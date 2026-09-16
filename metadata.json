@@ -1,0 +1,6 @@
+{
+  "name": "日常記帳與財務開支分析工具",
+  "description": "專為公司零用金管理設計：階層式選單記帳、選單排序與搜尋、零用金水位與餘額警示、靜態快照存檔、圓餅圖細項鑽取、分類月報表與年報表及Excel匯出。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
