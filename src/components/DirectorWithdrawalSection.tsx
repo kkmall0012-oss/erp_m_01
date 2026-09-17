@@ -132,7 +132,7 @@ export const DirectorWithdrawalSection: React.FC<DirectorWithdrawalSectionProps>
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold">廠長專用零用金領取紀錄</h2>
+              <h2 className="text-lg font-bold">廠長領取記錄</h2>
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 border border-amber-400/30">
                 專屬精簡帳冊
               </span>

@@ -12,7 +12,7 @@ import {
   CheckCircle2,
   Trash2
 } from 'lucide-react';
-import { Transaction, CategoryConfig, MonthBudget, BackupData, DirectorWithdrawal } from '../types';
+import { Transaction, CategoryConfig, MonthBudget, BackupData, DirectorWithdrawal, SubAccount } from '../types';
 import { exportBackupJSON, parseBackupJSON } from '../utils/storage';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -24,6 +24,7 @@ interface BackupModalProps {
   budgets: Record<string, MonthBudget>;
   claimants?: string[];
   directorWithdrawals?: DirectorWithdrawal[];
+  subAccounts?: SubAccount[];
   onRestoreBackup: (data: BackupData) => void;
   onClearAllData: () => void;
 }
@@ -36,6 +37,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   budgets,
   claimants,
   directorWithdrawals,
+  subAccounts,
   onRestoreBackup,
   onClearAllData
 }) => {
@@ -49,7 +51,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
   // 下載 JSON 備份檔
   const handleDownloadBackup = () => {
-    exportBackupJSON(transactions, categories, budgets, claimants, directorWithdrawals);
+    exportBackupJSON(transactions, categories, budgets, claimants, directorWithdrawals, subAccounts);
   };
 
   // 匯入 JSON 備份檔

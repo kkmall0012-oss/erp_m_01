@@ -8,6 +8,7 @@ interface SearchableOptionPickerProps {
   value: string;
   onChange: (val: string) => void;
   usageCounts?: Record<string, number>;
+  monthLabel?: string;
   placeholder?: string;
   itemTypeLabel?: string; // 例如「店家」、「同仁」、「站點」
   badgeColor?: string;
@@ -18,6 +19,7 @@ export const SearchableOptionPicker: React.FC<SearchableOptionPickerProps> = ({
   value,
   onChange,
   usageCounts = {},
+  monthLabel,
   placeholder = '搜尋或點選...',
   itemTypeLabel = '項目',
   badgeColor = '#d97706'
@@ -149,7 +151,7 @@ export const SearchableOptionPicker: React.FC<SearchableOptionPickerProps> = ({
             <span className="font-bold text-stone-900 truncate">{value}</span>
             {usageCounts[value] ? (
               <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-200/80 text-amber-900 font-mono shrink-0">
-                當月已記 {usageCounts[value]} 次
+                {monthLabel ? `${monthLabel}已記` : '當月已記'} {usageCounts[value]} 次
               </span>
             ) : null}
           </div>

@@ -179,6 +179,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                 <th className="py-3 px-4">日期</th>
                 <th className="py-3 px-4">請領同仁</th>
                 <th className="py-3 px-4">主分類</th>
+                <th className="py-3 px-3 text-center">憑證</th>
                 <th className="py-3 px-4">項目 (店家 / 站點 / 細項 / 來源)</th>
                 <th className="py-3 px-4 text-center">人數 (餐飲)</th>
                 <th className="py-3 px-4 text-right">金額 (NT$)</th>
@@ -231,6 +232,34 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                         {getCategoryIcon(item.categoryId)}
                         <span>{item.categoryName}</span>
                       </span>
+                    </td>
+
+                    {/* 憑證/發票 */}
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      {isExpense ? (
+                        item.receiptType === 'invoice' ? (
+                          <div className="inline-flex flex-col items-center">
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-bold text-[10px] bg-purple-50 text-purple-700 border border-purple-200">
+                              🧾 發票
+                            </span>
+                            {item.invoiceNumber && (
+                              <span className="text-[9px] font-mono text-purple-700 mt-0.5 max-w-[90px] truncate" title={item.invoiceNumber}>
+                                {item.invoiceNumber}
+                              </span>
+                            )}
+                          </div>
+                        ) : item.receiptType === 'receipt' ? (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-medium text-[10px] bg-blue-50 text-blue-700 border border-blue-200">
+                            📄 收據
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-normal text-[10px] bg-stone-100 text-stone-400">
+                            無
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-stone-300">-</span>
+                      )}
                     </td>
 
                     {/* 第二層細項 */}

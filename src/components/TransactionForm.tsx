@@ -14,9 +14,10 @@ import {
   Settings, 
   UserCheck, 
   Building2, 
-  FolderPlus
+  FolderPlus,
+  Receipt
 } from 'lucide-react';
-import { CategoryConfig, Transaction, TransactionType } from '../types';
+import { CategoryConfig, Transaction, TransactionType, ReceiptType } from '../types';
 import { getTodayDateStr } from '../utils/storage';
 import { SearchableOptionPicker } from './SearchableOptionPicker';
 
@@ -58,45 +59,51 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
   const [isCustomClaimantMode, setIsCustomClaimantMode] = useState<boolean>(false);
   const [saveClaimantToMenu, setSaveClaimantToMenu] = useState<boolean>(true);
 
-  // 計算各分類下項目在「當月份」的實際使用頻率（依使用者指示：只計算當月，不是全部）
-  const activeMonth = currentYearMonth || date.slice(0, 7);
+  // 計算各分類下項目在「查詢月份」（依使用者指示：必須嚴格依據當前所選查詢月份，例如 2026-07，而非現在電腦系統時間月份）
+  const queryMonth = currentYearMonth || date.slice(0, 7);
+  const queryMonthLabel = queryMonth ? `${queryMonth.replace('-', '/')} ` : '';
+
   const subItemUsageMap = useMemo(() => {
     const map: Record<string, number> = {};
     transactions.forEach((t) => {
-      // 僅計算當月紀錄
-      if (t.date && t.date.startsWith(activeMonth)) {
+      // 僅計算查詢月份紀錄
+      if (t.date && t.date.startsWith(queryMonth)) {
         if (t.subItem && (!t.categoryId || t.categoryId === selectedCategoryId)) {
           map[t.subItem] = (map[t.subItem] || 0) + 1;
         }
       }
     });
     return map;
-  }, [transactions, selectedCategoryId, activeMonth]);
+  }, [transactions, selectedCategoryId, queryMonth]);
 
-  // 計算請領人在「當月份」的實際請領頻率（依使用者指示：只計算當月）
+  // 計算請領人在「查詢月份」的實際請領頻率
   const claimantUsageMap = useMemo(() => {
     const map: Record<string, number> = {};
     transactions.forEach((t) => {
-      // 僅計算當月紀錄
-      if (t.date && t.date.startsWith(activeMonth)) {
+      // 僅計算查詢月份紀錄
+      if (t.date && t.date.startsWith(queryMonth)) {
         if (t.claimant) {
           map[t.claimant] = (map[t.claimant] || 0) + 1;
         }
       }
     });
     return map;
-  }, [transactions, activeMonth]);
+  }, [transactions, queryMonth]);
 
   // 4. 餐飲人數
   const [peopleCount, setPeopleCount] = useState<number>(1);
   
-  // 5. 金額
+  // 5. 支出憑證 (收據、發票、無) 與發票號碼
+  const [receiptType, setReceiptType] = useState<ReceiptType>('receipt');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+
+  // 6. 金額
   const [amount, setAmount] = useState<string>('');
   
-  // 6. 備註
+  // 7. 備註
   const [note, setNote] = useState<string>('');
 
-  // 7. 送出狀態
+  // 8. 送出狀態
   const [justSubmitted, setJustSubmitted] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -199,6 +206,8 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
       subItem: finalSubItem,
       claimant: finalClaimant,
       peopleCount: isDining ? Math.max(1, peopleCount) : undefined,
+      receiptType: type === 'expense' ? receiptType : undefined,
+      invoiceNumber: type === 'expense' && receiptType === 'invoice' ? (invoiceNumber.trim() ? invoiceNumber.trim().toUpperCase() : undefined) : undefined,
       amount: numAmount,
       note: note.trim()
     });
@@ -214,6 +223,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
     setIsCustomClaimantMode(false);
     setCustomClaimantInput('');
     setPeopleCount(1);
+    setInvoiceNumber('');
   };
 
   // 圖示渲染
@@ -369,8 +379,10 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
                   value={selectedClaimant}
                   onChange={(val) => setSelectedClaimant(val)}
                   label="請領同仁"
+                  itemTypeLabel="同仁"
                   placeholder="快速搜尋請領同仁姓名..."
                   usageCounts={claimantUsageMap}
+                  monthLabel={queryMonthLabel}
                   colorTheme="amber"
                   icon="user"
                 />
@@ -481,8 +493,10 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
                   value={selectedSubItem}
                   onChange={(val) => setSelectedSubItem(val)}
                   label={currentCategory?.subLabel || '項目'}
+                  itemTypeLabel={currentCategory?.subLabel || '項目'}
                   placeholder={`搜尋${currentCategory?.subLabel || '店家/項目'}...`}
                   usageCounts={subItemUsageMap}
+                  monthLabel={queryMonthLabel}
                   colorTheme="amber"
                   icon={isDining ? 'utensils' : selectedCategoryId === 'fuel' ? 'fuel' : 'sparkles'}
                   emptyMessage="尚未設定選項，可點擊上方「+自訂/手動輸入」新增"
@@ -555,6 +569,76 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
                 </div>
               )}
             </div>
+
+            {/* 3. 憑證與發票選項 (依需求：方便填入收據、發票、無，有發票可填發票號碼) */}
+            <div className="p-3.5 rounded-xl bg-stone-50 border border-stone-200 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
+                  <Receipt className="w-3.5 h-3.5 text-amber-600" />
+                  <span>3. 單據憑證類型 (收據 / 發票 / 無)</span>
+                </label>
+                <span className="text-[11px] text-stone-400">
+                  {receiptType === 'invoice' ? '統一發票' : receiptType === 'receipt' ? '免用發票收據' : '無單據'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-stone-200/60 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setReceiptType('receipt')}
+                  className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    receiptType === 'receipt'
+                      ? 'bg-white text-stone-900 shadow-2xs font-extrabold'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <span>📄 收據</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReceiptType('invoice')}
+                  className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    receiptType === 'invoice'
+                      ? 'bg-white text-amber-900 shadow-2xs font-extrabold'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <span>🧾 發票</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReceiptType('none')}
+                  className={`py-1.5 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    receiptType === 'none'
+                      ? 'bg-white text-stone-700 shadow-2xs font-extrabold'
+                      : 'text-stone-500 hover:text-stone-800'
+                  }`}
+                >
+                  <span>❌ 無憑證</span>
+                </button>
+              </div>
+
+              {receiptType === 'invoice' && (
+                <div className="pt-1 animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-semibold text-amber-900">
+                      發票號碼 (選填)
+                    </label>
+                    <span className="text-[10px] text-stone-400">例如：AB-12345678</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={invoiceNumber}
+                    onChange={(e) => setInvoiceNumber(e.target.value.toUpperCase())}
+                    placeholder="輸入發票號碼 (例：AB-12345678)"
+                    maxLength={14}
+                    className="w-full px-3 py-1.5 text-xs font-mono font-bold bg-white border border-amber-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 uppercase text-stone-800 placeholder:text-stone-300 placeholder:font-normal"
+                  />
+                </div>
+              )}
+            </div>
           </>
         )}
 
@@ -592,8 +676,10 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
                 value={selectedSubItem}
                 onChange={(val) => setSelectedSubItem(val)}
                 label="撥補來源"
+                itemTypeLabel="來源"
                 placeholder="搜尋撥補來源..."
                 usageCounts={subItemUsageMap}
+                monthLabel={queryMonthLabel}
                 colorTheme="emerald"
                 icon="coins"
               />

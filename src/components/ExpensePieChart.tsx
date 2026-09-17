@@ -162,16 +162,16 @@ export const ExpensePieChart: React.FC<ExpensePieChartProps> = ({
             </div>
             <p className="text-sm font-semibold text-stone-600">本月份尚無任何支出資料</p>
             <p className="text-xs text-stone-400 mt-1">
-              請使用左側階層式表單新增餐飲、加油、預支或雜支開銷
+              可使用左側快速登記台或按鍵登記餐飲、加油、代墊等開銷
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center py-4">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center py-2">
             {/* SVG 互動圓餅圖 */}
-            <div className="md:col-span-6 flex flex-col items-center justify-center relative">
+            <div className="lg:col-span-5 flex flex-col items-center justify-center relative">
               <svg
-                width="240"
-                height="240"
+                width="210"
+                height="210"
                 viewBox="0 0 240 240"
                 className="overflow-visible select-none drop-shadow-xs"
               >
@@ -230,7 +230,7 @@ export const ExpensePieChart: React.FC<ExpensePieChartProps> = ({
             </div>
 
             {/* 圖例與佔比清單 */}
-            <div className="md:col-span-6 space-y-2.5">
+            <div className="lg:col-span-7 space-y-2.5">
               <span className="text-xs font-semibold text-stone-500 block mb-1">
                 開支類別排行佔比：
               </span>

@@ -1,195 +1,138 @@
 import React from 'react';
-import { TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, ShieldAlert, SlidersHorizontal, Coins } from 'lucide-react';
-import { MonthBudget } from '../types';
+import { TrendingDown, TrendingUp, Coins, ShoppingBag, Wallet } from 'lucide-react';
 
 interface StatCardsProps {
   totalExpense: number;
   totalIncome: number;
   expenseCount: number;
-  budget?: MonthBudget;
-  onOpenBudgetModal: () => void;
+  incomeCount?: number;
+  activeSubAccountsAllocated?: number; // 撥給採買子帳的總金額
+  activeSubAccountsRemaining?: number; // 採買子帳目前剩餘未用的零用金
+  activeSubAccountsSpent?: number; // 採買子帳已記開銷
+  activeSubAccountsCount?: number; // 進行中的採買子帳數量
 }
 
 export const StatCards: React.FC<StatCardsProps> = ({
   totalExpense,
   totalIncome,
   expenseCount,
-  budget,
-  onOpenBudgetModal
+  incomeCount = 0,
+  activeSubAccountsAllocated = 0,
+  activeSubAccountsRemaining = 0,
+  activeSubAccountsCount = 0
 }) => {
-  const budgetAmount = budget?.budgetAmount || 0;
-  const alertThreshold = budget?.alertThresholdPercent || 20;
+  // 1. 手上的零用金 (實體抽屜/保險箱現有現金 = 總撥補 - 總帳直接支出 - 已撥給採買同仁的款項)
+  const cashOnHand = totalIncome - totalExpense - activeSubAccountsAllocated;
 
-  // 零用金剩餘水位 (以預算額度或以撥補總額扣減支出)
-  // 如果有設預備金額度，以預算為基準；另外可參考 (撥補總額 - 支出)
-  const remainingBudget = budgetAmount - totalExpense;
-  const usageRatio = budgetAmount > 0 ? (totalExpense / budgetAmount) * 100 : 0;
-  const remainingRatio = budgetAmount > 0 ? (remainingBudget / budgetAmount) * 100 : 0;
-  const netPettyCashBalance = totalIncome - totalExpense;
+  // 2. 採買子帳零用金 (同仁手中尚餘未用額度)
+  const subAccountCash = activeSubAccountsRemaining;
 
-  // 警示狀態判定
-  let statusBadge = {
-    label: '水位充裕',
-    bgColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    icon: CheckCircle2,
-    barColor: 'bg-emerald-500',
-    cardBorder: 'border-stone-200'
-  };
-
-  if (budgetAmount > 0) {
-    if (remainingBudget < 0) {
-      statusBadge = {
-        label: `超支 NT$ ${Math.abs(remainingBudget).toLocaleString()} (請款急)`,
-        bgColor: 'bg-rose-50 text-rose-700 border-rose-200',
-        icon: ShieldAlert,
-        barColor: 'bg-rose-500',
-        cardBorder: 'border-rose-300 ring-1 ring-rose-300'
-      };
-    } else if (remainingRatio <= alertThreshold) {
-      statusBadge = {
-        label: `水位僅存 ${remainingRatio.toFixed(0)}% (請儘速撥補)`,
-        bgColor: 'bg-amber-50 text-amber-700 border-amber-200',
-        icon: AlertTriangle,
-        barColor: 'bg-amber-500',
-        cardBorder: 'border-amber-300 ring-1 ring-amber-200'
-      };
-    }
-  }
-
-  const StatusIcon = statusBadge.icon;
+  // 3. 零用金總額 (手上的零用金 + 採買子帳零用金)
+  const totalPettyCash = cashOnHand + subAccountCash;
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      {/* 1. 當月零用金支出 */}
+      {/* 1. 手上的零用金 (實存現金，核心重要) */}
       <div 
-        id="stat-total-expense" 
-        className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between"
+        id="stat-cash-on-hand" 
+        className="bg-white p-4.5 rounded-2xl border border-sky-200 bg-linear-to-br from-white to-sky-50/40 shadow-xs flex flex-col justify-between"
       >
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-stone-500">本期零用金總支出</span>
-          <span className="p-2 rounded-xl bg-orange-50 text-orange-600">
+          <span className="text-xs font-bold text-sky-900 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse"></span>
+            手上的零用金 (現存現金)
+          </span>
+          <span className="p-1.5 rounded-xl bg-sky-100 text-sky-700">
+            <Wallet className="w-4 h-4" />
+          </span>
+        </div>
+        <div className="mt-2.5">
+          <div className="text-2xl font-bold tracking-tight font-mono text-sky-950">
+            <span className="text-sm font-normal text-stone-400 mr-1 font-sans">NT$</span>
+            {cashOnHand.toLocaleString()}
+          </div>
+          <div className="mt-1 text-[11px] text-stone-500">
+            {activeSubAccountsAllocated > 0 ? (
+              <span className="text-amber-700 font-medium">
+                已扣撥採買備用金 NT$ {activeSubAccountsAllocated.toLocaleString()}
+              </span>
+            ) : (
+              <span>保險箱／抽屜現有可支配現金</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 2. 採買子帳零用金 */}
+      <div 
+        id="stat-subaccount-cash" 
+        className="bg-white p-4.5 rounded-2xl border border-amber-200 bg-linear-to-br from-white to-amber-50/40 shadow-xs flex flex-col justify-between"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-amber-900">採買子帳零用金</span>
+          <span className="p-1.5 rounded-xl bg-amber-100 text-amber-700">
+            <ShoppingBag className="w-4 h-4" />
+          </span>
+        </div>
+        <div className="mt-2.5">
+          <div className="text-2xl font-bold tracking-tight font-mono text-amber-900">
+            <span className="text-sm font-normal text-stone-400 mr-1 font-sans">NT$</span>
+            {subAccountCash.toLocaleString()}
+          </div>
+          <div className="mt-1 text-[11px] text-stone-500 flex items-center justify-between">
+            <span>進行中 {activeSubAccountsCount} 筆採買</span>
+            <span className="text-stone-400 font-medium">
+              合計總額 NT$ {totalPettyCash.toLocaleString()}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. 本期零用金支出 (依指示：數字用紅色表示) */}
+      <div 
+        id="stat-total-expense" 
+        className="bg-white p-4.5 rounded-2xl border border-rose-200 bg-linear-to-br from-white to-rose-50/30 shadow-xs flex flex-col justify-between"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-rose-900">本期零用金總支出</span>
+          <span className="p-1.5 rounded-xl bg-rose-100 text-rose-600">
             <TrendingDown className="w-4 h-4" />
           </span>
         </div>
-        <div className="mt-3">
-          <div className="text-2xl font-bold tracking-tight text-stone-900">
-            <span className="text-sm font-normal text-stone-400 mr-1">NT$</span>
+        <div className="mt-2.5">
+          {/* 數字使用醒目的鮮紅色表示 */}
+          <div className="text-2xl font-bold tracking-tight font-mono text-rose-600">
+            <span className="text-sm font-normal text-rose-400 mr-1 font-sans">NT$</span>
             {totalExpense.toLocaleString()}
           </div>
-          <div className="mt-1 text-xs text-stone-500 flex items-center justify-between">
-            <span>累計開支 {expenseCount} 筆</span>
-            <span className="text-[11px] text-stone-400">平均單筆 NT$ {expenseCount > 0 ? Math.round(totalExpense / expenseCount).toLocaleString() : 0}</span>
+          <div className="mt-1 text-[11px] text-stone-500 flex items-center justify-between">
+            <span>累計支出 {expenseCount} 筆</span>
+            <span className="text-stone-400 font-mono">
+              平均單筆 NT$ {expenseCount > 0 ? Math.round(totalExpense / expenseCount).toLocaleString() : 0}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* 2. 零用金預備金額度 (預算上限) */}
+      {/* 4. 本期撥補收入 */}
       <div 
-        id="stat-budget" 
-        className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between"
+        id="stat-total-income" 
+        className="bg-white p-4.5 rounded-2xl border border-emerald-200 bg-linear-to-br from-white to-emerald-50/30 shadow-xs flex flex-col justify-between"
       >
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-stone-500">零用金核定額度 (預算)</span>
-          <button
-            id="adjust-budget-btn"
-            onClick={onOpenBudgetModal}
-            className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100 transition-colors"
-            title="設定零用金上限與警戒線"
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-          </button>
-        </div>
-        <div className="mt-3">
-          <div className="text-2xl font-bold tracking-tight text-stone-900">
-            {budgetAmount > 0 ? (
-              <>
-                <span className="text-sm font-normal text-stone-400 mr-1">NT$</span>
-                {budgetAmount.toLocaleString()}
-              </>
-            ) : (
-              <span className="text-base text-stone-400 font-normal">未設定上限額度</span>
-            )}
-          </div>
-          <div className="mt-1 text-xs text-stone-500 flex items-center justify-between">
-            <span>額度已支用: {usageRatio.toFixed(1)}%</span>
-            <button
-              onClick={onOpenBudgetModal}
-              className="text-[11px] text-amber-700 hover:text-amber-800 font-medium underline"
-            >
-              設定額度
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* 3. 零用金水位與餘額警示 */}
-      <div 
-        id="stat-balance-alert" 
-        className={`bg-white p-5 rounded-2xl border ${statusBadge.cardBorder} shadow-xs flex flex-col justify-between transition-all`}
-      >
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-stone-500">零用金即時水位與警示</span>
-          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${statusBadge.bgColor}`}>
-            <StatusIcon className="w-3 h-3" />
-            {statusBadge.label}
+          <span className="text-xs font-bold text-emerald-900">本期撥補入帳</span>
+          <span className="p-1.5 rounded-xl bg-emerald-100 text-emerald-700">
+            <TrendingUp className="w-4 h-4" />
           </span>
         </div>
-        <div className="mt-3">
-          <div className="text-2xl font-bold tracking-tight text-stone-900">
-            {budgetAmount > 0 ? (
-              <>
-                <span className={`text-sm font-normal mr-1 ${remainingBudget < 0 ? 'text-rose-500' : 'text-stone-400'}`}>
-                  {remainingBudget < 0 ? '- NT$' : 'NT$'}
-                </span>
-                <span className={remainingBudget < 0 ? 'text-rose-600' : 'text-stone-900'}>
-                  {Math.abs(remainingBudget).toLocaleString()}
-                </span>
-              </>
-            ) : (
-              <span className="text-sm text-stone-400 font-normal">請設定額度以監控水位</span>
-            )}
-          </div>
-
-          {/* 預算進度條 */}
-          {budgetAmount > 0 && (
-            <div className="mt-2.5">
-              <div className="w-full bg-stone-100 rounded-full h-2 overflow-hidden">
-                <div
-                  className={`h-full transition-all duration-500 ${statusBadge.barColor}`}
-                  style={{ width: `${Math.min(usageRatio, 100)}%` }}
-                />
-              </div>
-              <div className="mt-1 flex justify-between text-[11px] text-stone-400">
-                <span>0%</span>
-                <span>撥補警戒線: {alertThreshold}%</span>
-                <span>100%</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 4. 本期撥補入帳與淨結餘 */}
-      <div 
-        id="stat-income-savings" 
-        className="bg-white p-5 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between"
-      >
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-stone-500">本期撥補總額</span>
-          <span className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
-            <Coins className="w-4 h-4" />
-          </span>
-        </div>
-        <div className="mt-3">
-          <div className="text-2xl font-bold tracking-tight text-emerald-700">
-            <span className="text-sm font-normal text-stone-400 mr-1">NT$</span>
+        <div className="mt-2.5">
+          <div className="text-2xl font-bold tracking-tight font-mono text-emerald-700">
+            <span className="text-sm font-normal text-stone-400 mr-1 font-sans">NT$</span>
             {totalIncome.toLocaleString()}
           </div>
-          <div className="mt-1 text-xs text-stone-500 flex items-center justify-between">
-            <span>實體結存: NT$ {netPettyCashBalance.toLocaleString()}</span>
-            <span className="text-[11px] text-stone-400">
-              {netPettyCashBalance >= 0 ? '備用金充足' : '墊付款待補'}
-            </span>
+          <div className="mt-1 text-[11px] text-stone-500 flex items-center justify-between">
+            <span>累計撥入 {incomeCount > 0 ? `${incomeCount} 次` : '常態撥補'}</span>
+            <span className="text-emerald-700 font-semibold">金庫水位補足</span>
           </div>
         </div>
       </div>

@@ -5,7 +5,8 @@ import {
   BackupData, 
   DEFAULT_CATEGORIES, 
   DEFAULT_CLAIMANTS, 
-  DirectorWithdrawal 
+  DirectorWithdrawal,
+  SubAccount 
 } from '../types';
 
 const STORAGE_KEYS = {
@@ -14,6 +15,7 @@ const STORAGE_KEYS = {
   BUDGETS: 'expense_tracker_budgets_v1',
   CLAIMANTS: 'expense_tracker_claimants_v1',
   DIRECTOR_WITHDRAWALS: 'expense_tracker_director_v1',
+  SUB_ACCOUNTS: 'expense_tracker_sub_accounts_v1',
   LAST_BACKUP: 'expense_tracker_last_backup_date'
 };
 
@@ -129,6 +131,81 @@ export function saveDirectorWithdrawals(records: DirectorWithdrawal[]): void {
     localStorage.setItem(STORAGE_KEYS.DIRECTOR_WITHDRAWALS, JSON.stringify(records));
   } catch (e) {
     console.error('Failed to save director withdrawals', e);
+  }
+}
+
+// 讀取專款子帳戶 (代管備用金 / 代收代付子帳號)
+export function loadSubAccounts(): SubAccount[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SUB_ACCOUNTS);
+    if (!raw) {
+      // 預設建立一筆生動的示範專款子帳戶
+      const today = getTodayDateStr();
+      const currentYM = getCurrentYearMonth();
+      const demoSubAccount: SubAccount = {
+        id: 'sub-demo-1',
+        name: '每週午餐餐點採買專款 (陳小明)',
+        custodian: '陳小明',
+        initialFund: 5000,
+        startDate: `${currentYM}-01`,
+        status: 'active',
+        note: '每週預撥5,000元代管備用金，採買每日午餐，每週五統一結算匯入總帳',
+        createdAt: Date.now() - 86400000 * 5,
+        items: [
+          {
+            id: 'sub-item-1',
+            date: `${currentYM}-02`,
+            type: 'expense',
+            subItem: '池上便當 (午餐5人份)',
+            amount: 550,
+            receiptType: 'invoice',
+            invoiceNumber: 'UB-98765432',
+            note: '現場領收便當',
+            createdAt: Date.now() - 86400000 * 4,
+            isImportedToGeneral: false
+          },
+          {
+            id: 'sub-item-2',
+            date: `${currentYM}-03`,
+            type: 'expense',
+            subItem: '全聯福利中心 (茶水點心與水果)',
+            amount: 380,
+            receiptType: 'receipt',
+            note: '會議茶水水果',
+            createdAt: Date.now() - 86400000 * 3,
+            isImportedToGeneral: false
+          },
+          {
+            id: 'sub-item-3',
+            date: `${currentYM}-04`,
+            type: 'expense',
+            subItem: '麥當勞午餐 (4人份)',
+            amount: 620,
+            receiptType: 'invoice',
+            invoiceNumber: 'VC-12349876',
+            note: '午餐餐點',
+            createdAt: Date.now() - 86400000 * 2,
+            isImportedToGeneral: false
+          }
+        ]
+      };
+      saveSubAccounts([demoSubAccount]);
+      return [demoSubAccount];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.error('Failed to load sub accounts', e);
+    return [];
+  }
+}
+
+// 儲存專款子帳戶
+export function saveSubAccounts(accounts: SubAccount[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.SUB_ACCOUNTS, JSON.stringify(accounts));
+  } catch (e) {
+    console.error('Failed to save sub accounts', e);
   }
 }
 
@@ -292,16 +369,18 @@ export function exportBackupJSON(
   categories: CategoryConfig[],
   budgets: Record<string, MonthBudget>,
   claimants?: string[],
-  directorWithdrawals?: DirectorWithdrawal[]
+  directorWithdrawals?: DirectorWithdrawal[],
+  subAccounts?: SubAccount[]
 ): void {
   const data: BackupData = {
-    version: '1.1.0',
+    version: '1.2.0',
     exportedAt: new Date().toISOString(),
     transactions,
     categories,
     budgets,
     claimants: claimants || loadClaimants(),
-    directorWithdrawals: directorWithdrawals || loadDirectorWithdrawals()
+    directorWithdrawals: directorWithdrawals || loadDirectorWithdrawals(),
+    subAccounts: subAccounts || loadSubAccounts()
   };
 
   const jsonStr = JSON.stringify(data, null, 2);
@@ -326,13 +405,14 @@ export function parseBackupJSON(jsonStr: string): BackupData | null {
       throw new Error('無效的備份檔案格式：缺少交易紀錄資料');
     }
     return {
-      version: data.version || '1.1.0',
+      version: data.version || '1.2.0',
       exportedAt: data.exportedAt || new Date().toISOString(),
       transactions: data.transactions,
       categories: Array.isArray(data.categories) ? data.categories : DEFAULT_CATEGORIES,
       budgets: typeof data.budgets === 'object' && data.budgets !== null ? data.budgets : {},
       claimants: Array.isArray(data.claimants) ? data.claimants : DEFAULT_CLAIMANTS,
-      directorWithdrawals: Array.isArray(data.directorWithdrawals) ? data.directorWithdrawals : []
+      directorWithdrawals: Array.isArray(data.directorWithdrawals) ? data.directorWithdrawals : [],
+      subAccounts: Array.isArray(data.subAccounts) ? data.subAccounts : []
     };
   } catch (e) {
     console.error('Failed to parse backup JSON', e);

@@ -3,17 +3,14 @@ import {
   X, 
   Save, 
   Trash2, 
-  Utensils, 
-  Fuel, 
-  HandCoins, 
-  PackageCheck, 
-  Coins, 
   Users, 
   Calendar, 
   AlertCircle,
-  Clock
+  Clock,
+  ShieldCheck,
+  Receipt
 } from 'lucide-react';
-import { CategoryConfig, Transaction, TransactionType } from '../types';
+import { CategoryConfig, Transaction, ReceiptType } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
 
 interface TransactionEditModalProps {
@@ -35,36 +32,43 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
   onSave,
   onDelete
 }) => {
-  if (!isOpen || !transaction) return null;
-
-  const [type, setType] = useState<TransactionType>(transaction.type);
-  const [date, setDate] = useState<string>(transaction.date);
-  const [categoryId, setCategoryId] = useState<string>(transaction.categoryId);
-  const [subItem, setSubItem] = useState<string>(transaction.subItem || '');
-  const [claimant, setClaimant] = useState<string>(transaction.claimant || '自己 / 零用金管理員');
-  const [peopleCount, setPeopleCount] = useState<number>(transaction.peopleCount || 1);
-  const [amount, setAmount] = useState<string>(String(transaction.amount));
-  const [note, setNote] = useState<string>(transaction.note || '');
+  // 注意：所有 Hook 必須無條件置於組件頂部，不可在 if (!isOpen || !transaction) 之後呼叫
+  // 避免 React 19 拋出 "Expected static flag was missing" 內部錯誤
+  const [date, setDate] = useState<string>('');
+  const [categoryId, setCategoryId] = useState<string>('dining');
+  const [subItem, setSubItem] = useState<string>('');
+  const [claimant, setClaimant] = useState<string>('自己 / 零用金管理員');
+  const [peopleCount, setPeopleCount] = useState<number>(1);
+  const [receiptType, setReceiptType] = useState<ReceiptType>('receipt');
+  const [invoiceNumber, setInvoiceNumber] = useState<string>('');
+  const [amount, setAmount] = useState<string>('');
+  const [note, setNote] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
 
   // 當 transaction 切換時重設狀態
   useEffect(() => {
     if (transaction) {
-      setType(transaction.type);
       setDate(transaction.date);
       setCategoryId(transaction.categoryId);
       setSubItem(transaction.subItem || '');
       setClaimant(transaction.claimant || '自己 / 零用金管理員');
       setPeopleCount(transaction.peopleCount || 1);
+      setReceiptType(transaction.receiptType || (transaction.type === 'expense' ? 'receipt' : 'none'));
+      setInvoiceNumber(transaction.invoiceNumber || '');
       setAmount(String(transaction.amount));
       setNote(transaction.note || '');
       setErrorMessage('');
+      setShowDeleteConfirm(false);
     }
   }, [transaction]);
 
+  // Hook 執行完成後才做條件回傳
+  if (!isOpen || !transaction) return null;
+
   const currentCategory = categories.find((c) => c.id === categoryId) || categories[0];
-  const isDining = type === 'expense' && (currentCategory?.id === 'dining' || currentCategory?.hasPeopleCount);
+  const isExpense = transaction.type === 'expense';
+  const isDining = isExpense && (currentCategory?.id === 'dining' || currentCategory?.hasPeopleCount);
 
   // 儲存修改
   const handleSubmit = (e: React.FormEvent) => {
@@ -80,9 +84,10 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
       return;
     }
 
+    // 依使用者指示：嚴格維持原始收支性質，不可將支出變收入，亦不可將收入變支出
     const updated: Transaction = {
       ...transaction,
-      type,
+      type: transaction.type,
       date,
       categoryId,
       categoryName: currentCategory?.name || transaction.categoryName,
@@ -90,7 +95,9 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
       amount: numAmount,
       note: note.trim(),
       peopleCount: isDining ? (peopleCount > 0 ? peopleCount : 1) : undefined,
-      claimant: type === 'expense' ? claimant : undefined
+      claimant: isExpense ? claimant : undefined,
+      receiptType: isExpense ? receiptType : undefined,
+      invoiceNumber: isExpense && receiptType === 'invoice' ? (invoiceNumber.trim() ? invoiceNumber.trim().toUpperCase() : undefined) : undefined
     };
 
     onSave(updated);
@@ -107,7 +114,7 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
         <div className="p-4 sm:px-6 border-b border-stone-200 flex items-center justify-between bg-stone-50">
           <div className="flex items-center gap-2.5">
             <div className={`p-2 rounded-xl text-white ${
-              type === 'expense' ? 'bg-amber-600' : 'bg-emerald-600'
+              isExpense ? 'bg-amber-600' : 'bg-emerald-600'
             }`}>
               <Clock className="w-5 h-5" />
             </div>
@@ -140,41 +147,30 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
             </div>
           )}
 
-          {/* 收支型態切換 */}
-          <div>
-            <label className="block text-xs font-bold text-stone-600 mb-1.5">收支類型</label>
-            <div className="grid grid-cols-2 gap-2 p-1 bg-stone-100 rounded-xl">
-              <button
-                type="button"
-                onClick={() => {
-                  setType('expense');
-                  const firstExp = categories.find((c) => c.type === 'expense');
-                  if (firstExp) setCategoryId(firstExp.id);
-                }}
-                className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  type === 'expense'
-                    ? 'bg-amber-500 text-white shadow-xs'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                🔴 支出開銷
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setType('income');
-                  const firstInc = categories.find((c) => c.type === 'income');
-                  if (firstInc) setCategoryId(firstInc.id);
-                }}
-                className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  type === 'income'
-                    ? 'bg-emerald-600 text-white shadow-xs'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                🟢 撥補補充
-              </button>
+          {/* 收支類型展示（依指示：收支性質固定，不可將支出改為收入或收入改為支出） */}
+          <div className={`p-3.5 rounded-xl border flex items-center justify-between ${
+            isExpense 
+              ? 'bg-amber-500/10 border-amber-200' 
+              : 'bg-emerald-500/10 border-emerald-200'
+          }`}>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className={`w-4 h-4 ${isExpense ? 'text-amber-700' : 'text-emerald-700'}`} />
+                <span className="text-xs font-bold text-stone-800">
+                  收支類型：{isExpense ? '支出開銷' : '撥補補充 (收入)'}
+                </span>
+              </div>
+              <p className="text-[11px] text-stone-500 mt-0.5">
+                {isExpense 
+                  ? '此筆記錄為支出開銷，性質固定，不可改為撥補收入' 
+                  : '此筆記錄為撥補補充，性質固定，不可改為支出開銷'}
+              </p>
             </div>
+            <span className={`px-3 py-1 rounded-lg text-xs font-bold text-white shadow-2xs shrink-0 ${
+              isExpense ? 'bg-amber-600' : 'bg-emerald-600'
+            }`}>
+              {isExpense ? '🔴 支出開銷' : '🟢 撥補補充'}
+            </span>
           </div>
 
           {/* 日期與主分類 */}
@@ -208,7 +204,7 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
                 className="w-full px-3 py-2 text-sm bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium"
               >
                 {categories
-                  .filter((c) => c.type === type)
+                  .filter((c) => c.type === transaction.type)
                   .map((cat) => (
                     <option key={cat.id} value={cat.id}>
                       {cat.name}
@@ -218,8 +214,8 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
             </div>
           </div>
 
-          {/* 請領人 (支出開銷時顯示) */}
-          {type === 'expense' && (
+          {/* 請領人 (僅支出開銷時顯示) */}
+          {isExpense && (
             <div>
               <label className="block text-xs font-bold text-stone-600 mb-1.5 flex items-center gap-1">
                 <Users className="w-3.5 h-3.5 text-stone-400" />
@@ -247,7 +243,7 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
           {/* 店家 / 項目 */}
           <div>
             <label className="block text-xs font-bold text-stone-600 mb-1.5">
-              {currentCategory?.subLabel || '店家 / 項目 / 來源名稱'}
+              {currentCategory?.subLabel || (isExpense ? '店家 / 項目名稱' : '撥補來源說明')}
             </label>
             <div className="space-y-2">
               <input
@@ -255,10 +251,10 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
                 required
                 value={subItem}
                 onChange={(e) => setSubItem(e.target.value)}
-                placeholder="請輸入店家或項目名稱..."
+                placeholder={isExpense ? '請輸入店家或開銷項目名稱...' : '請輸入撥補來源名稱...'}
                 className="w-full px-3 py-2 text-sm bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium"
               />
-              {/* 常用預設標籤點選 */}
+              {/* 常用預設標籤快速代入 */}
               {currentCategory?.defaultSubItems && currentCategory.defaultSubItems.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 pt-0.5">
                   <span className="text-[10px] text-stone-400 self-center">快速代入:</span>
@@ -304,6 +300,75 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
                   )}
                 </span>
               </div>
+            </div>
+          )}
+
+          {/* 支出單據憑證類型 (收據 / 發票 / 無) */}
+          {isExpense && (
+            <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
+                  <Receipt className="w-3.5 h-3.5 text-amber-600" />
+                  <span>單據憑證類型</span>
+                </label>
+                <span className="text-[11px] text-stone-500">
+                  {receiptType === 'invoice' ? '統一發票' : receiptType === 'receipt' ? '免用發票收據' : '無單據'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-stone-200/60 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setReceiptType('receipt')}
+                  className={`py-1 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    receiptType === 'receipt'
+                      ? 'bg-white text-stone-900 shadow-2xs'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <span>📄 收據</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReceiptType('invoice')}
+                  className={`py-1 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    receiptType === 'invoice'
+                      ? 'bg-white text-amber-900 shadow-2xs font-extrabold'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <span>🧾 發票</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReceiptType('none')}
+                  className={`py-1 px-2 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    receiptType === 'none'
+                      ? 'bg-white text-stone-700 shadow-2xs'
+                      : 'text-stone-500 hover:text-stone-800'
+                  }`}
+                >
+                  <span>❌ 無憑證</span>
+                </button>
+              </div>
+
+              {receiptType === 'invoice' && (
+                <div className="pt-1">
+                  <label className="block text-[11px] font-semibold text-amber-900 mb-1">
+                    發票號碼 (選填)
+                  </label>
+                  <input
+                    type="text"
+                    value={invoiceNumber}
+                    onChange={(e) => setInvoiceNumber(e.target.value.toUpperCase())}
+                    placeholder="輸入發票號碼 (例：AB-12345678)"
+                    maxLength={14}
+                    className="w-full px-3 py-1.5 text-xs font-mono font-bold bg-white border border-amber-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 uppercase text-stone-800"
+                  />
+                </div>
+              )}
             </div>
           )}
 

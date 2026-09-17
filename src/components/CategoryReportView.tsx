@@ -55,10 +55,14 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
     id: undefined
   });
 
-  // 計算所有出現在交易中的年份清單
+  // 計算所有可供選擇的年份清單 (包含過去與未來的範圍，確保能查任何歷史月份)
   const availableYears = useMemo(() => {
     const years = new Set<string>();
-    years.add(initialYear);
+    const curY = parseInt(initialYear, 10) || new Date().getFullYear();
+    // 預設提供過去 5 年至未來 2 年的年份
+    for (let y = curY - 5; y <= curY + 2; y++) {
+      years.add(String(y));
+    }
     transactions.forEach((t) => {
       const y = t.date.split('-')[0];
       if (y) years.add(y);
@@ -66,16 +70,39 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
     return Array.from(years).sort().reverse();
   }, [transactions, initialYear]);
 
-  // 計算所有出現在交易中的月份清單
-  const availableMonths = useMemo(() => {
-    const months = new Set<string>();
-    months.add(currentYearMonth);
-    transactions.forEach((t) => {
-      const ym = t.date.slice(0, 7);
-      if (ym) months.add(ym);
-    });
-    return Array.from(months).sort().reverse();
-  }, [transactions, currentYearMonth]);
+  // 解析目前選擇的年與月
+  const [currYearPart, currMonthPart] = selectedMonth.split('-');
+
+  // 切換上一月、下一月
+  const handlePrevMonth = () => {
+    let y = parseInt(currYearPart, 10);
+    let m = parseInt(currMonthPart, 10) - 1;
+    if (m < 1) {
+      m = 12;
+      y -= 1;
+    }
+    setSelectedMonth(`${y}-${String(m).padStart(2, '0')}`);
+  };
+
+  const handleNextMonth = () => {
+    let y = parseInt(currYearPart, 10);
+    let m = parseInt(currMonthPart, 10) + 1;
+    if (m > 12) {
+      m = 1;
+      y += 1;
+    }
+    setSelectedMonth(`${y}-${String(m).padStart(2, '0')}`);
+  };
+
+  // 快捷切換年
+  const handleYearChangeForMonth = (y: string) => {
+    setSelectedMonth(`${y}-${currMonthPart || '09'}`);
+  };
+
+  // 快捷切換月
+  const handleMonthChangeForMonth = (m: string) => {
+    setSelectedMonth(`${currYearPart || initialYear}-${m}`);
+  };
 
   // ==========================================
   // 1. 月報表計算
@@ -88,6 +115,31 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
     const totalExpense = expenses.reduce((sum, t) => sum + t.amount, 0);
     const totalIncome = incomes.reduce((sum, t) => sum + t.amount, 0);
     const netBalance = totalIncome - totalExpense;
+
+    // 憑證統計計算
+    let invoiceCount = 0;
+    let invoiceAmount = 0;
+    let receiptCount = 0;
+    let receiptAmount = 0;
+    let noDocCount = 0;
+    let noDocAmount = 0;
+
+    expenses.forEach((t) => {
+      if (t.receiptType === 'invoice') {
+        invoiceCount++;
+        invoiceAmount += t.amount;
+      } else if (t.receiptType === 'receipt') {
+        receiptCount++;
+        receiptAmount += t.amount;
+      } else {
+        noDocCount++;
+        noDocAmount += t.amount;
+      }
+    });
+
+    const documentedAmount = invoiceAmount + receiptAmount;
+    const documentedCount = invoiceCount + receiptCount;
+    const voucherComplianceRate = totalExpense > 0 ? (documentedAmount / totalExpense) * 100 : 100;
 
     // 依分類彙整
     const categoryStats: Record<string, {
@@ -186,7 +238,17 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
       expenseCount: expenses.length,
       categoryList: list,
       topClaimants,
-      topItems
+      topItems,
+      // 憑證統計數據
+      invoiceCount,
+      invoiceAmount,
+      receiptCount,
+      receiptAmount,
+      noDocCount,
+      noDocAmount,
+      documentedCount,
+      documentedAmount,
+      voucherComplianceRate
     };
   }, [transactions, categories, selectedMonth]);
 
@@ -288,14 +350,14 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
   }, [transactions, categories, selectedYear]);
 
   // ==========================================
-  // 3. 匯出 Excel
+  // 3. 匯出 Excel (含完整統計項目)
   // ==========================================
   // 匯出月報表
   const handleExportMonthExcel = () => {
     const wb = XLSX.utils.book_new();
 
-    // Sheet 1: 分類支出彙整
-    const catRows = monthlyData.categoryList.map((c, idx) => ({
+    // Sheet 1: 分類支出彙整與統計
+    const catRows: any[] = monthlyData.categoryList.map((c, idx) => ({
       '排名': idx + 1,
       '支出分類': c.name,
       '支出總額 (NT$)': c.amount,
@@ -303,25 +365,111 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
       '平均每筆 (NT$)': c.count > 0 ? Math.round(c.amount / c.count) : 0,
       '佔比': `${c.percentage.toFixed(1)}%`
     }));
+
+    // 加入關鍵統計項目
     catRows.push({
-      '排名': '-' as any,
-      '支出分類': '【當月支出合計】',
+      '排名': '【總計】',
+      '支出分類': '當月支出開銷合計',
       '支出總額 (NT$)': monthlyData.totalExpense,
       '開支筆數': monthlyData.expenseCount,
       '平均每筆 (NT$)': monthlyData.expenseCount > 0 ? Math.round(monthlyData.totalExpense / monthlyData.expenseCount) : 0,
       '佔比': '100.0%'
     });
-    const ws1 = XLSX.utils.json_to_sheet(catRows);
-    XLSX.utils.book_append_sheet(wb, ws1, `${selectedMonth}_分類彙整`);
+    catRows.push({
+      '排名': '【撥補】',
+      '支出分類': '當月總撥補入帳 (收入)',
+      '支出總額 (NT$)': monthlyData.totalIncome,
+      '開支筆數': '-',
+      '平均每筆 (NT$)': '-',
+      '佔比': '-'
+    });
+    catRows.push({
+      '排名': '【水位】',
+      '支出分類': '本月零用金淨額 (收-支)',
+      '支出總額 (NT$)': monthlyData.netBalance,
+      '開支筆數': '-',
+      '平均每筆 (NT$)': '-',
+      '佔比': monthlyData.netBalance >= 0 ? '盈餘充裕' : '超支透支'
+    });
 
-    // Sheet 2: 請領人與 TOP 店家
+    const ws1 = XLSX.utils.json_to_sheet(catRows);
+    ws1['!cols'] = [{ wch: 10 }, { wch: 24 }, { wch: 18 }, { wch: 12 }, { wch: 16 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, ws1, `${selectedMonth}_分類與財務統計`);
+
+    // Sheet 2: 憑證與發票統計表
+    const docRows = [
+      {
+        '憑證類型': '🧾 統一發票',
+        '總筆數': monthlyData.invoiceCount,
+        '金額總計 (NT$)': monthlyData.invoiceAmount,
+        '佔支出比率': `${monthlyData.totalExpense > 0 ? ((monthlyData.invoiceAmount / monthlyData.totalExpense) * 100).toFixed(1) : 0}%`,
+        '備註': '附統一發票號碼'
+      },
+      {
+        '憑證類型': '📄 免用發票收據',
+        '總筆數': monthlyData.receiptCount,
+        '金額總計 (NT$)': monthlyData.receiptAmount,
+        '佔支出比率': `${monthlyData.totalExpense > 0 ? ((monthlyData.receiptAmount / monthlyData.totalExpense) * 100).toFixed(1) : 0}%`,
+        '備註': '免用統一發票收據/專用收據'
+      },
+      {
+        '憑證類型': '❌ 無憑證 (白單/便簽)',
+        '總筆數': monthlyData.noDocCount,
+        '金額總計 (NT$)': monthlyData.noDocAmount,
+        '佔支出比率': `${monthlyData.totalExpense > 0 ? ((monthlyData.noDocAmount / monthlyData.totalExpense) * 100).toFixed(1) : 0}%`,
+        '備註': '無單據'
+      },
+      {
+        '憑證類型': '【具備合格憑證合計】',
+        '總筆數': monthlyData.documentedCount,
+        '金額總計 (NT$)': monthlyData.documentedAmount,
+        '佔支出比率': `${monthlyData.voucherComplianceRate.toFixed(1)}%`,
+        '備註': '發票與收據合計'
+      }
+    ];
+    const ws2 = XLSX.utils.json_to_sheet(docRows);
+    ws2['!cols'] = [{ wch: 24 }, { wch: 12 }, { wch: 18 }, { wch: 16 }, { wch: 24 }];
+    XLSX.utils.book_append_sheet(wb, ws2, '憑證與發票統計');
+
+    // Sheet 3: 請領同仁與店家排行
     const topClaimantRows = monthlyData.topClaimants.map(([name, amt]) => ({
       '請領同仁': name,
       '請領總金額 (NT$)': amt,
       '佔總支出比例': `${monthlyData.totalExpense > 0 ? ((amt / monthlyData.totalExpense) * 100).toFixed(1) : 0}%`
     }));
-    const ws2 = XLSX.utils.json_to_sheet(topClaimantRows);
-    XLSX.utils.book_append_sheet(wb, ws2, `同仁請領排行`);
+    const ws3 = XLSX.utils.json_to_sheet(topClaimantRows);
+    ws3['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 16 }];
+    XLSX.utils.book_append_sheet(wb, ws3, '同仁請領排行');
+
+    // Sheet 4: 當月所有收支明細清單
+    const detailRows = monthlyData.monthTx.map((t, idx) => ({
+      '項次': idx + 1,
+      '日期': t.date,
+      '收支類型': t.type === 'expense' ? '支出' : '撥補收入',
+      '請領同仁': t.claimant || (t.type === 'income' ? '公司出納' : '未指定'),
+      '主分類': t.categoryName,
+      '項目細項': t.subItem,
+      '憑證類型': t.type === 'expense' ? (t.receiptType === 'invoice' ? '🧾 發票' : t.receiptType === 'receipt' ? '📄 收據' : '無') : '-',
+      '發票號碼': t.invoiceNumber || '-',
+      '用餐人數': t.peopleCount || '-',
+      '金額 (NT$)': t.amount,
+      '備註說明': t.note || ''
+    }));
+    const ws4 = XLSX.utils.json_to_sheet(detailRows);
+    ws4['!cols'] = [
+      { wch: 6 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 22 },
+      { wch: 10 },
+      { wch: 14 },
+      { wch: 10 },
+      { wch: 14 },
+      { wch: 24 }
+    ];
+    XLSX.utils.book_append_sheet(wb, ws4, `${selectedMonth}_收支流水明細`);
 
     XLSX.writeFile(wb, `零用金分類月報表_${selectedMonth}.xlsx`);
   };
@@ -433,25 +581,78 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
             </button>
           </div>
 
-          {/* 月份或年份選擇下拉選單 */}
+          {/* 月份或年份選擇工具列 */}
           {reportMode === 'month' ? (
-            <div className="flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-stone-400" />
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="px-3 py-1.5 text-xs font-bold bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 text-stone-800 cursor-pointer shadow-2xs"
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handlePrevMonth}
+                className="p-1.5 text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                title="上一個月"
               >
-                {availableMonths.map((ym) => (
-                  <option key={ym} value={ym}>
-                    {ym} 報表
+                ◀
+              </button>
+
+              {/* 年份選擇 */}
+              <select
+                value={currYearPart}
+                onChange={(e) => handleYearChangeForMonth(e.target.value)}
+                className="px-2.5 py-1.5 text-xs font-bold bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 text-stone-800 cursor-pointer shadow-2xs"
+              >
+                {availableYears.map((y) => (
+                  <option key={y} value={y}>
+                    {y} 年
                   </option>
                 ))}
               </select>
+
+              {/* 月份選擇 */}
+              <select
+                value={currMonthPart}
+                onChange={(e) => handleMonthChangeForMonth(e.target.value)}
+                className="px-2.5 py-1.5 text-xs font-bold bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 text-stone-800 cursor-pointer shadow-2xs"
+              >
+                {Array.from({ length: 12 }, (_, i) => {
+                  const m = String(i + 1).padStart(2, '0');
+                  return (
+                    <option key={m} value={m}>
+                      {m} 月
+                    </option>
+                  );
+                })}
+              </select>
+
+              <button
+                type="button"
+                onClick={handleNextMonth}
+                className="p-1.5 text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                title="下一個月"
+              >
+                ▶
+              </button>
+
+              {selectedMonth !== currentYearMonth && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedMonth(currentYearMonth)}
+                  className="px-2 py-1 text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer"
+                  title="切換回系統當前月份"
+                >
+                  回到本月
+                </button>
+              )}
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              <Calendar className="w-4 h-4 text-stone-400" />
+              <button
+                type="button"
+                onClick={() => setSelectedYear(String(parseInt(selectedYear, 10) - 1))}
+                className="p-1.5 text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                title="上一年"
+              >
+                ◀
+              </button>
+
               <select
                 value={selectedYear}
                 onChange={(e) => setSelectedYear(e.target.value)}
@@ -459,10 +660,30 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
               >
                 {availableYears.map((y) => (
                   <option key={y} value={y}>
-                    {y} 年度交叉表
+                    {y} 年度交叉分析
                   </option>
                 ))}
               </select>
+
+              <button
+                type="button"
+                onClick={() => setSelectedYear(String(parseInt(selectedYear, 10) + 1))}
+                className="p-1.5 text-stone-600 hover:text-stone-900 bg-stone-100 hover:bg-stone-200 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                title="下一年"
+              >
+                ▶
+              </button>
+
+              {selectedYear !== initialYear && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedYear(initialYear)}
+                  className="px-2 py-1 text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer"
+                  title="回到今年"
+                >
+                  回到今年
+                </button>
+              )}
             </div>
           )}
 
@@ -473,7 +694,7 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer ml-auto sm:ml-0"
           >
             <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>匯出 {reportMode === 'month' ? '月度報表' : '年度交叉表'}</span>
+            <span>匯出 {reportMode === 'month' ? '月度統計報表' : '年度交叉表'}</span>
           </button>
         </div>
       </div>
@@ -525,6 +746,68 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
               <span className="text-[11px] text-stone-400 mt-1 block">
                 平均單筆零用金請領額
               </span>
+            </div>
+          </div>
+
+          {/* 憑證與發票統計卡片 */}
+          <div className="bg-white p-4 sm:p-5 rounded-2xl border border-stone-200 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-purple-600" />
+                <h3 className="text-xs font-bold text-stone-900">
+                  {selectedMonth} 憑證合規統計（發票 vs 免用發票收據 vs 無憑證）
+                </h3>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-stone-500">合法憑證覆蓋率:</span>
+                <span className="font-mono font-bold text-purple-700 text-sm">
+                  {monthlyData.voucherComplianceRate.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+              {/* 發票 */}
+              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-200/80">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-purple-900">🧾 統一發票</span>
+                  <span className="text-[11px] font-mono text-purple-700">{monthlyData.invoiceCount} 筆</span>
+                </div>
+                <div className="text-lg font-bold font-mono text-purple-800 mt-1">
+                  NT$ {monthlyData.invoiceAmount.toLocaleString()}
+                </div>
+                <span className="text-[10px] text-purple-600 block mt-0.5">
+                  佔支出 {monthlyData.totalExpense > 0 ? ((monthlyData.invoiceAmount / monthlyData.totalExpense) * 100).toFixed(1) : 0}%
+                </span>
+              </div>
+
+              {/* 收據 */}
+              <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200/80">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-900">📄 免用發票收據</span>
+                  <span className="text-[11px] font-mono text-blue-700">{monthlyData.receiptCount} 筆</span>
+                </div>
+                <div className="text-lg font-bold font-mono text-blue-800 mt-1">
+                  NT$ {monthlyData.receiptAmount.toLocaleString()}
+                </div>
+                <span className="text-[10px] text-blue-600 block mt-0.5">
+                  佔支出 {monthlyData.totalExpense > 0 ? ((monthlyData.receiptAmount / monthlyData.totalExpense) * 100).toFixed(1) : 0}%
+                </span>
+              </div>
+
+              {/* 無憑證 */}
+              <div className="p-3 bg-stone-100 rounded-xl border border-stone-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-stone-700">❌ 無憑證 (便簽/白單)</span>
+                  <span className="text-[11px] font-mono text-stone-500">{monthlyData.noDocCount} 筆</span>
+                </div>
+                <div className="text-lg font-bold font-mono text-stone-800 mt-1">
+                  NT$ {monthlyData.noDocAmount.toLocaleString()}
+                </div>
+                <span className="text-[10px] text-stone-500 block mt-0.5">
+                  佔支出 {monthlyData.totalExpense > 0 ? ((monthlyData.noDocAmount / monthlyData.totalExpense) * 100).toFixed(1) : 0}%
+                </span>
+              </div>
             </div>
           </div>
 

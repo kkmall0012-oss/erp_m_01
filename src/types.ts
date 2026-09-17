@@ -1,4 +1,5 @@
 export type TransactionType = 'expense' | 'income';
+export type ReceiptType = 'receipt' | 'invoice' | 'none';
 
 export interface CategoryConfig {
   id: string;
@@ -23,6 +24,41 @@ export interface Transaction {
   amount: number; // 金額 (NT$)
   note: string;
   createdAt: number;
+  receiptType?: ReceiptType; // 'receipt' (收據) | 'invoice' (發票) | 'none' (無憑證)
+  invoiceNumber?: string; // 發票號碼 (選填，當 receiptType === 'invoice' 時)
+  subAccountSourceId?: string; // 若是由專款子帳戶匯入，記錄來源子帳戶 ID
+  subAccountSourceName?: string; // 若是由專款子帳戶匯入，記錄子帳戶名稱
+}
+
+// 採買子帳號 (例如：小明每週午餐採買備用金5000元、工地臨時採買備用金等)
+export interface SubAccountItem {
+  id: string;
+  date: string; // YYYY-MM-DD
+  type: 'expense' | 'income'; // 支出 (採買開銷) 或 收入 (追加備用金)
+  categoryId?: string; // 支出分類 ID (如：dining, fuel, misc)
+  categoryName?: string; // 支出分類名稱 (如：餐費、油資/交通)
+  subItem: string; // 店家或項目名稱 (例如：池上便當)
+  amount: number; // 金額 (NT$)
+  receiptType: ReceiptType; // 單據憑證類型：收據 / 發票 / 無
+  invoiceNumber?: string; // 發票號碼 (選填)
+  claimant?: string; // 採買/經手人
+  note?: string; // 備註說明
+  createdAt: number;
+  isImportedToGeneral?: boolean; // 是否已匯入總帳
+}
+
+export interface SubAccount {
+  id: string;
+  name: string; // 例如「每週午餐採買 (小明)」、「台北採購備用金」
+  custodian: string; // 採買負責同仁 (經辦人)
+  initialFund: number; // 撥發採買備用金金額 (NT$)
+  startDate: string; // 撥款/開始日期
+  status: 'active' | 'settled'; // 進行中 | 已結算
+  note?: string; // 用途備註 (如：每週一預撥5000元，週五結算匯入總帳)
+  createdAt: number;
+  settledAt?: number; // 結算時間戳
+  settlementNote?: string; // 結算備註
+  items: SubAccountItem[]; // 每日採買明細
 }
 
 // 廠長專用零用金領取紀錄 (只記錄何時領了多少)
@@ -48,6 +84,7 @@ export interface BackupData {
   budgets: Record<string, MonthBudget>;
   claimants?: string[];
   directorWithdrawals?: DirectorWithdrawal[];
+  subAccounts?: SubAccount[];
 }
 
 // 預設常用請領人名單
