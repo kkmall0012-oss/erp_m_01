@@ -10,7 +10,12 @@ import {
   Plus, 
   SlidersHorizontal,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Utensils,
+  Fuel,
+  HandCoins,
+  Car,
+  PackageCheck
 } from 'lucide-react';
 import { CategoryConfig, Transaction, TransactionType, ReceiptType } from '../types';
 import { getTodayDateStr } from '../utils/storage';
@@ -83,6 +88,13 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
     '其他現金收入'
   ];
 
+  // 支出大類：排除零用金撥補（撥補屬收入類別，支出登記頁面嚴禁出現撥補選項）
+  const expenseCategories = useMemo(() => {
+    return categories.filter(
+      (c) => c.type === 'expense' && c.id !== 'replenishment' && !c.name.includes('撥補')
+    );
+  }, [categories]);
+
   // 計算查詢月份項目的統計頻率
   const queryMonth = currentYearMonth || date.slice(0, 7);
 
@@ -128,9 +140,9 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
       setCustomIncomeSource('');
 
       if (type === 'expense') {
-        const targetCat = (defaultCategoryId && categories.find((c) => c.id === defaultCategoryId)) ||
-          categories.find((c) => c.type === 'expense') ||
-          categories[0];
+        const targetCat = (defaultCategoryId && expenseCategories.find((c) => c.id === defaultCategoryId)) ||
+          expenseCategories.find((c) => c.id === 'dining') ||
+          expenseCategories[0];
         if (targetCat) {
           setSelectedCategoryId(targetCat.id);
           setSelectedSubItem(targetCat.defaultSubItems[0] || '');
@@ -239,6 +251,31 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
     });
 
     onClose();
+  };
+
+  // 確保分類圖示使用乾淨圖標，絕不顯示資料庫原始英文欄位名稱
+  const renderCategoryIcon = (cat: CategoryConfig, isSelected: boolean) => {
+    const iconKey = (cat.icon || '').toLowerCase();
+    const idKey = (cat.id || '').toLowerCase();
+    const nameKey = (cat.name || '').toLowerCase();
+    const iconClass = isSelected ? 'w-4 h-4 text-amber-300 shrink-0' : 'w-4 h-4 text-stone-600 shrink-0';
+
+    if (iconKey.includes('utensils') || idKey === 'dining' || nameKey.includes('餐') || nameKey.includes('食') || nameKey.includes('便當')) {
+      return <Utensils className={iconClass} />;
+    }
+    if (iconKey.includes('fuel') || idKey === 'fuel' || nameKey.includes('油') || nameKey.includes('車')) {
+      return <Fuel className={iconClass} />;
+    }
+    if (iconKey.includes('handcoins') || idKey === 'advance' || nameKey.includes('代墊') || nameKey.includes('預支')) {
+      return <HandCoins className={iconClass} />;
+    }
+    if (iconKey.includes('car') || idKey === 'transport' || nameKey.includes('交通') || nameKey.includes('差旅')) {
+      return <Car className={iconClass} />;
+    }
+    if (iconKey.includes('coins') || idKey === 'replenishment' || nameKey.includes('撥補') || nameKey.includes('收入')) {
+      return <Coins className={iconClass} />;
+    }
+    return <PackageCheck className={iconClass} />;
   };
 
   return (
@@ -356,7 +393,7 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                   )}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {categories.map((cat) => {
+                  {expenseCategories.map((cat) => {
                     const isSelected = selectedCategoryId === cat.id;
                     return (
                       <button
@@ -369,7 +406,7 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                             : 'border-stone-200 bg-stone-50/80 hover:bg-stone-100 text-stone-700 font-medium'
                         }`}
                       >
-                        <span className="text-base">{cat.icon}</span>
+                        {renderCategoryIcon(cat, isSelected)}
                         <span className="text-xs truncate">{cat.name}</span>
                       </button>
                     );
@@ -485,7 +522,7 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                         : 'border-stone-200 bg-stone-50 text-stone-600 hover:bg-stone-100'
                     }`}
                   >
-                    <span>📄 免用收據</span>
+                    <span>📄 收據</span>
                   </button>
 
                   <button

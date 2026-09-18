@@ -406,11 +406,11 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
         '備註': '附統一發票號碼'
       },
       {
-        '憑證類型': '📄 免用發票收據',
+        '憑證類型': '📄 收據',
         '總筆數': monthlyData.receiptCount,
         '金額總計 (NT$)': monthlyData.receiptAmount,
         '佔支出比率': `${monthlyData.totalExpense > 0 ? ((monthlyData.receiptAmount / monthlyData.totalExpense) * 100).toFixed(1) : 0}%`,
-        '備註': '免用統一發票收據/專用收據'
+        '備註': '店家/廠商專用收據'
       },
       {
         '憑證類型': '❌ 無憑證 (白單/便簽)',
@@ -755,7 +755,7 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
               <div className="flex items-center gap-2">
                 <FileSpreadsheet className="w-4 h-4 text-purple-600" />
                 <h3 className="text-xs font-bold text-stone-900">
-                  {selectedMonth} 憑證合規統計（發票 vs 免用發票收據 vs 無憑證）
+                  {selectedMonth} 憑證合規統計（發票 vs 收據 vs 無憑證）
                 </h3>
               </div>
               <div className="flex items-center gap-2 text-xs">
@@ -784,7 +784,7 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
               {/* 收據 */}
               <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200/80">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-blue-900">📄 免用發票收據</span>
+                  <span className="text-xs font-bold text-blue-900">📄 收據</span>
                   <span className="text-[11px] font-mono text-blue-700">{monthlyData.receiptCount} 筆</span>
                 </div>
                 <div className="text-lg font-bold font-mono text-blue-800 mt-1">

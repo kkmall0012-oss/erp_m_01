@@ -428,7 +428,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {categories
-                  .filter((c) => c.type === 'expense')
+                  .filter((c) => c.type === 'expense' && c.id !== 'replenishment' && !c.name.includes('撥補'))
                   .map((cat) => {
                     const isSelected = selectedCategoryId === cat.id;
                     return (
@@ -578,7 +578,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
                   <span>3. 單據憑證類型 (收據 / 發票 / 無)</span>
                 </label>
                 <span className="text-[11px] text-stone-400">
-                  {receiptType === 'invoice' ? '統一發票' : receiptType === 'receipt' ? '免用發票收據' : '無單據'}
+                  {receiptType === 'invoice' ? '統一發票' : receiptType === 'receipt' ? '收據' : '無單據'}
                 </span>
               </div>
 

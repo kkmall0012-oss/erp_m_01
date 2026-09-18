@@ -29,7 +29,7 @@ interface SubAccountSectionProps {
   subAccounts: SubAccount[];
   claimants: string[];
   categories?: CategoryConfig[];
-  onAddSubAccount?: (account: Omit<SubAccount, 'id' | 'createdAt' | 'items'>) => void;
+  onAddSubAccount?: (account: Omit<SubAccount, 'id' | 'createdAt' | 'items'> & { id?: string }) => any;
   onUpdateSubAccount?: (account: SubAccount) => void;
   onDeleteSubAccount?: (id: string) => void;
   onImportItemsToGeneral?: (subAccount: SubAccount, itemsToImport: SubAccountItem[], returnExcessFund?: number) => void;
@@ -58,13 +58,20 @@ export const SubAccountSection: React.FC<SubAccountSectionProps> = ({
   // 子帳戶檢視篩選 (全部、進行中、已結算)
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'settled'>('active');
 
-  // 新增採買子帳號 Modal 狀態
+  // 新增採買子帳號 Modal 狀態 (有撥款才放，預設初始備用金可為 0 或自訂)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [newName, setNewName] = useState<string>('');
   const [newCustodian, setNewCustodian] = useState<string>(claimants[0] || '陳小明');
-  const [newInitialFund, setNewInitialFund] = useState<string>('5000');
+  const [newInitialFund, setNewInitialFund] = useState<string>('0');
   const [newStartDate, setNewStartDate] = useState<string>(getTodayDateStr());
   const [newNote, setNewNote] = useState<string>('');
+
+  // 撥款／追加撥款 Modal 狀態 (有撥款才放，非每月直接撥款)
+  const [isFundModalOpen, setIsFundModalOpen] = useState<boolean>(false);
+  const [fundAmount, setFundAmount] = useState<string>('3000');
+  const [fundMode, setFundMode] = useState<'add' | 'set'>('add');
+  const [fundDate, setFundDate] = useState<string>(getTodayDateStr());
+  const [fundNote, setFundNote] = useState<string>('');
 
   // 採買支出明細 Modal 狀態 (按按鍵跳出彈窗填入，與零用金收支登記一樣)
   const [isAddItemModalOpen, setIsAddItemModalOpen] = useState<boolean>(false);
@@ -99,41 +106,94 @@ export const SubAccountSection: React.FC<SubAccountSectionProps> = ({
     ? currentAccount.items.filter((it) => it.isImportedToGeneral).reduce((sum, it) => sum + it.amount, 0)
     : 0;
 
-  // 建立新採買子帳號
+  // 建立新採買子帳號 (有撥款才放，可自訂初始金額或為 0，建立後自動切換至該子帳)
   const handleCreateAccount = (e: React.FormEvent) => {
     e.preventDefault();
     const fund = parseInt(newInitialFund, 10);
     if (!newName.trim()) return;
-    if (isNaN(fund) || fund < 0) return;
+    const initialAmount = isNaN(fund) || fund < 0 ? 0 : fund;
+    const generatedId = `sub-acc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+    const newAccData = {
+      name: newName.trim(),
+      custodian: newCustodian.trim() || '未指定',
+      initialFund: initialAmount,
+      startDate: newStartDate,
+      status: 'active' as const,
+      note: newNote.trim()
+    };
 
     if (onAddSubAccount) {
-      onAddSubAccount({
-        name: newName.trim(),
-        custodian: newCustodian.trim() || '未指定',
-        initialFund: fund,
-        startDate: newStartDate,
-        status: 'active',
-        note: newNote.trim()
-      });
+      const res = onAddSubAccount({ ...newAccData, id: generatedId });
+      setSelectedAccountId(typeof res === 'string' ? res : generatedId);
     } else if (onUpdateSubAccounts) {
       const newAcc: SubAccount = {
-        id: `sub-acc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        name: newName.trim(),
-        custodian: newCustodian.trim() || '未指定',
-        initialFund: fund,
-        startDate: newStartDate,
-        status: 'active',
-        note: newNote.trim(),
+        ...newAccData,
+        id: generatedId,
         createdAt: Date.now(),
         items: []
       };
       onUpdateSubAccounts([newAcc, ...subAccounts]);
+      setSelectedAccountId(generatedId);
     }
 
     setIsCreateModalOpen(false);
     setNewName('');
-    setNewInitialFund('5000');
+    setNewInitialFund('0');
     setNewNote('');
+  };
+
+  // 執行撥款／追加款項至子帳 (有撥款才放)
+  const handleDisburseFund = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentAccount) return;
+    const amount = parseInt(fundAmount, 10);
+    if (isNaN(amount) || amount <= 0) return;
+
+    const newInitialFund = fundMode === 'add'
+      ? currentAccount.initialFund + amount
+      : amount;
+
+    const actionText = fundMode === 'add'
+      ? `追加撥發備用金 NT$ ${amount.toLocaleString()}`
+      : `調整備用金總額為 NT$ ${amount.toLocaleString()}`;
+
+    const notePart = fundNote.trim() ? ` (${fundNote.trim()})` : '';
+    const newNote = currentAccount.note
+      ? `${currentAccount.note}；[${fundDate} ${actionText}${notePart}]`
+      : `[${fundDate} ${actionText}${notePart}]`;
+
+    const updatedAccount: SubAccount = {
+      ...currentAccount,
+      initialFund: newInitialFund,
+      note: newNote
+    };
+
+    if (onUpdateSubAccount) {
+      onUpdateSubAccount(updatedAccount);
+    } else if (onUpdateSubAccounts) {
+      onUpdateSubAccounts(subAccounts.map((a) => (a.id === updatedAccount.id ? updatedAccount : a)));
+    }
+
+    setIsFundModalOpen(false);
+    setFundAmount('3000');
+    setFundNote('');
+  };
+
+  // 刪除子帳號處理
+  const handleConfirmDeleteAccount = () => {
+    if (!subAccountToDelete) return;
+    const targetId = subAccountToDelete.id;
+
+    if (onDeleteSubAccount) {
+      onDeleteSubAccount(targetId);
+    } else if (onUpdateSubAccounts) {
+      onUpdateSubAccounts(subAccounts.filter((a) => a.id !== targetId));
+    }
+
+    const remaining = subAccounts.filter((a) => a.id !== targetId);
+    setSelectedAccountId(remaining[0]?.id || '');
+    setSubAccountToDelete(null);
   };
 
   // 由 SubAccountItemModal 新增採買明細
@@ -324,6 +384,17 @@ export const SubAccountSection: React.FC<SubAccountSectionProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {currentAccount && (
+              <button
+                type="button"
+                onClick={() => setSubAccountToDelete(currentAccount)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                title="刪除當前選取的採買子帳"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>刪除子帳</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setIsCreateModalOpen(true)}
@@ -409,14 +480,43 @@ export const SubAccountSection: React.FC<SubAccountSectionProps> = ({
         <div className="space-y-6">
           {/* 子帳號概要與指標卡片 */}
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs">
-              <span className="text-xs font-semibold text-stone-500">撥發採買備用金</span>
-              <div className="text-xl font-bold text-stone-900 mt-1 font-mono">
-                NT$ {currentAccount.initialFund.toLocaleString()}
+            <div className="bg-white p-4 rounded-2xl border border-stone-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-stone-500">撥發採買備用金</span>
+                  {currentAccount.initialFund === 0 && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-bold">
+                      待撥款
+                    </span>
+                  )}
+                </div>
+                <div className="text-xl font-bold text-stone-900 mt-1 font-mono">
+                  NT$ {currentAccount.initialFund.toLocaleString()}
+                </div>
+                <div className="text-[11px] text-stone-400 mt-1 flex items-center justify-between">
+                  <span>採買負責人:</span>
+                  <span className="font-bold text-stone-700">{currentAccount.custodian}</span>
+                </div>
               </div>
-              <div className="text-[11px] text-stone-400 mt-1 flex items-center justify-between">
-                <span>採買負責人:</span>
-                <span className="font-bold text-stone-700">{currentAccount.custodian}</span>
+
+              <div className="mt-2.5 pt-2 border-t border-stone-100 flex items-center justify-between">
+                <span className="text-[10px] text-stone-400">有撥款才放</span>
+                {currentAccount.status === 'active' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFundAmount(currentAccount.initialFund === 0 ? '5000' : '3000');
+                      setFundMode('add');
+                      setFundDate(getTodayDateStr());
+                      setFundNote('');
+                      setIsFundModalOpen(true);
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-sky-800 hover:text-sky-950 cursor-pointer bg-sky-50 hover:bg-sky-100 px-2 py-1 rounded-lg border border-sky-200 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>{currentAccount.initialFund === 0 ? '撥發備用金' : '追加撥款'}</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -495,6 +595,15 @@ export const SubAccountSection: React.FC<SubAccountSectionProps> = ({
                   title="匯出此採買子帳專屬 Excel"
                 >
                   <FileSpreadsheet className="w-4 h-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSubAccountToDelete(currentAccount)}
+                  className="p-1 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                  title="刪除此採買子帳"
+                >
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -753,17 +862,27 @@ export const SubAccountSection: React.FC<SubAccountSectionProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-stone-700 mb-1">
-                    採買經手人 / 請領人
-                  </label>
-                  <input
-                    type="text"
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-stone-700">
+                      採買經手人 / 請領人
+                    </label>
+                    <span className="text-[10px] text-stone-400">內部同仁</span>
+                  </div>
+                  <select
                     required
                     value={newCustodian}
                     onChange={(e) => setNewCustodian(e.target.value)}
-                    placeholder="例如：陳小明"
-                    className="w-full px-3 py-2 text-xs bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden"
-                  />
+                    className="w-full px-3 py-2 text-xs bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden font-medium text-stone-800"
+                  >
+                    {claimants.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                    {!claimants.includes(newCustodian) && newCustodian && (
+                      <option value={newCustodian}>{newCustodian} (現有)</option>
+                    )}
+                  </select>
                 </div>
 
                 <div>
@@ -776,11 +895,11 @@ export const SubAccountSection: React.FC<SubAccountSectionProps> = ({
                     required
                     value={newInitialFund}
                     onChange={(e) => setNewInitialFund(e.target.value)}
-                    placeholder="5000"
+                    placeholder="0"
                     className="w-full px-3 py-2 text-xs font-bold font-mono bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden"
                   />
-                  <span className="text-[10px] text-stone-400 mt-0.5 block">
-                    *手上的零用金將即時減少此金額
+                  <span className="text-[10px] text-stone-500 mt-0.5 block">
+                    * 採買撥款採取「有撥款才放」，若目前尚未撥發備用金可填 0，待有實際撥款時隨時增撥補入
                   </span>
                 </div>
               </div>
@@ -926,6 +1045,148 @@ export const SubAccountSection: React.FC<SubAccountSectionProps> = ({
         </div>
       )}
 
+      {/* 撥款／追加撥款 Modal (有撥款才放，非每月直接撥款) */}
+      {isFundModalOpen && currentAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl border border-stone-200 shadow-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-sky-100 text-sky-800 rounded-xl">
+                  <Coins className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900">
+                    撥發採買備用金 (有撥款才放)
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    子帳號：{currentAccount.name}（經手人：{currentAccount.custodian}）
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFundModalOpen(false)}
+                className="text-stone-400 hover:text-stone-600 text-sm cursor-pointer p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-3 bg-stone-50 rounded-xl border border-stone-200/80 text-xs space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-stone-500">目前已撥本金：</span>
+                <span className="font-bold text-stone-900 font-mono">
+                  NT$ {currentAccount.initialFund.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-500">目前尚存未用：</span>
+                <span className={`font-bold font-mono ${remainingFund >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                  NT$ {remainingFund.toLocaleString()}
+                </span>
+              </div>
+            </div>
+
+            <form onSubmit={handleDisburseFund} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                  撥款作業方式
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFundMode('add')}
+                    className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all cursor-pointer text-center ${
+                      fundMode === 'add'
+                        ? 'bg-sky-900 text-white border-sky-900 shadow-2xs'
+                        : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
+                    }`}
+                  >
+                    ＋ 追加撥發金額
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFundMode('set')}
+                    className={`py-2 px-3 text-xs font-bold rounded-xl border transition-all cursor-pointer text-center ${
+                      fundMode === 'set'
+                        ? 'bg-sky-900 text-white border-sky-900 shadow-2xs'
+                        : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-50'
+                    }`}
+                  >
+                    設定撥款總額
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  {fundMode === 'add' ? '本次撥發金額 (NT$)' : '設定撥發總額 (NT$)'}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-xs text-stone-400 font-bold">NT$</span>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={fundAmount}
+                    onChange={(e) => setFundAmount(e.target.value)}
+                    placeholder="3000"
+                    className="w-full pl-11 pr-3 py-2 text-sm font-bold font-mono bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden focus:border-sky-500 focus:bg-white"
+                  />
+                </div>
+                <span className="text-[11px] text-stone-500 mt-1 block">
+                  {fundMode === 'add'
+                    ? `完成後此子帳總撥發額將變為 NT$ ${(currentAccount.initialFund + (parseInt(fundAmount, 10) || 0)).toLocaleString()}`
+                    : `將此子帳初始備用金調整為 NT$ ${(parseInt(fundAmount, 10) || 0).toLocaleString()}`}
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  撥款日期
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={fundDate}
+                  onChange={(e) => setFundDate(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  撥款備註用途 (選填)
+                </label>
+                <input
+                  type="text"
+                  value={fundNote}
+                  onChange={(e) => setFundNote(e.target.value)}
+                  placeholder="例如：臨時追加午餐費用、現場五金零星材料款"
+                  className="w-full px-3 py-2 text-xs bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100">
+                <button
+                  type="button"
+                  onClick={() => setIsFundModalOpen(false)}
+                  className="px-4 py-2 text-xs text-stone-600 hover:bg-stone-100 rounded-xl font-medium cursor-pointer"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-bold text-white bg-sky-900 hover:bg-sky-800 rounded-xl shadow-xs cursor-pointer"
+                >
+                  確認撥款入子帳
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* 刪除子帳號確認 */}
       {subAccountToDelete && (
         <ConfirmDialog
@@ -934,14 +1195,7 @@ export const SubAccountSection: React.FC<SubAccountSectionProps> = ({
           message={`確定要刪除「${subAccountToDelete.name}」嗎？此動作將刪除該帳號內部登記的 ${subAccountToDelete.items.length} 筆明細（已匯入總帳的紀錄不會被刪除）。`}
           confirmLabel="確認刪除"
           isDanger={true}
-          onConfirm={() => {
-            if (onDeleteSubAccount) {
-              onDeleteSubAccount(subAccountToDelete.id);
-            } else if (onUpdateSubAccounts) {
-              onUpdateSubAccounts(subAccounts.filter((a) => a.id !== subAccountToDelete.id));
-            }
-            setSubAccountToDelete(null);
-          }}
+          onConfirm={handleConfirmDeleteAccount}
           onCancel={() => setSubAccountToDelete(null)}
         />
       )}

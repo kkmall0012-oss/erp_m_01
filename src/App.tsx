@@ -10,7 +10,8 @@ import {
   ShoppingBag,
   TrendingDown,
   TrendingUp,
-  Plus
+  Plus,
+  Table as TableIcon
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { StatCards } from './components/StatCards';
@@ -22,9 +23,12 @@ import { TransactionEditModal } from './components/TransactionEditModal';
 import { BudgetModal } from './components/BudgetModal';
 import { SettingsModal } from './components/SettingsModal';
 import { BackupModal } from './components/BackupModal';
+import { DataImportModal } from './components/DataImportModal';
 import { DirectorWithdrawalSection } from './components/DirectorWithdrawalSection';
 import { CategoryReportView } from './components/CategoryReportView';
 import { SubAccountSection } from './components/SubAccountSection';
+import { ReportCenterView } from './components/ReportCenterView';
+import { ReportExportModal } from './components/ReportExportModal';
 import { 
   Transaction, 
   CategoryConfig, 
@@ -73,9 +77,13 @@ export default function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState<boolean>(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<'categories' | 'claimants'>('categories');
   const [isBackupModalOpen, setIsBackupModalOpen] = useState<boolean>(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false);
+  const [importNotification, setImportNotification] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState<boolean>(false);
   const [createModalType, setCreateModalType] = useState<'income' | 'expense'>('expense');
   const [createModalCategoryId, setCreateModalCategoryId] = useState<string | undefined>(undefined);
+  const [isReportExportModalOpen, setIsReportExportModalOpen] = useState<boolean>(false);
+  const [reportsSubTab, setReportsSubTab] = useState<'center' | 'analytics'>('center');
 
   // 初次載入本機所有資料
   useEffect(() => {
@@ -125,15 +133,17 @@ export default function App() {
     saveSubAccounts(newSubs);
   };
 
-  // 建立新專款子帳號
-  const handleAddSubAccount = (accountData: Omit<SubAccount, 'id' | 'createdAt' | 'items'>) => {
+  // 建立新專款子帳號 (有撥款才放，可自訂初始撥款或為 0)
+  const handleAddSubAccount = (accountData: Omit<SubAccount, 'id' | 'createdAt' | 'items'> & { id?: string }) => {
+    const newId = accountData.id || `sub-acc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newAccount: SubAccount = {
       ...accountData,
-      id: `sub-acc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: newId,
       createdAt: Date.now(),
       items: []
     };
     handleSubAccountsChange([newAccount, ...subAccounts]);
+    return newAccount.id;
   };
 
   // 更新單一專款子帳號
@@ -218,6 +228,18 @@ export default function App() {
     }
   };
 
+  // 批次匯入新資料（防重複檢核通過後的安全寫入）
+  const handleImportSuccess = (newTxList: Transaction[], stats: { added: number; duplicates: number }) => {
+    handleTransactionsChange([...newTxList, ...transactions]);
+    setImportNotification({
+      message: `成功匯入 ${stats.added} 筆全新帳務資料！${stats.duplicates > 0 ? `（已自動排除略過 ${stats.duplicates} 筆重複資料）` : ''}`,
+      type: 'success'
+    });
+    setTimeout(() => {
+      setImportNotification(null);
+    }, 6000);
+  };
+
   // 新增一般零用金記帳 (左側專用表單)
   const handleAddTransaction = (data: Omit<Transaction, 'id' | 'createdAt'>) => {
     const newRecord: Transaction = {
@@ -293,10 +315,9 @@ export default function App() {
     handleBudgetsChange(updated);
   };
 
-  // 匯出 Excel
+  // 匯出 Excel (自選報表產出視窗：可單獨選流水帳/日報/分類/損益/平衡表/資金預估，亦可自選打包)
   const handleExportExcel = () => {
-    const currentBudget = budgets[currentYearMonth];
-    exportTransactionsToExcel(transactions, currentYearMonth, currentBudget);
+    setIsReportExportModalOpen(true);
   };
 
   // 還原備份檔
@@ -400,6 +421,32 @@ export default function App() {
     return Math.max(0, activeSubAccountsAllocated - activeSubAccountsSpent);
   }, [activeSubAccountsAllocated, activeSubAccountsSpent]);
 
+  // 零用金實體現鈔滾存計算：
+  // 撥款採取「有撥款才放，並非每月直接撥款」，某月可能無撥補，手上現鈔為前期滾存餘額
+  // 因此手上的現金餘額與總水位是「歷史累計撥補 - 歷史累計總帳支出 - 目前撥給進行中子帳的款項」
+  const cumulativeTransactions = useMemo(() => {
+    // 統計至當前月份底的所有收支紀錄
+    const endOfMonth = `${currentYearMonth}-99`;
+    return transactions.filter((t) => t.date <= endOfMonth);
+  }, [transactions, currentYearMonth]);
+
+  const cumulativeIncome = useMemo(() => {
+    return cumulativeTransactions
+      .filter((t) => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [cumulativeTransactions]);
+
+  const cumulativeExpense = useMemo(() => {
+    return cumulativeTransactions
+      .filter((t) => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [cumulativeTransactions]);
+
+  // 手上的實體零用金 (歷史累積撥入 - 歷史累積總帳直接支出 - 目前已撥給進行中採買子帳的備用金)
+  const cashOnHand = useMemo(() => {
+    return cumulativeIncome - cumulativeExpense - activeSubAccountsAllocated;
+  }, [cumulativeIncome, cumulativeExpense, activeSubAccountsAllocated]);
+
   const currentBudget = budgets[currentYearMonth];
 
   if (!isLoaded) {
@@ -417,10 +464,24 @@ export default function App() {
         currentYearMonth={currentYearMonth}
         onMonthChange={setCurrentYearMonth}
         onExportExcel={handleExportExcel}
+        onOpenImport={() => setIsImportModalOpen(true)}
         onOpenBackup={() => setIsBackupModalOpen(true)}
         onOpenSettings={() => handleOpenSettingsModal('categories')}
         onOpenBudget={() => setIsBudgetModalOpen(true)}
       />
+
+      {/* 匯入通知提示列 */}
+      {importNotification && (
+        <div className="bg-emerald-600 text-white text-xs px-4 py-2.5 text-center font-bold flex items-center justify-center gap-2 shadow-sm animate-fade-in">
+          <span>{importNotification.message}</span>
+          <button
+            onClick={() => setImportNotification(null)}
+            className="text-emerald-100 hover:text-white ml-2 text-sm cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* 主工作區容器 */}
       <main className="grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
@@ -450,10 +511,10 @@ export default function App() {
                   : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              <BarChart3 className="w-4 h-4 text-emerald-600" />
-              <span>分類月報表 & 年報表</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-medium">
-                月/年統計
+              <TableIcon className="w-4 h-4 text-emerald-700" />
+              <span>P. 統計報表中心</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
+                12種報表
               </span>
             </button>
 
@@ -523,10 +584,12 @@ export default function App() {
               totalIncome={totalIncome}
               expenseCount={expenseCount}
               incomeCount={incomeCount}
+              cashOnHand={cashOnHand}
               activeSubAccountsAllocated={activeSubAccountsAllocated}
               activeSubAccountsRemaining={activeSubAccountsRemaining}
               activeSubAccountsSpent={activeSubAccountsSpent}
               activeSubAccountsCount={activeSubAccountsCount}
+              onGoToSubAccounts={() => setActiveTab('subaccounts')}
             />
 
             {/* 2. 核心工作站：左側為快速登記工作台 (傻瓜式大按鍵 + 常用捷徑)，右側為月度開支圓餅圖 (半寬緊湊排版) */}
@@ -540,7 +603,7 @@ export default function App() {
                   }}
                   onGoToSubAccounts={() => setActiveTab('subaccounts')}
                   onOpenSettings={handleOpenSettingsModal}
-                  cashOnHand={totalIncome - totalExpense - activeSubAccountsAllocated}
+                  cashOnHand={cashOnHand}
                   subAccountCash={activeSubAccountsRemaining}
                   activeSubAccountsCount={activeSubAccountsCount}
                 />
@@ -571,15 +634,67 @@ export default function App() {
         )}
 
         {/* ========================================================= */}
-        {/* 視圖 2：分類月報表及年報表 (按分類統計、月度損益與1~12月交叉樞紐表) */}
+        {/* 視圖 2：P. 統計報表中心 (支援自由選取12種獨立報表產出、流水帳、損益表、平衡表) */}
         {/* ========================================================= */}
         {activeTab === 'reports' && (
-          <CategoryReportView
-            transactions={transactions}
-            categories={categories}
-            currentYearMonth={currentYearMonth}
-            budgets={budgets}
-          />
+          <div className="space-y-4">
+            {/* 次級切換列 */}
+            <div className="flex items-center justify-between bg-stone-100 p-1.5 rounded-xl text-xs">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setReportsSubTab('center')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    reportsSubTab === 'center'
+                      ? 'bg-white text-stone-900 shadow-2xs'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <TableIcon className="w-3.5 h-3.5 text-emerald-700" />
+                  <span>P. 統計報表中心 (12類流水帳/日報/損益/平衡/預估)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReportsSubTab('analytics')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                    reportsSubTab === 'analytics'
+                      ? 'bg-white text-stone-900 shadow-2xs'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5 text-stone-600" />
+                  <span>圖表統計與全年度交叉樞紐分析</span>
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsReportExportModalOpen(true)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-700 text-white font-semibold text-xs hover:bg-emerald-800 cursor-pointer shadow-2xs active:scale-95"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>快速產出 Excel 報表</span>
+              </button>
+            </div>
+
+            {reportsSubTab === 'center' ? (
+              <ReportCenterView
+                transactions={transactions}
+                categories={categories}
+                currentYearMonth={currentYearMonth}
+                budgets={budgets}
+                subAccounts={subAccounts}
+                directorWithdrawals={directorWithdrawals}
+              />
+            ) : (
+              <CategoryReportView
+                transactions={transactions}
+                categories={categories}
+                currentYearMonth={currentYearMonth}
+                budgets={budgets}
+              />
+            )}
+          </div>
         )}
 
         {/* ========================================================= */}
@@ -630,10 +745,17 @@ export default function App() {
             </button>
             <span>·</span>
             <button
-              onClick={handleExportExcel}
-              className="text-emerald-700 hover:text-emerald-800 font-medium"
+              onClick={() => setIsImportModalOpen(true)}
+              className="text-sky-700 hover:text-sky-800 font-medium cursor-pointer"
             >
-              匯出本月 Excel 報表
+              匯入 Excel 帳務 (智慧防重複)
+            </button>
+            <span>·</span>
+            <button
+              onClick={handleExportExcel}
+              className="text-emerald-700 hover:text-emerald-800 font-medium cursor-pointer"
+            >
+              匯出本月綜合報表 (Excel)
             </button>
           </div>
         </div>
@@ -690,6 +812,16 @@ export default function App() {
         onClearAllData={handleClearAllData}
       />
 
+      {/* 帳務資料匯入視窗 (支援 Excel 空白範本下載、上傳與智慧防重複檢視) */}
+      <DataImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        existingTransactions={transactions}
+        categories={categories}
+        claimants={claimants}
+        onImportSuccess={handleImportSuccess}
+      />
+
       {/* 獨立跳出修改視窗 (專用於明細清單的修改動作，不佔用左側專用記帳表單) */}
       <TransactionEditModal
         isOpen={!!editingTransaction}
@@ -699,6 +831,22 @@ export default function App() {
         claimants={claimants}
         onSave={handleUpdateTransaction}
         onDelete={handleDeleteTransaction}
+      />
+
+      {/* 自選專業報表產出視窗 (讓使用者自由勾選想產出的報表，而非強制只產出一種) */}
+      <ReportExportModal
+        isOpen={isReportExportModalOpen}
+        onClose={() => setIsReportExportModalOpen(false)}
+        onNavigateToReportCenter={(reportId) => {
+          setActiveTab('reports');
+          setReportsSubTab('center');
+        }}
+        transactions={transactions}
+        categories={categories}
+        currentYearMonth={currentYearMonth}
+        budgets={budgets}
+        subAccounts={subAccounts}
+        directorWithdrawals={directorWithdrawals}
       />
     </div>
   );

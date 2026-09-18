@@ -204,7 +204,7 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
                 className="w-full px-3 py-2 text-sm bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 font-medium"
               >
                 {categories
-                  .filter((c) => c.type === transaction.type)
+                  .filter((c) => c.type === transaction.type && (transaction.type === 'expense' ? c.id !== 'replenishment' && !c.name.includes('撥補') : true))
                   .map((cat) => (
                     <option key={cat.id} value={cat.id}>
                       {cat.name}
@@ -312,7 +312,7 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
                   <span>單據憑證類型</span>
                 </label>
                 <span className="text-[11px] text-stone-500">
-                  {receiptType === 'invoice' ? '統一發票' : receiptType === 'receipt' ? '免用發票收據' : '無單據'}
+                  {receiptType === 'invoice' ? '統一發票' : receiptType === 'receipt' ? '收據' : '無單據'}
                 </span>
               </div>
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { 
   FileSpreadsheet, 
+  Upload,
   Database, 
   Settings, 
   ChevronLeft, 
@@ -13,6 +14,7 @@ interface NavbarProps {
   currentYearMonth: string;
   onMonthChange: (ym: string) => void;
   onExportExcel: () => void;
+  onOpenImport: () => void;
   onOpenBackup: () => void;
   onOpenSettings: () => void;
   onOpenBudget: () => void;
@@ -22,6 +24,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   currentYearMonth,
   onMonthChange,
   onExportExcel,
+  onOpenImport,
   onOpenBackup,
   onOpenSettings,
   onOpenBudget,
@@ -128,10 +131,21 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               id="export-excel-btn"
               onClick={onExportExcel}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 transition-all shadow-xs"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-lg bg-emerald-700 text-white hover:bg-emerald-800 active:scale-95 transition-all shadow-xs cursor-pointer"
+              title="自由選擇欲產出的專業統計報表（流水帳明細、收支日報、項目分類、損益表、平衡表、資金預估）"
             >
               <FileSpreadsheet className="w-4 h-4" />
-              <span>匯出 Excel</span>
+              <span>P. 統計報表 (產出)</span>
+            </button>
+
+            <button
+              id="import-data-btn"
+              onClick={onOpenImport}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-sky-600 text-white hover:bg-sky-700 active:scale-95 transition-all shadow-xs cursor-pointer"
+              title="下載空白範本或上傳 Excel 帳務匯入（具備智慧防重複檢視）"
+            >
+              <Upload className="w-4 h-4" />
+              <span>資料匯入</span>
             </button>
 
             <button

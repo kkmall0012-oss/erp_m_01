@@ -6,7 +6,13 @@ import {
   AlertCircle, 
   Plus, 
   ShoppingBag,
-  Users
+  Users,
+  Utensils,
+  Fuel,
+  HandCoins,
+  Car,
+  Coins,
+  PackageCheck
 } from 'lucide-react';
 import { CategoryConfig, SubAccountItem, ReceiptType } from '../types';
 import { getTodayDateStr } from '../utils/storage';
@@ -132,6 +138,31 @@ export const SubAccountItemModal: React.FC<SubAccountItemModalProps> = ({
     onClose();
   };
 
+  // 確保分類圖示使用乾淨圖標，絕不顯示資料庫原始英文欄位名稱
+  const renderCategoryIcon = (cat: CategoryConfig, isSelected: boolean) => {
+    const iconKey = (cat.icon || '').toLowerCase();
+    const idKey = (cat.id || '').toLowerCase();
+    const nameKey = (cat.name || '').toLowerCase();
+    const iconClass = isSelected ? 'w-4 h-4 text-white shrink-0' : 'w-4 h-4 text-stone-600 shrink-0';
+
+    if (iconKey.includes('utensils') || idKey === 'dining' || nameKey.includes('餐') || nameKey.includes('食') || nameKey.includes('便當')) {
+      return <Utensils className={iconClass} />;
+    }
+    if (iconKey.includes('fuel') || idKey === 'fuel' || nameKey.includes('油') || nameKey.includes('車')) {
+      return <Fuel className={iconClass} />;
+    }
+    if (iconKey.includes('handcoins') || idKey === 'advance' || nameKey.includes('代墊') || nameKey.includes('預支')) {
+      return <HandCoins className={iconClass} />;
+    }
+    if (iconKey.includes('car') || idKey === 'transport' || nameKey.includes('交通') || nameKey.includes('差旅')) {
+      return <Car className={iconClass} />;
+    }
+    if (iconKey.includes('coins') || idKey === 'replenishment' || nameKey.includes('撥補') || nameKey.includes('收入')) {
+      return <Coins className={iconClass} />;
+    }
+    return <PackageCheck className={iconClass} />;
+  };
+
   return (
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/70 backdrop-blur-xs overflow-hidden"
@@ -191,7 +222,9 @@ export const SubAccountItemModal: React.FC<SubAccountItemModalProps> = ({
           <div>
             <label className="block font-bold text-stone-700 mb-1.5">支出大類</label>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {categories.map((cat) => {
+              {categories
+                .filter((c) => c.type === 'expense' && c.id !== 'replenishment' && !c.name.includes('撥補'))
+                .map((cat) => {
                 const isSelected = selectedCategoryId === cat.id;
                 return (
                   <button
@@ -204,7 +237,7 @@ export const SubAccountItemModal: React.FC<SubAccountItemModalProps> = ({
                         : 'border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700'
                     }`}
                   >
-                    <span className="text-sm">{cat.icon}</span>
+                    {renderCategoryIcon(cat, isSelected)}
                     <span className="font-bold text-xs truncate">{cat.name}</span>
                   </button>
                 );
@@ -305,7 +338,7 @@ export const SubAccountItemModal: React.FC<SubAccountItemModalProps> = ({
                       : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'
                   }`}
                 >
-                  <span>📄 免用發票收據</span>
+                  <span>📄 收據</span>
                 </button>
 
                 <button
@@ -338,16 +371,29 @@ export const SubAccountItemModal: React.FC<SubAccountItemModalProps> = ({
             )}
           </div>
 
-          {/* 6. 採買經手人 */}
+          {/* 6. 採買經手人 / 請領人 (與零用金請款人相同，由內部人員名冊中選擇) */}
           <div>
-            <label className="block font-bold text-stone-700 mb-1">採買經手人</label>
-            <input
-              type="text"
+            <div className="flex items-center justify-between mb-1">
+              <label className="font-bold text-stone-700">採買經手人 / 請領人</label>
+              <span className="text-[10px] text-stone-400">限內部請款同仁名單</span>
+            </div>
+            <select
               value={claimant}
               onChange={(e) => setClaimant(e.target.value)}
-              placeholder="經手採買同仁姓名"
-              className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:border-sky-600 focus:outline-hidden text-xs text-stone-800"
-            />
+              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:border-sky-600 focus:outline-hidden text-xs text-stone-800 font-medium"
+            >
+              {claimants.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+              {defaultCustodian && !claimants.includes(defaultCustodian) && (
+                <option value={defaultCustodian}>{defaultCustodian} (預設經手人)</option>
+              )}
+              {claimant && !claimants.includes(claimant) && claimant !== defaultCustodian && (
+                <option value={claimant}>{claimant} (現有)</option>
+              )}
+            </select>
           </div>
 
           {/* 7. 備註說明 */}
