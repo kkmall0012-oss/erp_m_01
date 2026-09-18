@@ -12,7 +12,7 @@ import {
   CheckCircle2,
   Trash2
 } from 'lucide-react';
-import { Transaction, CategoryConfig, MonthBudget, BackupData, DirectorWithdrawal, SubAccount, CompanyProfile, BusinessContact } from '../types';
+import { Transaction, CategoryConfig, MonthBudget, BackupData, DirectorWithdrawal, SubAccount } from '../types';
 import { exportBackupJSON, parseBackupJSON } from '../utils/storage';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -25,8 +25,6 @@ interface BackupModalProps {
   claimants?: string[];
   directorWithdrawals?: DirectorWithdrawal[];
   subAccounts?: SubAccount[];
-  companyProfile?: CompanyProfile;
-  businessContacts?: BusinessContact[];
   onRestoreBackup: (data: BackupData) => void;
   onClearAllData: () => void;
 }
@@ -40,8 +38,6 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   claimants,
   directorWithdrawals,
   subAccounts,
-  companyProfile,
-  businessContacts,
   onRestoreBackup,
   onClearAllData
 }) => {
@@ -55,7 +51,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
   // 下載 JSON 備份檔
   const handleDownloadBackup = () => {
-    exportBackupJSON(transactions, categories, budgets, claimants, directorWithdrawals, subAccounts, companyProfile, businessContacts);
+    exportBackupJSON(transactions, categories, budgets, claimants, directorWithdrawals, subAccounts);
   };
 
   // 匯入 JSON 備份檔
@@ -275,11 +271,8 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                   {pendingRestore.directorWithdrawals && (
                     <div>廠長領取紀錄：{pendingRestore.directorWithdrawals.length} 筆</div>
                   )}
-                  {pendingRestore.companyProfile && (
-                    <div>本公司抬頭：{pendingRestore.companyProfile.name}</div>
-                  )}
-                  {pendingRestore.businessContacts && (
-                    <div>商務通訊名冊：{pendingRestore.businessContacts.length} 筆</div>
+                  {pendingRestore.subAccounts && (
+                    <div>採買子帳帳戶：{pendingRestore.subAccounts.length} 個</div>
                   )}
                 </div>
               </div>

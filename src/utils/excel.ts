@@ -380,7 +380,7 @@ export function exportTransactionsToExcel(
     '報表產出日期': printDateOnly
   });
   complianceRows.push({
-    '分析項目': '📄 收據 (免用統一發票收據)',
+    '分析項目': '📄 收據',
     '金額/數據 (NT$)': receiptAmount,
     '筆數/張數': `${receiptCount} 張`,
     '比重佔比 (%)': totalExpense > 0 ? ((receiptAmount / totalExpense) * 100).toFixed(1) + '%' : '0%',

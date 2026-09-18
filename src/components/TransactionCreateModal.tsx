@@ -220,6 +220,12 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
       return;
     }
 
+    // 單據發票強制填寫驗證 (選擇發票時，發票號碼為強制輸入選項)
+    if (receiptType === 'invoice' && !invoiceNumber.trim()) {
+      setErrorMessage('選擇「發票」時，發票號碼為強制輸入選項，請填寫發票號碼');
+      return;
+    }
+
     // 若為自訂並勾選儲存至下拉選單
     if (isCustomMode && saveToMenu && onQuickAddSubItem && finalSubItem) {
       onQuickAddSubItem(selectedCategoryId, finalSubItem);
@@ -312,7 +318,7 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
             type="button"
             onClick={onClose}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/25 active:bg-white/30 text-white text-xs font-bold transition-all cursor-pointer"
-            title="關閉視窗 (Esc)"
+            title="關閉視窗"
           >
             <X className="w-4 h-4" />
             <span>關閉</span>
@@ -340,8 +346,8 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                     開支金額 <span className="text-rose-600 font-bold">*</span>
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-rose-500 font-bold text-base">
-                      $
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-rose-500 font-bold text-xs">
+                      NT$
                     </span>
                     <input
                       type="number"
@@ -352,7 +358,7 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                       placeholder="例：250"
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      className="w-full pl-8 pr-3 py-2.5 rounded-xl border-2 border-stone-200 bg-stone-50/50 focus:bg-white focus:border-rose-500 focus:outline-hidden font-mono font-bold text-lg text-rose-600 transition-colors"
+                      className="w-full pl-11 pr-3 py-2.5 rounded-xl border-2 border-stone-200 bg-stone-50/50 focus:bg-white focus:border-rose-500 focus:outline-hidden font-mono font-bold text-lg text-rose-600 transition-colors"
                     />
                   </div>
                 </div>
@@ -449,9 +455,10 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                     options={currentCategory?.defaultSubItems || []}
                     value={selectedSubItem}
                     onChange={(val) => setSelectedSubItem(val)}
-                    usageCountMap={subItemUsageMap}
-                    queryMonthLabel={queryMonth}
+                    usageCounts={subItemUsageMap}
+                    monthLabel={queryMonth}
                     placeholder={`搜尋或點選 ${currentCategory?.name || '品項'}...`}
+                    itemTypeLabel={currentCategory?.name || '品項'}
                   />
                 ) : (
                   <div className="space-y-1.5">
@@ -540,8 +547,15 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
 
                 {receiptType === 'invoice' && (
                   <div className="mt-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] font-bold text-indigo-900 flex items-center gap-1">
+                        <span>發票號碼</span>
+                        <span className="text-rose-600 font-bold">*必填（未輸入無法建檔）</span>
+                      </span>
+                    </div>
                     <input
                       type="text"
+                      required
                       placeholder="請輸入發票號碼（例：AB-12345678）"
                       value={invoiceNumber}
                       onChange={(e) => setInvoiceNumber(e.target.value.toUpperCase())}
@@ -586,9 +600,10 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                     options={claimants}
                     value={selectedClaimant}
                     onChange={(val) => setSelectedClaimant(val)}
-                    usageCountMap={claimantUsageMap}
-                    queryMonthLabel={queryMonth}
+                    usageCounts={claimantUsageMap}
+                    monthLabel={queryMonth}
                     placeholder="搜尋或選擇經手同仁..."
+                    itemTypeLabel="請款同仁"
                   />
                 ) : (
                   <div className="space-y-1.5">
@@ -756,7 +771,7 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
           {/* 底部按鈕 - 固定在 Modal 底部 */}
           <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
             <span className="text-[11px] text-stone-400 hidden sm:inline">
-              提示：可直接按鍵盤 Esc 隨時關閉
+              點選右上角關閉或取消按鍵可隨時退出
             </span>
             <div className="flex items-center gap-2.5 ml-auto">
               <button

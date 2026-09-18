@@ -5,7 +5,7 @@ export interface ReportDefinition {
   id: string;
   code: string;
   name: string;
-  category: '明細與流水帳類' | '項目分類統計類' | '損益與收支淨值類';
+  category: '明細與流水帳類' | '項目分類統計類';
   shortDesc: string;
   iconName: string;
 }
@@ -53,24 +53,6 @@ export const REPORT_CATALOG: ReportDefinition[] = [
     category: '項目分類統計類',
     shortDesc: '各大支出分類科目與撥補收入跨 1~12 月之年度交叉樞紐分析總表',
     iconName: 'Table'
-  },
-
-  // 3. 損益與收支淨值類
-  {
-    id: 'income_statement',
-    code: '06',
-    name: '損益表 (收支損益分析)',
-    category: '損益與收支淨值類',
-    shortDesc: '營業收入撥補 vs 營業費用零星開銷 vs 本期收支淨損益結餘',
-    iconName: 'Receipt'
-  },
-  {
-    id: 'net_cash_flow',
-    code: '07',
-    name: '收支淨值報表 (淨值流量表)',
-    category: '損益與收支淨值類',
-    shortDesc: '各期現金流入、流出、淨現金流量與累計零用金水位變化',
-    iconName: 'Activity'
   }
 ];
 
@@ -190,6 +172,7 @@ export function buildDailySummaryReport(
     expense: number;
     txCount: number;
     notes: string[];
+    items: Transaction[];
   }> = {};
 
   const daysOfWeek = ['週日', '週一', '週二', '週三', '週四', '週五', '週六'];
@@ -204,7 +187,8 @@ export function buildDailySummaryReport(
         income: 0,
         expense: 0,
         txCount: 0,
-        notes: []
+        notes: [],
+        items: []
       };
     }
     if (t.type === 'income') {
@@ -213,6 +197,7 @@ export function buildDailySummaryReport(
       map[t.date].expense += t.amount;
     }
     map[t.date].txCount += 1;
+    map[t.date].items.push(t);
     const summary = `${t.categoryName}: ${t.subItem} ($${t.amount.toLocaleString()})`;
     if (map[t.date].notes.length < 3) {
       map[t.date].notes.push(summary);
@@ -232,7 +217,8 @@ export function buildDailySummaryReport(
       net: item.income - item.expense,
       cumulativeBalance: cumulative,
       txCount: item.txCount,
-      notes: item.notes.join('； ')
+      notes: item.notes.join('； '),
+      items: item.items
     };
   });
 
@@ -680,37 +666,6 @@ export function exportSingleReportExcel(
 
     const ws = XLSX.utils.json_to_sheet(rows);
     XLSX.utils.book_append_sheet(wb, ws, `${yr}年度彙總樞紐表`);
-  } else if (reportId === 'income_statement') {
-    const data = buildIncomeStatementReport(filteredTxs);
-    const rows = [
-      { '財務會計科目': '【一、營業撥補收入總計】', '金額 (NT$)': data.totalIncome, '比率': '100.0%', '說明備註': '零用金撥補款項' },
-      ...data.expenseItems.map((e) => ({
-        '財務會計科目': `　營業費用 - ${e.name}`,
-        '金額 (NT$)': e.amount,
-        '比率': `${e.percentage.toFixed(1)}%`,
-        '說明備註': '各項日常零星開支'
-      })),
-      { '財務會計科目': '【二、零用金費用支出總計】', '金額 (NT$)': data.totalExpense, '比率': '100.0%', '說明備註': '本期全部開銷' },
-      { '財務會計科目': '【三、本期收支淨損益結餘】', '金額 (NT$)': data.netProfit, '比率': '-', '說明備註': data.netProfit >= 0 ? '資金充裕' : '超支請款' }
-    ];
-
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 30 }, { wch: 16 }, { wch: 12 }, { wch: 24 }];
-    XLSX.utils.book_append_sheet(wb, ws, '收支損益表');
-  } else if (reportId === 'net_cash_flow') {
-    const keyStr = filters.yearMonth || filters.year || '';
-    const data = buildNetCashFlowReport(context.transactions, filters.periodType === 'year' ? 'year' : 'month', keyStr);
-    const rows = [
-      { '指標項目': '統計期間', '金額 (NT$)': data.period, '狀態/說明': '現金流量統計期間' },
-      { '指標項目': '零用金撥入款項 (流入總計)', '金額 (NT$)': data.inflow, '狀態/說明': `共 ${data.inflowCount} 筆入金` },
-      { '指標項目': '零用金日常開銷 (流出總計)', '金額 (NT$)': data.outflow, '狀態/說明': `共 ${data.outflowCount} 筆支出` },
-      { '指標項目': '本期淨現金流量 (淨額)', '金額 (NT$)': data.netFlow, '狀態/說明': data.status },
-      { '指標項目': '報表產出時間', '金額 (NT$)': printTime, '狀態/說明': `基準: ${periodDesc}` }
-    ];
-
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 28 }];
-    XLSX.utils.book_append_sheet(wb, ws, '收支淨值報表');
   } else {
     // 預設匯出帳務明細
     const data = buildTxDetailsReport(filteredTxs);
@@ -815,31 +770,6 @@ export function exportMultipleSelectedReportsExcel(
       rows.push(totalRow);
       const ws = XLSX.utils.json_to_sheet(rows);
       XLSX.utils.book_append_sheet(wb, ws, `${yr}年度彙總樞紐表`);
-    } else if (id === 'income_statement') {
-      const data = buildIncomeStatementReport(filteredTxs);
-      const rows = [
-        { '財務會計科目': '【一、營業撥補收入總計】', '金額 (NT$)': data.totalIncome, '比率': '100.0%' },
-        ...data.expenseItems.map((e) => ({
-          '財務會計科目': `　營業費用 - ${e.name}`,
-          '金額 (NT$)': e.amount,
-          '比率': `${e.percentage.toFixed(1)}%`
-        })),
-        { '財務會計科目': '【二、零用金費用支出總計】', '金額 (NT$)': data.totalExpense, '比率': '100.0%' },
-        { '財務會計科目': '【三、本期收支淨損益結餘】', '金額 (NT$)': data.netProfit, '比率': '-' }
-      ];
-      const ws = XLSX.utils.json_to_sheet(rows);
-      XLSX.utils.book_append_sheet(wb, ws, '損益表');
-    } else if (id === 'net_cash_flow') {
-      const keyStr = filters.yearMonth || filters.year || '';
-      const data = buildNetCashFlowReport(context.transactions, filters.periodType === 'year' ? 'year' : 'month', keyStr);
-      const rows = [
-        { '指標項目': '統計期間', '金額 (NT$)': data.period, '狀態/備註': '現金流量期間' },
-        { '指標項目': '零用金撥入款項 (流入)', '金額 (NT$)': data.inflow, '狀態/備註': `${data.inflowCount} 筆入帳` },
-        { '指標項目': '零用金開銷支出 (流出)', '金額 (NT$)': data.outflow, '狀態/備註': `${data.outflowCount} 筆支出` },
-        { '指標項目': '本期淨現金流量 (淨額)', '金額 (NT$)': data.netFlow, '狀態/備註': data.status }
-      ];
-      const ws = XLSX.utils.json_to_sheet(rows);
-      XLSX.utils.book_append_sheet(wb, ws, '收支淨值報表');
     }
   });
 

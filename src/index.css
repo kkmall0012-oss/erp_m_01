@@ -37,4 +37,54 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+
+  /* 跨頁標題與報表紙本排版規則 */
+  .print-doc-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    border: none !important;
+  }
+
+  .print-doc-thead {
+    display: table-header-group !important;
+  }
+
+  .print-doc-table > thead > tr > th {
+    border: none !important;
+    background: #ffffff !important;
+    padding: 0 0 8px 0 !important;
+  }
+
+  .print-doc-table > tbody > tr > td {
+    border: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
+  .summary-cards-row {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 8px !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    width: 100% !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
 }

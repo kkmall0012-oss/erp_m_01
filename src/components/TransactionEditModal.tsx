@@ -84,6 +84,11 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
       return;
     }
 
+    if (isExpense && receiptType === 'invoice' && !invoiceNumber.trim()) {
+      setErrorMessage('選擇「發票」時，發票號碼為強制輸入選項，請填寫發票號碼');
+      return;
+    }
+
     // 依使用者指示：嚴格維持原始收支性質，不可將支出變收入，亦不可將收入變支出
     const updated: Transaction = {
       ...transaction,
@@ -357,10 +362,11 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
               {receiptType === 'invoice' && (
                 <div className="pt-1">
                   <label className="block text-[11px] font-semibold text-amber-900 mb-1">
-                    發票號碼 (選填)
+                    <span>發票號碼</span> <span className="text-rose-600 font-bold">*必填</span>
                   </label>
                   <input
                     type="text"
+                    required
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value.toUpperCase())}
                     placeholder="輸入發票號碼 (例：AB-12345678)"

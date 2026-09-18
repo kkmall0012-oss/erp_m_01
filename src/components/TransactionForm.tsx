@@ -191,6 +191,12 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
       if (isCustomClaimantMode && customClaimantInput.trim() && saveClaimantToMenu && onQuickAddClaimant) {
         onQuickAddClaimant(customClaimantInput.trim());
       }
+
+      // 單據發票強制填寫驗證 (選擇發票時，發票號碼為強制輸入選項)
+      if (receiptType === 'invoice' && !invoiceNumber.trim()) {
+        setErrorMessage('選擇「發票」時，發票號碼為強制輸入選項，請填寫發票號碼');
+        return;
+      }
     }
 
     // 若手動輸入新子項目且勾選存入選單
@@ -623,13 +629,15 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
               {receiptType === 'invoice' && (
                 <div className="pt-1 animate-in fade-in duration-150">
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-semibold text-amber-900">
-                      發票號碼 (選填)
+                    <label className="text-[11px] font-semibold text-amber-900 flex items-center gap-1">
+                      <span>發票號碼</span>
+                      <span className="text-rose-600 font-bold">*必填（未輸入無法建檔）</span>
                     </label>
                     <span className="text-[10px] text-stone-400">例如：AB-12345678</span>
                   </div>
                   <input
                     type="text"
+                    required
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value.toUpperCase())}
                     placeholder="輸入發票號碼 (例：AB-12345678)"

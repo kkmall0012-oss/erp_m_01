@@ -6,9 +6,7 @@ import {
   DEFAULT_CATEGORIES, 
   DEFAULT_CLAIMANTS, 
   DirectorWithdrawal,
-  SubAccount,
-  CompanyProfile,
-  BusinessContact
+  SubAccount
 } from '../types';
 
 const STORAGE_KEYS = {
@@ -18,8 +16,6 @@ const STORAGE_KEYS = {
   CLAIMANTS: 'expense_tracker_claimants_v1',
   DIRECTOR_WITHDRAWALS: 'expense_tracker_director_v1',
   SUB_ACCOUNTS: 'expense_tracker_sub_accounts_v1',
-  COMPANY_PROFILE: 'expense_tracker_company_profile_v1',
-  BUSINESS_CONTACTS: 'expense_tracker_business_contacts_v1',
   LAST_BACKUP: 'expense_tracker_last_backup_date'
 };
 
@@ -303,7 +299,7 @@ function generateInitialSeedData(): Transaction[] {
       type: 'expense',
       categoryId: 'fuel',
       categoryName: '加油',
-      subItem: '台灣中油 (CPC)',
+      subItem: '台灣中油',
       amount: 1450,
       note: '公務車加滿 95無鉛汽油',
       createdAt: Date.now() - 86400000 * 10
@@ -367,169 +363,6 @@ function generateInitialSeedData(): Transaction[] {
   ];
 }
 
-// 本公司預設初始基本資料
-export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
-  name: '弘業精密實業有限公司',
-  taxId: '54892163',
-  owner: '王大衛',
-  phone: '02-2789-8800',
-  fax: '02-2789-8801',
-  email: 'service@hongye-precision.com.tw',
-  registeredAddress: '台北市內湖區瑞光路 588 號 8 樓',
-  shippingAddress: '新北市五股區五工二路 102 號 (五股廠區倉庫)',
-  bankName: '004 臺灣銀行',
-  bankBranch: '南港分行',
-  bankAccount: '054-001-889922',
-  bankAccountName: '弘業精密實業有限公司',
-  invoiceTitleNotes: '請一律開立三聯式統一發票 (含稅 5%)，發票備註欄請填寫承辦採買案號'
-};
-
-// 預設往來客戶與供應商示範資料
-export const DEFAULT_BUSINESS_CONTACTS: BusinessContact[] = [
-  {
-    id: 'cnt-v-1',
-    type: 'vendor',
-    name: '協成五金螺絲五金建材行',
-    shortName: '協成五金',
-    taxId: '12345678',
-    category: '五金耗材',
-    contactPerson: '李協理',
-    jobTitle: '廠務業務專員',
-    phone: '02-2998-1122',
-    mobile: '0912-345-678',
-    email: 'sales@xiecheng-hardware.com',
-    lineId: 'xc_hardware',
-    address: '新北市新莊區化成路 320 號',
-    paymentTerms: '零用金現金實支 / 月結 30 天',
-    bankInfo: {
-      bankName: '007 第一銀行',
-      branch: '新莊分行',
-      accountNumber: '215-10-888999',
-      accountName: '協成五金行'
-    },
-    status: 'active',
-    notes: '常規採買螺絲、膨脹螺栓、噴劑，可憑收據或三聯發票報銷',
-    createdAt: Date.now() - 86400000 * 30
-  },
-  {
-    id: 'cnt-v-2',
-    type: 'vendor',
-    name: '福盛紙業包裝工業股份有限公司',
-    shortName: '福盛紙業',
-    taxId: '87654321',
-    category: '包裝耗材',
-    contactPerson: '張玉婷',
-    jobTitle: '客服組長',
-    phone: '02-8686-5566',
-    mobile: '0928-888-999',
-    email: 'order@fusheng-pack.com.tw',
-    lineId: 'fusheng_pack',
-    address: '新北市樹林區三俊街 65 號',
-    paymentTerms: '次月 15 日電匯',
-    bankInfo: {
-      bankName: '013 國泰世華銀行',
-      branch: '樹林分行',
-      accountNumber: '037-03-5001234',
-      accountName: '福盛紙業包裝工業股份有限公司'
-    },
-    status: 'active',
-    notes: '出貨瓦楞紙箱、氣泡布，每批滿額送免運',
-    createdAt: Date.now() - 86400000 * 20
-  },
-  {
-    id: 'cnt-c-1',
-    type: 'client',
-    name: '永泰航太科技股份有限公司',
-    shortName: '永泰航太',
-    taxId: '23456789',
-    category: '精密航太客戶',
-    contactPerson: '陳建銘',
-    jobTitle: '資深採購工程師',
-    phone: '03-388-7799',
-    mobile: '0933-123-456',
-    email: 'jmchen@yongtai-tech.com',
-    lineId: 'jmchen_yt',
-    address: '桃園市蘆竹區南青路 188 號',
-    paymentTerms: '月結 60 天匯款',
-    bankInfo: {
-      bankName: '008 華南商業銀行',
-      branch: '蘆竹分行',
-      accountNumber: '175-20-112233',
-      accountName: '永泰航太科技股份有限公司'
-    },
-    status: 'active',
-    notes: 'A級重要客戶，每月定期交貨精密沖壓件',
-    createdAt: Date.now() - 86400000 * 45
-  },
-  {
-    id: 'cnt-v-3',
-    type: 'vendor',
-    name: '池上木片便當 (五股工專店)',
-    shortName: '池上便當',
-    taxId: '34567890',
-    category: '餐飲供應',
-    contactPerson: '林老闆',
-    jobTitle: '店長',
-    phone: '02-2299-3355',
-    mobile: '0955-667-889',
-    address: '新北市五股區成泰路二段 45 號',
-    paymentTerms: '零用金每日現場付現 / 可開免用統一發票專用收據',
-    status: 'active',
-    notes: '廠區加班同仁午晚餐便當，滿10個可外送',
-    createdAt: Date.now() - 86400000 * 15
-  }
-];
-
-// 讀取本公司設定
-export function loadCompanyProfile(): CompanyProfile {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.COMPANY_PROFILE);
-    if (!raw) {
-      saveCompanyProfile(DEFAULT_COMPANY_PROFILE);
-      return DEFAULT_COMPANY_PROFILE;
-    }
-    const parsed = JSON.parse(raw);
-    return parsed && parsed.name ? parsed : DEFAULT_COMPANY_PROFILE;
-  } catch (e) {
-    console.error('Failed to load company profile', e);
-    return DEFAULT_COMPANY_PROFILE;
-  }
-}
-
-// 儲存本公司設定
-export function saveCompanyProfile(profile: CompanyProfile): void {
-  try {
-    localStorage.setItem(STORAGE_KEYS.COMPANY_PROFILE, JSON.stringify(profile));
-  } catch (e) {
-    console.error('Failed to save company profile', e);
-  }
-}
-
-// 讀取往來客戶與廠商通訊名冊
-export function loadBusinessContacts(): BusinessContact[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEYS.BUSINESS_CONTACTS);
-    if (!raw) {
-      saveBusinessContacts(DEFAULT_BUSINESS_CONTACTS);
-      return DEFAULT_BUSINESS_CONTACTS;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : DEFAULT_BUSINESS_CONTACTS;
-  } catch (e) {
-    console.error('Failed to load business contacts', e);
-    return DEFAULT_BUSINESS_CONTACTS;
-  }
-}
-
-// 儲存往來客戶與廠商通訊名冊
-export function saveBusinessContacts(contacts: BusinessContact[]): void {
-  try {
-    localStorage.setItem(STORAGE_KEYS.BUSINESS_CONTACTS, JSON.stringify(contacts));
-  } catch (e) {
-    console.error('Failed to save business contacts', e);
-  }
-}
-
 // 產生可存 10 年以上的全本機備份檔 (.json)
 export function exportBackupJSON(
   transactions: Transaction[],
@@ -537,21 +370,17 @@ export function exportBackupJSON(
   budgets: Record<string, MonthBudget>,
   claimants?: string[],
   directorWithdrawals?: DirectorWithdrawal[],
-  subAccounts?: SubAccount[],
-  companyProfile?: CompanyProfile,
-  businessContacts?: BusinessContact[]
+  subAccounts?: SubAccount[]
 ): void {
   const data: BackupData = {
-    version: '1.3.0',
+    version: '1.4.0',
     exportedAt: new Date().toISOString(),
     transactions,
     categories,
     budgets,
     claimants: claimants || loadClaimants(),
     directorWithdrawals: directorWithdrawals || loadDirectorWithdrawals(),
-    subAccounts: subAccounts || loadSubAccounts(),
-    companyProfile: companyProfile || loadCompanyProfile(),
-    businessContacts: businessContacts || loadBusinessContacts()
+    subAccounts: subAccounts || loadSubAccounts()
   };
 
   const jsonStr = JSON.stringify(data, null, 2);
@@ -561,7 +390,7 @@ export function exportBackupJSON(
   const now = new Date();
   const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
   a.href = url;
-  a.download = `公司零用金與商務通訊完整備份庫_${dateStr}.json`;
+  a.download = `公司零用金完整備份庫_${dateStr}.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -576,16 +405,14 @@ export function parseBackupJSON(jsonStr: string): BackupData | null {
       throw new Error('無效的備份檔案格式：缺少交易紀錄資料');
     }
     return {
-      version: data.version || '1.3.0',
+      version: data.version || '1.4.0',
       exportedAt: data.exportedAt || new Date().toISOString(),
       transactions: data.transactions,
       categories: Array.isArray(data.categories) ? data.categories : DEFAULT_CATEGORIES,
       budgets: typeof data.budgets === 'object' && data.budgets !== null ? data.budgets : {},
       claimants: Array.isArray(data.claimants) ? data.claimants : DEFAULT_CLAIMANTS,
       directorWithdrawals: Array.isArray(data.directorWithdrawals) ? data.directorWithdrawals : [],
-      subAccounts: Array.isArray(data.subAccounts) ? data.subAccounts : [],
-      companyProfile: data.companyProfile || DEFAULT_COMPANY_PROFILE,
-      businessContacts: Array.isArray(data.businessContacts) ? data.businessContacts : DEFAULT_BUSINESS_CONTACTS
+      subAccounts: Array.isArray(data.subAccounts) ? data.subAccounts : []
     };
   } catch (e) {
     console.error('Failed to parse backup JSON', e);

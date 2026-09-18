@@ -12,7 +12,8 @@ import {
   HandCoins,
   Car,
   Coins,
-  PackageCheck
+  PackageCheck,
+  UserCheck
 } from 'lucide-react';
 import { CategoryConfig, SubAccountItem, ReceiptType } from '../types';
 import { getTodayDateStr } from '../utils/storage';
@@ -46,7 +47,11 @@ export const SubAccountItemModal: React.FC<SubAccountItemModalProps> = ({
   const [amount, setAmount] = useState<string>('');
   const [receiptType, setReceiptType] = useState<ReceiptType>('invoice');
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
-  const [claimant, setClaimant] = useState<string>(defaultCustodian || '採買人員');
+  const [claimant, setClaimant] = useState<string>(
+    defaultCustodian && claimants.includes(defaultCustodian) 
+      ? defaultCustodian 
+      : (claimants[0] || '陳小明')
+  );
   const [note, setNote] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -59,7 +64,11 @@ export const SubAccountItemModal: React.FC<SubAccountItemModalProps> = ({
       setErrorMessage('');
       setInvoiceNumber('');
       setReceiptType('invoice');
-      setClaimant(defaultCustodian || '採買人員');
+      setClaimant(
+        defaultCustodian && claimants.includes(defaultCustodian) 
+          ? defaultCustodian 
+          : (claimants[0] || '陳小明')
+      );
       setIsCustomSubItem(false);
       setCustomSubItem('');
 
@@ -113,7 +122,12 @@ export const SubAccountItemModal: React.FC<SubAccountItemModalProps> = ({
       return;
     }
 
-    if (receiptType === 'invoice' && invoiceNumber.trim()) {
+    // 統一發票強制驗證
+    if (receiptType === 'invoice') {
+      if (!invoiceNumber.trim()) {
+        setErrorMessage('選擇「統一發票」時，發票號碼為強制輸入選項，請填寫發票號碼');
+        return;
+      }
       const formattedInv = invoiceNumber.trim().toUpperCase();
       const invoiceRegex = /^[A-Z]{2}-?\d{8}$/;
       if (!invoiceRegex.test(formattedInv)) {
@@ -295,8 +309,8 @@ export const SubAccountItemModal: React.FC<SubAccountItemModalProps> = ({
           <div>
             <label className="block font-bold text-stone-700 mb-1">支出金額 (NT$ 新台幣)</label>
             <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 font-bold text-sm">
-                $
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 font-bold text-xs">
+                NT$
               </span>
               <input
                 type="number"
@@ -306,7 +320,7 @@ export const SubAccountItemModal: React.FC<SubAccountItemModalProps> = ({
                 placeholder="例：450"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                className="w-full pl-8 pr-3 py-2.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:border-sky-600 focus:outline-hidden font-mono font-bold text-base text-stone-900"
+                className="w-full pl-11 pr-3 py-2.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:border-sky-600 focus:outline-hidden font-mono font-bold text-base text-stone-900"
               />
             </div>
           </div>
@@ -357,11 +371,16 @@ export const SubAccountItemModal: React.FC<SubAccountItemModalProps> = ({
 
             {receiptType === 'invoice' && (
               <div className="pt-2 border-t border-stone-200/80">
-                <label className="block font-bold text-stone-700 mb-1">
-                  發票號碼 <span className="font-normal text-stone-400">(格式例：AB-12345678)</span>
+                <label className="block font-bold text-stone-700 mb-1 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <span>發票號碼</span>
+                    <span className="text-rose-600 font-bold text-xs">*必填（未輸入無法建檔）</span>
+                  </span>
+                  <span className="font-normal text-stone-400 text-xs">(格式例：AB-12345678)</span>
                 </label>
                 <input
                   type="text"
+                  required
                   placeholder="請輸入發票號碼"
                   value={invoiceNumber}
                   onChange={(e) => setInvoiceNumber(e.target.value.toUpperCase())}
@@ -373,25 +392,55 @@ export const SubAccountItemModal: React.FC<SubAccountItemModalProps> = ({
 
           {/* 6. 採買經手人 / 請領人 (與零用金請款人相同，由內部人員名冊中選擇) */}
           <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="font-bold text-stone-700">採買經手人 / 請領人</label>
-              <span className="text-[10px] text-stone-400">限內部請款同仁名單</span>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="font-bold text-stone-700 flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 text-sky-600" />
+                <span>採買經手人 / 請領人</span>
+                <span className="text-rose-600 font-bold">*</span>
+              </label>
+              <span className="text-[10px] text-stone-500 font-medium bg-stone-100 px-2 py-0.5 rounded-full">
+                限公司內部請款同仁名單
+              </span>
             </div>
+
+            {/* 常用內部同仁快捷點選標籤 */}
+            <div className="mb-2">
+              <div className="text-[10px] text-stone-400 mb-1 font-medium">快速點選內部同仁帶入：</div>
+              <div className="flex flex-wrap gap-1.5">
+                {claimants.map((c) => {
+                  const isSelected = claimant === c;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setClaimant(c)}
+                      className={`text-xs px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 ${
+                        isSelected
+                          ? 'bg-sky-600 text-white border-sky-700 font-bold shadow-2xs'
+                          : 'bg-white text-stone-700 border-stone-200 hover:border-sky-400 hover:bg-sky-50/50 font-medium'
+                      }`}
+                    >
+                      <UserCheck className="w-3 h-3" />
+                      <span>{c}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 下拉選單選擇 */}
             <select
               value={claimant}
               onChange={(e) => setClaimant(e.target.value)}
-              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:border-sky-600 focus:outline-hidden text-xs text-stone-800 font-medium"
+              className="w-full px-3 py-2.5 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:border-sky-600 focus:outline-hidden text-xs text-stone-800 font-semibold"
             >
               {claimants.map((c) => (
                 <option key={c} value={c}>
-                  {c}
+                  {c} (公司內部同仁)
                 </option>
               ))}
               {defaultCustodian && !claimants.includes(defaultCustodian) && (
                 <option value={defaultCustodian}>{defaultCustodian} (預設經手人)</option>
-              )}
-              {claimant && !claimants.includes(claimant) && claimant !== defaultCustodian && (
-                <option value={claimant}>{claimant} (現有)</option>
               )}
             </select>
           </div>

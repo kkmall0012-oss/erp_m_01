@@ -4,6 +4,7 @@ import { Search, Flame, ArrowDownAZ, ListOrdered, Check, X, ChevronDown, Chevron
 export type SortMode = 'popular' | 'alpha' | 'default';
 
 interface SearchableOptionPickerProps {
+  id?: string;
   options: string[];
   value: string;
   onChange: (val: string) => void;
@@ -15,6 +16,7 @@ interface SearchableOptionPickerProps {
 }
 
 export const SearchableOptionPicker: React.FC<SearchableOptionPickerProps> = ({
+  id,
   options,
   value,
   onChange,
@@ -120,7 +122,7 @@ export const SearchableOptionPicker: React.FC<SearchableOptionPickerProps> = ({
                 ? 'bg-white text-stone-900 shadow-2xs font-bold'
                 : 'text-stone-600 hover:text-stone-900'
             }`}
-            title="依照中文筆畫或字母 A-Z 順序排列"
+            title="依照中文筆畫順序排列"
           >
             <ArrowDownAZ className="w-3 h-3 text-blue-600" />
             <span>筆劃名稱</span>

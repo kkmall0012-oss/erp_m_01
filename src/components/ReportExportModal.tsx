@@ -54,7 +54,8 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
     'tx_details',
     'daily_summary',
     'category_stats',
-    'income_statement'
+    'yearly_summary',
+    'yearly_matrix'
   ]);
 
   const filterOptions: ReportFilterOptions = {
@@ -96,7 +97,7 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
                 P. 統計報表產出中心
               </h3>
               <p className="text-xs text-stone-500">
-                自由挑選您想產出的報表類型（流水帳明細、收支日報、項目分類統計、年度收支、損益表、淨現金流）
+                自由挑選您想產出的報表類型（流水帳明細、收支日報、項目分類統計、年度收支、年度收支彙總）
               </p>
             </div>
           </div>
