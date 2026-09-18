@@ -76,6 +76,52 @@ export interface MonthBudget {
   alertThresholdPercent: number; // 警戒百分比 (預設 20%，即零用金低於20%時發出請款撥補警示)
 }
 
+// 本公司基本設定
+export interface CompanyProfile {
+  name: string; // 公司名稱 / 行號全銜
+  taxId: string; // 統一編號 (8碼)
+  owner: string; // 負責人 / 代表人
+  phone: string; // 聯絡電話
+  fax?: string; // 傳真號碼
+  email?: string; // 公司官方電子信箱
+  registeredAddress: string; // 公司登記地址
+  shippingAddress?: string; // 營業通訊 / 出貨倉庫地址
+  bankName: string; // 主要匯款往來銀行 (含代碼)
+  bankBranch?: string; // 分行名稱
+  bankAccount: string; // 銀行帳號
+  bankAccountName: string; // 銀行戶名
+  invoiceTitleNotes?: string; // 開立發票與收據特別備註 (如：二聯/三聯抬頭、營業稅外加等)
+  updatedAt?: number;
+}
+
+// 往來客戶與廠商通訊名冊
+export interface BusinessContact {
+  id: string;
+  type: 'client' | 'vendor'; // 'client' (客戶) | 'vendor' (廠商/供應商)
+  name: string; // 公司或行號名稱
+  shortName?: string; // 簡稱
+  taxId?: string; // 統一編號 (選填)
+  category: string; // 產業類別 / 供貨項目 (如：五金耗材、包裝紙箱、外包工程、餐飲便當、長期客戶)
+  contactPerson: string; // 主要聯絡窗口同仁姓名
+  jobTitle?: string; // 窗口職稱
+  phone?: string; // 市話電話
+  mobile?: string; // 手機號碼
+  email?: string; // 電子信箱
+  lineId?: string; // LINE ID
+  address?: string; // 通訊地址
+  paymentTerms: string; // 付款/請款條件 (如：月結30天、匯款、零用金現金實支、次月15日電匯)
+  bankInfo?: {
+    bankName: string; // 銀行名稱
+    branch?: string; // 分行
+    accountNumber: string; // 帳號
+    accountName: string; // 戶名
+  };
+  status: 'active' | 'inactive'; // 合作狀態：合作中 | 暫停合作
+  notes?: string; // 備忘錄與注意事項
+  createdAt: number;
+  updatedAt?: number;
+}
+
 export interface BackupData {
   version: string;
   exportedAt: string;
@@ -85,6 +131,8 @@ export interface BackupData {
   claimants?: string[];
   directorWithdrawals?: DirectorWithdrawal[];
   subAccounts?: SubAccount[];
+  companyProfile?: CompanyProfile;
+  businessContacts?: BusinessContact[];
 }
 
 // 預設常用請領人名單

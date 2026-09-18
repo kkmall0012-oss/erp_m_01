@@ -11,7 +11,8 @@ import {
   TrendingDown,
   TrendingUp,
   Plus,
-  Table as TableIcon
+  Table as TableIcon,
+  Building
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
 import { StatCards } from './components/StatCards';
@@ -514,7 +515,7 @@ export default function App() {
               <TableIcon className="w-4 h-4 text-emerald-700" />
               <span>P. 統計報表中心</span>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">
-                12種報表
+                7種核心報表
               </span>
             </button>
 

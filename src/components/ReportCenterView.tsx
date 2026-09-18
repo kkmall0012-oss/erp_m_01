@@ -20,6 +20,9 @@ import {
   Filter, 
   Calendar, 
   ChevronRight, 
+  ChevronDown,
+  ChevronsUpDown,
+  Eye,
   AlertCircle, 
   CheckCircle2, 
   Coins,
@@ -89,16 +92,17 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
 
   // 列印參照區
   const printAreaRef = useRef<HTMLDivElement>(null);
+  const [printStatusNotice, setPrintStatusNotice] = useState<string | null>(null);
 
-  // 報表篩選設定
+  // 報表篩選設定 (分類統計表、年度表、損益表等自動保留全部科目，無需也不受單一科目限制)
   const filterOptions: ReportFilterOptions = useMemo(() => ({
     periodType,
     yearMonth: selectedYearMonth,
     year: selectedYear,
     startDate,
     endDate,
-    categoryId: selectedCategory
-  }), [periodType, selectedYearMonth, selectedYear, startDate, endDate, selectedCategory]);
+    categoryId: ['tx_details', 'daily_summary'].includes(activeReportId) ? selectedCategory : 'all'
+  }), [periodType, selectedYearMonth, selectedYear, startDate, endDate, selectedCategory, activeReportId]);
 
   // 取得篩選後的交易資料
   const filteredTransactions = useMemo(() => {
@@ -154,9 +158,122 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
     setIsBatchExportModalOpen(false);
   };
 
-  // 列印目前報表
+  // 列印目前報表 (強化支援獨立 iframe 列印與瀏覽器另存高解析 PDF)
   const handlePrint = () => {
-    window.print();
+    setPrintStatusNotice('正在呼叫列印程序，請稍候...');
+    const printNode = printAreaRef.current;
+
+    if (!printNode) {
+      window.focus();
+      window.print();
+      setTimeout(() => setPrintStatusNotice(null), 3000);
+      return;
+    }
+
+    try {
+      // 建立隱藏之專用列印 iframe，確保直接提取純淨報表紙本內容，杜絕導覽與按鈕干擾
+      const existingFrame = document.getElementById('report-print-frame');
+      if (existingFrame && existingFrame.parentNode) {
+        existingFrame.parentNode.removeChild(existingFrame);
+      }
+
+      const printFrame = document.createElement('iframe');
+      printFrame.id = 'report-print-frame';
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = '0';
+      printFrame.style.zIndex = '-9999';
+      document.body.appendChild(printFrame);
+
+      const frameDoc = printFrame.contentWindow?.document;
+      if (frameDoc && printFrame.contentWindow) {
+        frameDoc.open();
+        frameDoc.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <title>${currentReportDef.name} - ${periodDesc}</title>
+              <style>
+                @page { size: A4 portrait; margin: 10mm; }
+                * { box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                body {
+                  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+                  font-size: 11px;
+                  color: #1c1917;
+                  background: #ffffff;
+                  margin: 0;
+                  padding: 12px;
+                }
+                table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+                th, td { border: 1px solid #d6d3d1; padding: 6px 8px; text-align: left; vertical-align: middle; }
+                th { background-color: #f5f5f4 !important; font-weight: bold; color: #292524; }
+                .text-right { text-align: right; }
+                .text-center { text-align: center; }
+                .font-bold { font-weight: bold; }
+                .font-semibold { font-weight: 600; }
+                .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+                .text-rose-600 { color: #e11d48 !important; }
+                .text-emerald-600 { color: #059669 !important; }
+                .text-emerald-700 { color: #047857 !important; }
+                .text-amber-800 { color: #92400e !important; }
+                .text-stone-400 { color: #a8a29e !important; }
+                .text-stone-500 { color: #78716c !important; }
+                .text-stone-600 { color: #57534e !important; }
+                .text-stone-700 { color: #44403c !important; }
+                .text-stone-800 { color: #292524 !important; }
+                .text-stone-900 { color: #1c1917 !important; }
+                .bg-stone-50 { background-color: #fafaf9 !important; }
+                .bg-stone-100 { background-color: #f5f5f4 !important; }
+                .bg-amber-50 { background-color: #fffbeb !important; }
+                .bg-emerald-50 { background-color: #ecfdf5 !important; }
+                .rounded-xl, .rounded-2xl { border-radius: 6px; }
+                .border { border: 1px solid #e7e5e4; }
+                .border-b { border-bottom: 1px solid #e7e5e4; }
+                .border-b-2 { border-bottom: 2px solid #1c1917; }
+                .border-t-2 { border-top: 2px solid #1c1917; }
+                .no-print { display: none !important; }
+              </style>
+            </head>
+            <body>
+              ${printNode.innerHTML}
+            </body>
+          </html>
+        `);
+        frameDoc.close();
+
+        setTimeout(() => {
+          try {
+            printFrame.contentWindow?.focus();
+            printFrame.contentWindow?.print();
+            setPrintStatusNotice('已啟動列印對話框，可直接列印或另存為 PDF');
+          } catch (e) {
+            window.focus();
+            window.print();
+            setPrintStatusNotice('已啟動列印程序');
+          } finally {
+            setTimeout(() => {
+              if (document.body.contains(printFrame)) {
+                document.body.removeChild(printFrame);
+              }
+              setPrintStatusNotice(null);
+            }, 4000);
+          }
+        }, 400);
+      } else {
+        window.focus();
+        window.print();
+        setTimeout(() => setPrintStatusNotice(null), 3000);
+      }
+    } catch (err) {
+      console.warn('Iframe print fallback to window.print', err);
+      window.focus();
+      window.print();
+      setTimeout(() => setPrintStatusNotice(null), 3000);
+    }
   };
 
   // 圖示選擇器
@@ -208,11 +325,11 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
                 P. 統計報表中心 (自由選擇報表產出)
               </h2>
               <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 border border-stone-200">
-                12 種專業報表
+                7 種核心專業報表
               </span>
             </div>
             <p className="text-xs text-stone-500">
-              支援單獨產出流水帳、收支日報、項目分類、損益表、資產負債平衡與資金預估，具備即時預覽、單獨匯出與自選打包
+              支援單獨產出流水帳、收支日報、項目分類、損益表、廠長專冊、請領人統計與年度收支彙整，具備即時預覽、單獨匯出與列印另存 PDF
             </p>
           </div>
         </div>
@@ -246,6 +363,14 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* 列印提示訊息 */}
+      {printStatusNotice && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs px-4 py-2.5 rounded-xl flex items-center gap-2 no-print shadow-2xs">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span className="font-semibold">{printStatusNotice}</span>
+        </div>
+      )}
 
       {/* 主體佈局：左側為選單 (類似會計軟體 P.統計報表)，右側為即時報表預覽 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
@@ -403,22 +528,29 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
               </div>
             </div>
 
-            {/* 次要篩選：關鍵字搜尋與分類 */}
+            {/* 次要篩選：關鍵字搜尋與分類 (項目分類統計表等報表無須單一科目篩選，自動隱藏以保持簡潔) */}
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2">
-                <Filter className="w-3.5 h-3.5 text-stone-400" />
-                <span className="text-stone-600 font-medium">科目分類：</span>
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 text-stone-800 focus:outline-hidden cursor-pointer"
-                >
-                  <option value="all">全部分類科目</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
+              {['tx_details', 'daily_summary'].includes(activeReportId) ? (
+                <div className="flex items-center gap-2">
+                  <Filter className="w-3.5 h-3.5 text-stone-400" />
+                  <span className="text-stone-600 font-medium">科目分類：</span>
+                  <select
+                    value={selectedCategory}
+                    onChange={(e) => setSelectedCategory(e.target.value)}
+                    className="bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 text-stone-800 focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="all">全部分類科目</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div className="text-xs text-stone-500 flex items-center gap-1.5 bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                  <span className="font-medium text-stone-700">自動彙總對比全科目支出數據</span>
+                </div>
+              )}
 
               <div className="relative min-w-[200px]">
                 <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-2.5" />
@@ -435,6 +567,7 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
 
           {/* 報表主紙本預覽 (列印專區) */}
           <div 
+            id="printable-report-card"
             ref={printAreaRef}
             className="bg-white rounded-2xl border border-stone-200 shadow-sm p-6 space-y-6 print:border-none print:shadow-none print:p-0"
           >
@@ -717,78 +850,112 @@ const TxDetailsTable: React.FC<{ transactions: Transaction[] }> = ({ transaction
       </div>
 
       {/* 明細清單表格 */}
-      <div className="overflow-x-auto border border-stone-200 rounded-xl">
-        <table className="w-full text-left text-xs border-collapse">
+      <div className="overflow-x-auto border border-stone-200 rounded-xl shadow-2xs">
+        <table className="w-full text-left text-xs border-collapse min-w-[1080px]">
           <thead>
             <tr className="bg-stone-100 text-stone-700 border-b border-stone-200 font-bold">
-              <th className="py-2.5 px-3 w-12 text-center">序</th>
-              <th className="py-2.5 px-3 w-24">日期</th>
-              <th className="py-2.5 px-3 w-20">類型</th>
-              <th className="py-2.5 px-3 w-28">科目分類</th>
-              <th className="py-2.5 px-3">品名店家 / 細項</th>
-              <th className="py-2.5 px-3 text-right w-28">金額 (NT$)</th>
-              <th className="py-2.5 px-3 w-24">經辦同仁</th>
-              <th className="py-2.5 px-3 w-28">憑證與發票號</th>
-              <th className="py-2.5 px-3">備註說明</th>
+              <th className="py-3 px-3 w-12 text-center">序</th>
+              <th className="py-3 px-3 w-24">日期</th>
+              <th className="py-3 px-3 w-24 text-center">類型</th>
+              <th className="py-3 px-3 w-28">科目分類</th>
+              <th className="py-3 px-4 min-w-[260px]">品名店家 / 開銷細項</th>
+              <th className="py-3 px-3 text-right w-28">金額 (NT$)</th>
+              <th className="py-3 px-3 w-24">經辦同仁</th>
+              <th className="py-3 px-3 w-32">憑證與發票號</th>
+              <th className="py-3 px-3 min-w-[160px]">備註說明</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-200 text-stone-700">
             {data.rows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-8 text-center text-stone-400">
+                <td colSpan={9} className="py-10 text-center text-stone-400">
                   此期間無符合條件的收支流水紀錄
                 </td>
               </tr>
             ) : (
               data.rows.map((t, idx) => (
-                <tr key={t.id} className="hover:bg-stone-50/80 transition-colors">
-                  <td className="py-2 px-3 text-center text-stone-400 font-mono">{idx + 1}</td>
-                  <td className="py-2 px-3 font-mono">{t.date}</td>
-                  <td className="py-2 px-3">
+                <tr key={t.id} className="hover:bg-stone-50/90 transition-colors">
+                  <td className="py-3 px-3 text-center text-stone-400 font-mono">{idx + 1}</td>
+                  <td className="py-3 px-3 font-mono text-stone-700 font-medium">{t.date}</td>
+                  <td className="py-3 px-3 text-center">
                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
                       t.type === 'income'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : 'bg-stone-100 text-stone-700'
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                        : 'bg-stone-100 text-stone-700 border border-stone-200'
                     }`}>
-                      {t.type === 'income' ? '撥補' : '支出'}
+                      {t.type === 'income' ? '撥補入帳' : '零用金支出'}
                     </span>
                   </td>
-                  <td className="py-2 px-3 font-semibold text-stone-900">{t.categoryName}</td>
-                  <td className="py-2 px-3 font-medium text-stone-800">{t.subItem}</td>
-                  <td className={`py-2 px-3 text-right font-bold font-mono ${
+                  <td className="py-3 px-3 font-bold text-stone-900 whitespace-nowrap">
+                    {t.categoryName}
+                  </td>
+                  <td className="py-3 px-4 min-w-[260px]">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-stone-950 text-[13px] leading-snug">
+                          {t.subItem || '未載明細項'}
+                        </span>
+                        {t.peopleCount && t.peopleCount > 0 ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-200 font-semibold inline-flex items-center gap-1">
+                            👥 {t.peopleCount} 人
+                          </span>
+                        ) : null}
+                        {t.subAccountSourceName && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200">
+                            專款: {t.subAccountSourceName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className={`py-3 px-3 text-right font-bold font-mono text-sm whitespace-nowrap ${
                     t.type === 'income' ? 'text-emerald-600' : 'text-stone-900'
                   }`}>
                     {t.type === 'income' ? '+' : '-'}${t.amount.toLocaleString()}
                   </td>
-                  <td className="py-2 px-3 text-stone-600">{t.claimant || '-'}</td>
-                  <td className="py-2 px-3">
-                    <div className="flex items-center gap-1 text-[11px]">
-                      <span className={`px-1.5 py-0.2 rounded ${
+                  <td className="py-3 px-3 text-stone-700 whitespace-nowrap">
+                    {t.claimant ? (
+                      <span className="font-medium text-stone-800">{t.claimant}</span>
+                    ) : (
+                      <span className="text-stone-300">-</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-3 whitespace-nowrap">
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
                         t.receiptType === 'invoice' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
                         t.receiptType === 'receipt' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
                         'bg-stone-100 text-stone-500'
                       }`}>
-                        {t.receiptType === 'invoice' ? '發票' : t.receiptType === 'receipt' ? '收據' : '無'}
+                        {t.receiptType === 'invoice' ? '發票' : t.receiptType === 'receipt' ? '收據' : '無憑證'}
                       </span>
-                      {t.invoiceNumber && <span className="font-mono text-stone-600">{t.invoiceNumber}</span>}
+                      {t.invoiceNumber ? (
+                        <span className="font-mono text-stone-700 font-semibold">{t.invoiceNumber}</span>
+                      ) : null}
                     </div>
                   </td>
-                  <td className="py-2 px-3 text-stone-500 truncate max-w-xs">{t.note || '-'}</td>
+                  <td className="py-3 px-3 text-stone-600 text-xs">
+                    {t.note ? (
+                      <span className="text-stone-600">{t.note}</span>
+                    ) : (
+                      <span className="text-stone-300">-</span>
+                    )}
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
           {data.rows.length > 0 && (
             <tfoot>
-              <tr className="bg-stone-100/80 font-bold text-stone-900 border-t-2 border-stone-300">
-                <td colSpan={5} className="py-2.5 px-3 text-right">
+              <tr className="bg-stone-100/90 font-bold text-stone-900 border-t-2 border-stone-300">
+                <td colSpan={5} className="py-3 px-4 text-right">
                   本期收支合計 (共 {data.count} 筆)：
                 </td>
-                <td className="py-2.5 px-3 text-right font-mono text-rose-600">
+                <td className="py-3 px-3 text-right font-mono text-rose-600 text-sm">
                   -${data.totalExpense.toLocaleString()}
                 </td>
-                <td colSpan={3} className="py-2.5 px-3 text-stone-500 text-xs">
-                  (另有撥補總入帳 +${data.totalIncome.toLocaleString()}，淨差額 ${data.netBalance.toLocaleString()})
+                <td colSpan={3} className="py-3 px-3 text-stone-600 text-xs">
+                  (另有撥補總入帳 +${data.totalIncome.toLocaleString()}，結算淨差額 ${data.netBalance.toLocaleString()})
                 </td>
               </tr>
             </tfoot>
@@ -887,22 +1054,63 @@ const DailySummaryTable: React.FC<{ transactions: Transaction[] }> = ({ transact
 };
 
 // =========================================================================
-// 子表格組件 3：項目分類統計表
+// 子表格組件 3：項目分類統計表 (支援點擊下鑽展開各科目明細與總和)
 // =========================================================================
 const CategoryStatsTable: React.FC<{ transactions: Transaction[]; categories: CategoryConfig[] }> = ({
   transactions,
   categories
 }) => {
   const data = useMemo(() => buildCategoryStatsReport(transactions, categories), [transactions, categories]);
+  const [expandedCatIds, setExpandedCatIds] = useState<string[]>([]);
+
+  const toggleCat = (id: string) => {
+    setExpandedCatIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const expandAll = () => {
+    setExpandedCatIds(data.rows.map((r) => r.id));
+  };
+
+  const collapseAll = () => {
+    setExpandedCatIds([]);
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-x-auto border border-stone-200 rounded-xl">
+    <div className="space-y-3">
+      {/* 展開/收合控制列 */}
+      <div className="flex items-center justify-between px-1 text-xs text-stone-600">
+        <div className="flex items-center gap-1.5">
+          <Eye className="w-3.5 h-3.5 text-amber-600" />
+          <span className="font-semibold text-stone-800">
+            點擊任一科目即可展開完整交易流水明細與合計總額 (支援預支、餐飲等各項目)
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={expandAll}
+            className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium transition-colors cursor-pointer text-[11px]"
+          >
+            展開全部明細
+          </button>
+          <button
+            type="button"
+            onClick={collapseAll}
+            className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium transition-colors cursor-pointer text-[11px]"
+          >
+            收合全部
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto border border-stone-200 rounded-xl shadow-2xs">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-stone-100 text-stone-700 border-b border-stone-200 font-bold">
               <th className="py-2.5 px-3 w-12 text-center">名次</th>
-              <th className="py-2.5 px-3 w-32">支出科目名稱</th>
+              <th className="py-2.5 px-3 w-36">支出科目名稱</th>
               <th className="py-2.5 px-3 text-right w-32">開支總額 (NT$)</th>
               <th className="py-2.5 px-3 text-center w-28">佔比</th>
               <th className="py-2.5 px-3 text-center w-20">筆數</th>
@@ -919,38 +1127,155 @@ const CategoryStatsTable: React.FC<{ transactions: Transaction[]; categories: Ca
                 </td>
               </tr>
             ) : (
-              data.rows.map((r, idx) => (
-                <tr key={r.id} className="hover:bg-stone-50/80 transition-colors">
-                  <td className="py-2.5 px-3 text-center font-mono text-stone-400">{idx + 1}</td>
-                  <td className="py-2.5 px-3 font-bold text-stone-900">{r.name}</td>
-                  <td className="py-2.5 px-3 text-right font-mono font-bold text-stone-900">
-                    ${r.amount.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-3 text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <div className="w-12 h-2 bg-stone-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-amber-500 rounded-full" 
-                          style={{ width: `${Math.min(100, r.percentage)}%` }}
-                        />
-                      </div>
-                      <span className="font-mono text-[11px] font-semibold text-stone-700">
-                        {r.percentage.toFixed(1)}%
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-2.5 px-3 text-center font-mono text-stone-600">{r.count}</td>
-                  <td className="py-2.5 px-3 text-right font-mono text-stone-600">
-                    ${r.avgPerTx.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-3 text-stone-700 font-medium truncate max-w-xs">
-                    {r.topSubItem}
-                  </td>
-                  <td className="py-2.5 px-3 text-stone-600 text-xs">
-                    {r.topClaimant}
-                  </td>
-                </tr>
-              ))
+              data.rows.map((r, idx) => {
+                const isExpanded = expandedCatIds.includes(r.id);
+                const subTotal = (r.transactions || []).reduce((sum, t) => sum + t.amount, 0);
+
+                return (
+                  <React.Fragment key={r.id}>
+                    <tr
+                      onClick={() => toggleCat(r.id)}
+                      className={`hover:bg-amber-50/60 cursor-pointer transition-colors select-none ${
+                        isExpanded ? 'bg-amber-50/40' : ''
+                      }`}
+                      title="點擊展開或收合此科目的全部交易明細"
+                    >
+                      <td className="py-2.5 px-3 text-center font-mono text-stone-400">
+                        {idx + 1}
+                      </td>
+                      <td className="py-2.5 px-3 font-bold text-stone-900">
+                        <div className="flex items-center gap-1.5">
+                          {isExpanded ? (
+                            <ChevronDown className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          ) : (
+                            <ChevronRight className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                          )}
+                          <span>{r.name}</span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${
+                            isExpanded ? 'bg-amber-200 text-amber-900' : 'bg-stone-100 text-stone-600'
+                          }`}>
+                            {isExpanded ? '收合' : '明細'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-stone-900">
+                        ${r.amount.toLocaleString()}
+                      </td>
+                      <td className="py-2.5 px-3 text-center">
+                        <div className="flex items-center justify-center gap-1.5">
+                          <div className="w-12 h-2 bg-stone-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-amber-500 rounded-full" 
+                              style={{ width: `${Math.min(100, r.percentage)}%` }}
+                            />
+                          </div>
+                          <span className="font-mono text-[11px] font-semibold text-stone-700">
+                            {r.percentage.toFixed(1)}%
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-center font-mono text-stone-600 font-semibold">
+                        {r.count}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono text-stone-600">
+                        ${r.avgPerTx.toLocaleString()}
+                      </td>
+                      <td className="py-2.5 px-3 text-stone-700 font-medium truncate max-w-xs">
+                        {r.topSubItem}
+                      </td>
+                      <td className="py-2.5 px-3 text-stone-600 text-xs">
+                        {r.topClaimant}
+                      </td>
+                    </tr>
+
+                    {/* 展開之細項明細抽屜表格 */}
+                    {isExpanded && (
+                      <tr className="bg-stone-50/70 border-b border-amber-200/60">
+                        <td colSpan={8} className="p-3 pl-8">
+                          <div className="bg-white rounded-xl border border-amber-200/80 shadow-xs overflow-hidden">
+                            <div className="bg-amber-100/50 px-3.5 py-2 border-b border-amber-200 flex items-center justify-between text-xs">
+                              <span className="font-bold text-amber-950 flex items-center gap-1.5">
+                                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                                【{r.name}】開銷明細清單 (共 {r.count} 筆)
+                              </span>
+                              <span className="font-mono font-bold text-stone-800">
+                                科目小計總和：NT$ {subTotal.toLocaleString()}
+                              </span>
+                            </div>
+
+                            {(!r.transactions || r.transactions.length === 0) ? (
+                              <div className="p-4 text-center text-xs text-stone-400">
+                                此科目在此期間暫無交易細項
+                              </div>
+                            ) : (
+                              <table className="w-full text-left text-xs border-collapse">
+                                <thead>
+                                  <tr className="bg-stone-50 text-stone-600 font-semibold border-b border-stone-200">
+                                    <th className="py-2 px-3 w-10 text-center">序</th>
+                                    <th className="py-2 px-3 w-24">日期</th>
+                                    <th className="py-2 px-3">品名店家 / 細項內容</th>
+                                    <th className="py-2 px-3 w-24">經辦同仁</th>
+                                    <th className="py-2 px-3 w-32">憑證發票</th>
+                                    <th className="py-2 px-3 w-40">備註說明</th>
+                                    <th className="py-2 px-3 text-right w-28">金額 (NT$)</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-stone-100 text-stone-700">
+                                  {r.transactions.map((tx, txIdx) => (
+                                    <tr key={tx.id} className="hover:bg-amber-50/30 transition-colors">
+                                      <td className="py-2 px-3 text-center font-mono text-stone-400">
+                                        {txIdx + 1}
+                                      </td>
+                                      <td className="py-2 px-3 font-mono text-stone-700">{tx.date}</td>
+                                      <td className="py-2 px-3 font-semibold text-stone-900">
+                                        <div className="flex items-center gap-2">
+                                          <span>{tx.subItem || '未載明細項'}</span>
+                                          {tx.peopleCount && tx.peopleCount > 0 ? (
+                                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-50 text-amber-900 border border-amber-200">
+                                              👥 {tx.peopleCount}人
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      </td>
+                                      <td className="py-2 px-3 text-stone-600">{tx.claimant || '-'}</td>
+                                      <td className="py-2 px-3">
+                                        <div className="flex items-center gap-1 text-[11px]">
+                                          <span className={`px-1.5 py-0.2 rounded text-[10px] ${
+                                            tx.receiptType === 'invoice' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
+                                            tx.receiptType === 'receipt' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
+                                            'bg-stone-100 text-stone-500'
+                                          }`}>
+                                            {tx.receiptType === 'invoice' ? '發票' : tx.receiptType === 'receipt' ? '收據' : '無'}
+                                          </span>
+                                          {tx.invoiceNumber && <span className="font-mono text-stone-600">{tx.invoiceNumber}</span>}
+                                        </div>
+                                      </td>
+                                      <td className="py-2 px-3 text-stone-500 text-xs truncate max-w-xs">{tx.note || '-'}</td>
+                                      <td className="py-2 px-3 text-right font-mono font-bold text-rose-600">
+                                        -${tx.amount.toLocaleString()}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot>
+                                  <tr className="bg-stone-50/90 font-bold border-t border-stone-200 text-stone-900">
+                                    <td colSpan={6} className="py-2 px-3 text-right text-stone-600">
+                                      【{r.name}】開銷小計總和 (共 {r.count} 筆)：
+                                    </td>
+                                    <td className="py-2 px-3 text-right font-mono text-rose-600 font-bold">
+                                      -${subTotal.toLocaleString()}
+                                    </td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })
             )}
           </tbody>
           {data.rows.length > 0 && (
@@ -968,7 +1293,7 @@ const CategoryStatsTable: React.FC<{ transactions: Transaction[]; categories: Ca
                   ${data.overallAvg.toLocaleString()}
                 </td>
                 <td colSpan={2} className="py-2.5 px-3 text-xs text-stone-400">
-                  依開支金額高低排序
+                  依開支金額高低排序 · 點擊項目可展開全部各項明細
                 </td>
               </tr>
             </tfoot>
@@ -980,21 +1305,62 @@ const CategoryStatsTable: React.FC<{ transactions: Transaction[]; categories: Ca
 };
 
 // =========================================================================
-// 子表格組件 6：年度收支統計表 (1~12月)
+// 子表格組件 6：年度收支統計表 (1~12月，支援點擊月份展開當月全部收支明細與總和)
 // =========================================================================
 const YearlySummaryTable: React.FC<{ transactions: Transaction[]; year: string }> = ({
   transactions,
   year
 }) => {
   const data = useMemo(() => buildYearlySummaryReport(transactions, year), [transactions, year]);
+  const [expandedMonthStrs, setExpandedMonthStrs] = useState<string[]>([]);
+
+  const toggleMonth = (mStr: string) => {
+    setExpandedMonthStrs((prev) =>
+      prev.includes(mStr) ? prev.filter((x) => x !== mStr) : [...prev, mStr]
+    );
+  };
+
+  const expandAll = () => {
+    setExpandedMonthStrs(data.rows.map((r) => r.monthStr));
+  };
+
+  const collapseAll = () => {
+    setExpandedMonthStrs([]);
+  };
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-x-auto border border-stone-200 rounded-xl">
+    <div className="space-y-3">
+      {/* 展開/收合控制列 */}
+      <div className="flex items-center justify-between px-1 text-xs text-stone-600">
+        <div className="flex items-center gap-1.5">
+          <Eye className="w-3.5 h-3.5 text-rose-600" />
+          <span className="font-semibold text-stone-800">
+            點擊任一月份即可展開當月完整收支流水明細、撥補入帳與淨額結算
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={expandAll}
+            className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium transition-colors cursor-pointer text-[11px]"
+          >
+            展開全年度月份明細
+          </button>
+          <button
+            type="button"
+            onClick={collapseAll}
+            className="px-2.5 py-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium transition-colors cursor-pointer text-[11px]"
+          >
+            收合全部
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto border border-stone-200 rounded-xl shadow-2xs">
         <table className="w-full text-left text-xs border-collapse">
           <thead>
             <tr className="bg-stone-100 text-stone-700 border-b border-stone-200 font-bold">
-              <th className="py-2.5 px-3 w-24">月份</th>
+              <th className="py-2.5 px-3 w-28">月份</th>
               <th className="py-2.5 px-3 text-right w-32">撥補入帳 (NT$)</th>
               <th className="py-2.5 px-3 text-right w-32">零用金支出 (NT$)</th>
               <th className="py-2.5 px-3 text-right w-32">收支差額</th>
@@ -1006,38 +1372,174 @@ const YearlySummaryTable: React.FC<{ transactions: Transaction[]; year: string }
           <tbody className="divide-y divide-stone-200 text-stone-700">
             {data.rows.map((r) => {
               const expenseRate = data.totalExpense > 0 ? (r.expense / data.totalExpense) * 100 : 0;
+              const isExpanded = expandedMonthStrs.includes(r.monthStr);
+              const txs = r.transactions || [];
+              const monthIncomes = txs.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+              const monthExpenses = txs.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+              const monthNet = monthIncomes - monthExpenses;
+
               return (
-                <tr key={r.monthStr} className="hover:bg-stone-50/80 transition-colors">
-                  <td className="py-2.5 px-3 font-bold text-stone-900">{r.monthName}</td>
-                  <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
-                    {r.income > 0 ? `+$${r.income.toLocaleString()}` : '-'}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono text-rose-600 font-semibold">
-                    {r.expense > 0 ? `-$${r.expense.toLocaleString()}` : '-'}
-                  </td>
-                  <td className={`py-2.5 px-3 text-right font-mono font-bold ${
-                    r.net >= 0 ? 'text-emerald-700' : 'text-rose-600'
-                  }`}>
-                    {r.net >= 0 ? '+' : ''}${r.net.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-3 text-right font-mono font-medium text-stone-900">
-                    ${r.cumulativeBalance.toLocaleString()}
-                  </td>
-                  <td className="py-2.5 px-3 text-center font-mono text-stone-600">{r.txCount}</td>
-                  <td className="py-2.5 px-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-24 h-2 bg-stone-100 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-rose-500 rounded-full" 
-                          style={{ width: `${Math.min(100, expenseRate)}%` }}
-                        />
+                <React.Fragment key={r.monthStr}>
+                  <tr
+                    onClick={() => toggleMonth(r.monthStr)}
+                    className={`hover:bg-rose-50/50 cursor-pointer transition-colors select-none ${
+                      isExpanded ? 'bg-rose-50/30' : ''
+                    }`}
+                    title="點擊展開或收合此月份的全部收支明細"
+                  >
+                    <td className="py-2.5 px-3 font-bold text-stone-900">
+                      <div className="flex items-center gap-1.5">
+                        {isExpanded ? (
+                          <ChevronDown className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5 text-stone-400 shrink-0" />
+                        )}
+                        <span>{r.monthName}</span>
+                        {r.txCount > 0 && (
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${
+                            isExpanded ? 'bg-rose-200 text-rose-900' : 'bg-stone-100 text-stone-600'
+                          }`}>
+                            {isExpanded ? '收合' : `${r.txCount}筆`}
+                          </span>
+                        )}
                       </div>
-                      <span className="font-mono text-[10px] text-stone-500">
-                        {expenseRate.toFixed(1)}%
-                      </span>
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-emerald-600 font-semibold">
+                      {r.income > 0 ? `+$${r.income.toLocaleString()}` : '-'}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-rose-600 font-semibold">
+                      {r.expense > 0 ? `-$${r.expense.toLocaleString()}` : '-'}
+                    </td>
+                    <td className={`py-2.5 px-3 text-right font-mono font-bold ${
+                      r.net >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                    }`}>
+                      {r.net >= 0 ? '+' : ''}${r.net.toLocaleString()}
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono font-medium text-stone-900">
+                      ${r.cumulativeBalance.toLocaleString()}
+                    </td>
+                    <td className="py-2.5 px-3 text-center font-mono text-stone-600 font-semibold">{r.txCount}</td>
+                    <td className="py-2.5 px-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 h-2 bg-stone-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-rose-500 rounded-full" 
+                            style={{ width: `${Math.min(100, expenseRate)}%` }}
+                          />
+                        </div>
+                        <span className="font-mono text-[10px] text-stone-500">
+                          {expenseRate.toFixed(1)}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* 展開之當月明細抽屜表格 */}
+                  {isExpanded && (
+                    <tr className="bg-stone-50/70 border-b border-rose-200/60">
+                      <td colSpan={7} className="p-3 pl-8">
+                        <div className="bg-white rounded-xl border border-rose-200/80 shadow-xs overflow-hidden">
+                          <div className="bg-rose-50/70 px-3.5 py-2 border-b border-rose-200 flex items-center justify-between text-xs">
+                            <span className="font-bold text-rose-950 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                              【{r.monthName}】當月收支交易明細 (共 {r.txCount} 筆)
+                            </span>
+                            <div className="flex items-center gap-3 font-mono font-bold text-stone-800">
+                              <span className="text-emerald-700">撥補: +${monthIncomes.toLocaleString()}</span>
+                              <span className="text-rose-600">支出: -${monthExpenses.toLocaleString()}</span>
+                              <span className={monthNet >= 0 ? 'text-emerald-800' : 'text-rose-700'}>
+                                當月差額: {monthNet >= 0 ? '+' : ''}${monthNet.toLocaleString()}
+                              </span>
+                            </div>
+                          </div>
+
+                          {txs.length === 0 ? (
+                            <div className="p-4 text-center text-xs text-stone-400">
+                              此月份暫無任何撥補或支出交易
+                            </div>
+                          ) : (
+                            <table className="w-full text-left text-xs border-collapse">
+                              <thead>
+                                <tr className="bg-stone-50 text-stone-600 font-semibold border-b border-stone-200">
+                                  <th className="py-2 px-3 w-10 text-center">序</th>
+                                  <th className="py-2 px-3 w-24">日期</th>
+                                  <th className="py-2 px-3 w-20 text-center">類型</th>
+                                  <th className="py-2 px-3 w-28">科目分類</th>
+                                  <th className="py-2 px-3">品名店家 / 細項內容</th>
+                                  <th className="py-2 px-3 w-24">經辦同仁</th>
+                                  <th className="py-2 px-3 w-28">憑證發票</th>
+                                  <th className="py-2 px-3 w-36">備註說明</th>
+                                  <th className="py-2 px-3 text-right w-28">金額 (NT$)</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-stone-100 text-stone-700">
+                                {txs.map((tx, txIdx) => (
+                                  <tr key={tx.id} className="hover:bg-rose-50/30 transition-colors">
+                                    <td className="py-2 px-3 text-center font-mono text-stone-400">
+                                      {txIdx + 1}
+                                    </td>
+                                    <td className="py-2 px-3 font-mono text-stone-700">{tx.date}</td>
+                                    <td className="py-2 px-3 text-center">
+                                      <span className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                                        tx.type === 'income'
+                                          ? 'bg-emerald-100 text-emerald-800'
+                                          : 'bg-stone-100 text-stone-700'
+                                      }`}>
+                                        {tx.type === 'income' ? '撥補' : '支出'}
+                                      </span>
+                                    </td>
+                                    <td className="py-2 px-3 font-semibold text-stone-900">{tx.categoryName}</td>
+                                    <td className="py-2 px-3 font-medium text-stone-800">
+                                      <div className="flex items-center gap-1.5">
+                                        <span>{tx.subItem || '未載明細項'}</span>
+                                        {tx.peopleCount && tx.peopleCount > 0 ? (
+                                          <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-amber-50 text-amber-900 border border-amber-200">
+                                            👥 {tx.peopleCount}人
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-3 text-stone-600">{tx.claimant || '-'}</td>
+                                    <td className="py-2 px-3">
+                                      <div className="flex items-center gap-1 text-[11px]">
+                                        <span className={`px-1.5 py-0.2 rounded text-[10px] ${
+                                          tx.receiptType === 'invoice' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
+                                          tx.receiptType === 'receipt' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
+                                          'bg-stone-100 text-stone-500'
+                                        }`}>
+                                          {tx.receiptType === 'invoice' ? '發票' : tx.receiptType === 'receipt' ? '收據' : '無'}
+                                        </span>
+                                        {tx.invoiceNumber && <span className="font-mono text-stone-600">{tx.invoiceNumber}</span>}
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-3 text-stone-500 text-xs truncate max-w-xs">{tx.note || '-'}</td>
+                                    <td className={`py-2 px-3 text-right font-mono font-bold ${
+                                      tx.type === 'income' ? 'text-emerald-600' : 'text-stone-900'
+                                    }`}>
+                                      {tx.type === 'income' ? '+' : '-'}${tx.amount.toLocaleString()}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                              <tfoot>
+                                <tr className="bg-stone-50/90 font-bold border-t border-stone-200 text-stone-900">
+                                  <td colSpan={8} className="py-2 px-3 text-right text-stone-600">
+                                    【{r.monthName}】當月結算合計：撥補 +${monthIncomes.toLocaleString()} · 支出 -${monthExpenses.toLocaleString()} · 淨差額：
+                                  </td>
+                                  <td className={`py-2 px-3 text-right font-mono font-bold ${
+                                    monthNet >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                                  }`}>
+                                    {monthNet >= 0 ? '+' : ''}${monthNet.toLocaleString()}
+                                  </td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -1059,7 +1561,7 @@ const YearlySummaryTable: React.FC<{ transactions: Transaction[]; year: string }
               <td className="py-2.5 px-3 text-center font-mono">
                 {data.rows.reduce((s, r) => s + r.txCount, 0)}
               </td>
-              <td className="py-2.5 px-3 text-xs text-stone-400">1~12月完整走勢</td>
+              <td className="py-2.5 px-3 text-xs text-stone-400">1~12月完整走勢 · 點擊月份可展開當月收支明細</td>
             </tr>
           </tfoot>
         </table>

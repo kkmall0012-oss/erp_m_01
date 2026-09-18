@@ -265,6 +265,7 @@ export function buildCategoryStatsReport(
     count: number;
     subItems: Record<string, number>;
     claimants: Record<string, number>;
+    transactions: Transaction[];
   }> = {};
 
   categories.forEach((c) => {
@@ -275,7 +276,8 @@ export function buildCategoryStatsReport(
         amount: 0,
         count: 0,
         subItems: {},
-        claimants: {}
+        claimants: {},
+        transactions: []
       };
     }
   });
@@ -289,11 +291,13 @@ export function buildCategoryStatsReport(
         amount: 0,
         count: 0,
         subItems: {},
-        claimants: {}
+        claimants: {},
+        transactions: []
       };
     }
     catMap[id].amount += t.amount;
     catMap[id].count += 1;
+    catMap[id].transactions.push(t);
 
     const sub = t.subItem || '未載明';
     catMap[id].subItems[sub] = (catMap[id].subItems[sub] || 0) + t.amount;
@@ -316,7 +320,8 @@ export function buildCategoryStatsReport(
         percentage: totalExpense > 0 ? (c.amount / totalExpense) * 100 : 0,
         avgPerTx: c.count > 0 ? Math.round(c.amount / c.count) : 0,
         topSubItem: topSub ? `${topSub[0]} ($${topSub[1].toLocaleString()})` : '-',
-        topClaimant: topClaimant ? `${topClaimant[0]} ($${topClaimant[1].toLocaleString()})` : '-'
+        topClaimant: topClaimant ? `${topClaimant[0]} ($${topClaimant[1].toLocaleString()})` : '-',
+        transactions: [...c.transactions].sort((a, b) => (b.date > a.date ? 1 : -1))
       };
     })
     .sort((a, b) => b.amount - a.amount);
@@ -343,7 +348,8 @@ export function buildYearlySummaryReport(
       monthName: `${i + 1} 月`,
       income: 0,
       expense: 0,
-      count: 0
+      count: 0,
+      transactions: [] as Transaction[]
     };
   });
 
@@ -357,6 +363,7 @@ export function buildYearlySummaryReport(
           monthsData[mIdx].expense += t.amount;
         }
         monthsData[mIdx].count += 1;
+        monthsData[mIdx].transactions.push(t);
       }
     }
   });
@@ -372,7 +379,8 @@ export function buildYearlySummaryReport(
       expense: m.expense,
       net,
       cumulativeBalance: runningBalance,
-      txCount: m.count
+      txCount: m.count,
+      transactions: [...m.transactions].sort((a, b) => (b.date > a.date ? 1 : -1))
     };
   });
 
