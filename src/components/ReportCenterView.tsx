@@ -939,10 +939,29 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
 };
 
 // =========================================================================
-// 子表格組件 1：帳務記錄明細表 (流水帳)
+// 子表格組件 1：帳務記錄明細表 (收支分開列示)
 // =========================================================================
 const TxDetailsTable: React.FC<{ transactions: Transaction[] }> = ({ transactions }) => {
+  const [viewMode, setViewMode] = useState<'all' | 'expense' | 'income'>('all');
   const data = useMemo(() => buildTxDetailsReport(transactions), [transactions]);
+
+  const displayedRows = useMemo(() => {
+    if (viewMode === 'expense') return data.rows.filter((t) => t.type === 'expense');
+    if (viewMode === 'income') return data.rows.filter((t) => t.type === 'income');
+    return data.rows;
+  }, [data.rows, viewMode]);
+
+  const currentTotalIncome = useMemo(() => {
+    return displayedRows
+      .filter((t) => t.type === 'income')
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [displayedRows]);
+
+  const currentTotalExpense = useMemo(() => {
+    return displayedRows
+      .filter((t) => t.type === 'expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+  }, [displayedRows]);
 
   return (
     <div className="space-y-4">
@@ -980,36 +999,91 @@ const TxDetailsTable: React.FC<{ transactions: Transaction[] }> = ({ transaction
         </div>
       </div>
 
-      {/* 明細清單表格 */}
+      {/* 檢視切換籤頁 (列印時隱藏) */}
+      <div className="flex items-center justify-between gap-3 print:hidden">
+        <div className="inline-flex p-1 bg-stone-100 rounded-xl border border-stone-200 text-xs font-medium">
+          <button
+            type="button"
+            onClick={() => setViewMode('all')}
+            className={`px-3 py-1.5 rounded-lg transition-all ${
+              viewMode === 'all'
+                ? 'bg-white text-stone-900 shadow-xs font-bold'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            全部收支明細 ({data.count})
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('expense')}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+              viewMode === 'expense'
+                ? 'bg-white text-rose-700 shadow-xs font-bold'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-rose-500" />
+            僅看支出 ({data.expenseCount})
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('income')}
+            className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+              viewMode === 'income'
+                ? 'bg-white text-emerald-700 shadow-xs font-bold'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            僅看收入撥補 ({data.incomeCount})
+          </button>
+        </div>
+
+        <span className="text-xs text-stone-500">
+          收支分開獨立欄位，檢視對帳更直觀清晰
+        </span>
+      </div>
+
+      {/* 明細清單表格 (收入與支出分開獨立兩欄) */}
       <div className="w-full overflow-x-auto border border-stone-200 rounded-xl shadow-2xs bg-white">
         <table className="w-full text-left text-xs border-collapse print:min-w-0 print:w-full">
           <thead>
             <tr className="bg-stone-100 text-stone-700 border-b border-stone-200 font-bold">
               <th className="py-2.5 px-2.5 w-12 text-center whitespace-nowrap">序</th>
-              <th className="py-2.5 px-3 w-28 whitespace-nowrap">記帳日期</th>
-              <th className="py-2.5 px-3 w-32 text-center whitespace-nowrap">收支類型</th>
+              <th className="py-2.5 px-3 w-32 whitespace-nowrap">記帳日期 / 傳票</th>
+              <th className="py-2.5 px-3 w-28 text-center whitespace-nowrap">收支類型</th>
               <th className="py-2.5 px-3 w-28 whitespace-nowrap">科目分類</th>
               <th className="py-2.5 px-3 min-w-[200px]">品名店家 / 開銷細項</th>
-              <th className="py-2.5 px-3 text-right w-28 whitespace-nowrap">金額 (NT$)</th>
+              <th className="py-2.5 px-3 text-right w-28 whitespace-nowrap bg-emerald-50/70 text-emerald-900 border-x border-emerald-100/60">
+                收入金額 (NT$)
+              </th>
+              <th className="py-2.5 px-3 text-right w-28 whitespace-nowrap bg-rose-50/70 text-rose-900 border-r border-rose-100/60">
+                支出金額 (NT$)
+              </th>
               <th className="py-2.5 px-3 w-24 whitespace-nowrap">經辦同仁</th>
               <th className="py-2.5 px-3 w-36 whitespace-nowrap">憑證發票</th>
               <th className="py-2.5 px-3 min-w-[130px]">備註說明</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-stone-200 text-stone-700">
-            {data.rows.length === 0 ? (
+            {displayedRows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="py-10 text-center text-stone-400">
+                <td colSpan={10} className="py-10 text-center text-stone-400">
                   此期間無符合條件的收支流水紀錄
                 </td>
               </tr>
             ) : (
-              data.rows.map((t, idx) => (
+              displayedRows.map((t, idx) => (
                 <tr key={t.id} className="hover:bg-stone-50/90 transition-colors">
                   <td className="py-2.5 px-2.5 text-center text-stone-400 font-mono">{idx + 1}</td>
-                  <td className="py-2.5 px-3 font-mono text-stone-700 font-medium whitespace-nowrap">{t.date}</td>
+                  <td className="py-2.5 px-3 whitespace-nowrap">
+                    <div className="flex flex-col">
+                      <span className="font-mono text-stone-800 font-medium">{t.date}</span>
+                      <span className="font-mono text-[10px] text-stone-400 tracking-tight">{t.voucherNo || t.id}</span>
+                    </div>
+                  </td>
                   <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                    <span className={`inline-flex items-center justify-center px-2.5 py-1 rounded-lg text-xs font-bold whitespace-nowrap ${
+                    <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-lg text-xs font-bold whitespace-nowrap ${
                       t.type === 'income'
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 ring-1 ring-emerald-200'
                         : 'bg-rose-50 text-rose-700 border border-rose-300 ring-1 ring-rose-200'
@@ -1039,10 +1113,25 @@ const TxDetailsTable: React.FC<{ transactions: Transaction[] }> = ({ transaction
                       </div>
                     </div>
                   </td>
-                  <td className={`py-2.5 px-3 text-right font-bold font-mono text-xs whitespace-nowrap ${
-                    t.type === 'income' ? 'text-emerald-600' : 'text-stone-900'
-                  }`}>
-                    {t.type === 'income' ? '+' : '-'}${t.amount.toLocaleString()}
+                  {/* 收入金額欄位 */}
+                  <td className="py-2.5 px-3 text-right font-mono text-xs whitespace-nowrap bg-emerald-50/30 border-x border-emerald-100/40">
+                    {t.type === 'income' ? (
+                      <span className="font-bold text-emerald-700">
+                        +NT$ {t.amount.toLocaleString()}
+                      </span>
+                    ) : (
+                      <span className="text-stone-300">-</span>
+                    )}
+                  </td>
+                  {/* 支出金額欄位 */}
+                  <td className="py-2.5 px-3 text-right font-mono text-xs whitespace-nowrap bg-rose-50/30 border-r border-rose-100/40">
+                    {t.type === 'expense' ? (
+                      <span className="font-bold text-stone-900">
+                        NT$ {t.amount.toLocaleString()}
+                      </span>
+                    ) : (
+                      <span className="text-stone-300">-</span>
+                    )}
                   </td>
                   <td className="py-2.5 px-3 text-stone-700 whitespace-nowrap">
                     {t.claimant ? (
@@ -1076,17 +1165,20 @@ const TxDetailsTable: React.FC<{ transactions: Transaction[] }> = ({ transaction
               ))
             )}
           </tbody>
-          {data.rows.length > 0 && (
+          {displayedRows.length > 0 && (
             <tfoot>
-              <tr className="bg-stone-100/90 font-bold text-stone-900 border-t-2 border-stone-300">
+              <tr className="bg-stone-100/95 font-bold text-stone-900 border-t-2 border-stone-300">
                 <td colSpan={5} className="py-2.5 px-4 text-right">
-                  本期收支合計 (共 {data.count} 筆)：
+                  清單合計 (共 {displayedRows.length} 筆)：
                 </td>
-                <td className="py-2.5 px-3 text-right font-mono text-rose-600 text-sm">
-                  -${data.totalExpense.toLocaleString()}
+                <td className="py-2.5 px-3 text-right font-mono text-emerald-700 text-xs sm:text-sm bg-emerald-50/50 border-x border-emerald-100/60">
+                  {currentTotalIncome > 0 ? `+NT$ ${currentTotalIncome.toLocaleString()}` : '-'}
                 </td>
-                <td colSpan={3} className="py-3 px-3 text-stone-600 text-xs">
-                  (另有撥補總入帳 +${data.totalIncome.toLocaleString()}，結算淨差額 ${data.netBalance.toLocaleString()})
+                <td className="py-2.5 px-3 text-right font-mono text-rose-600 text-xs sm:text-sm bg-rose-50/50 border-r border-rose-100/60">
+                  {currentTotalExpense > 0 ? `-NT$ ${currentTotalExpense.toLocaleString()}` : '-'}
+                </td>
+                <td colSpan={3} className="py-2.5 px-3 text-stone-600 text-xs">
+                  淨差額 NT$ {(currentTotalIncome - currentTotalExpense).toLocaleString()}
                 </td>
               </tr>
             </tfoot>

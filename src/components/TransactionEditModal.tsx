@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   X, 
   Save, 
@@ -63,12 +63,28 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
     }
   }, [transaction]);
 
+  // 取得所屬分類物件 (若為收入，優先匹配收入大類，確保自訂細項正確掛鉤)
+  const currentCategory = useMemo(() => {
+    const found = categories.find((c) => c.id === categoryId);
+    if (found) return found;
+    if (transaction?.type === 'income') {
+      return (
+        categories.find((c) => c.type === 'income') ||
+        categories.find((c) => c.id === 'replenishment' || c.id === 'replenish' || c.name.includes('撥補')) ||
+        categories[0]
+      );
+    }
+    return (
+      categories.find((c) => c.type === 'expense') ||
+      categories[0]
+    );
+  }, [categories, categoryId, transaction]);
+
+  const isExpense = transaction ? transaction.type === 'expense' : true;
+  const isDining = isExpense && (currentCategory?.id === 'dining' || currentCategory?.hasPeopleCount);
+
   // Hook 執行完成後才做條件回傳
   if (!isOpen || !transaction) return null;
-
-  const currentCategory = categories.find((c) => c.id === categoryId) || categories[0];
-  const isExpense = transaction.type === 'expense';
-  const isDining = isExpense && (currentCategory?.id === 'dining' || currentCategory?.hasPeopleCount);
 
   // 儲存修改
   const handleSubmit = (e: React.FormEvent) => {
@@ -124,11 +140,18 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
               <Clock className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-stone-900">
-                修改記帳明細
+              <h2 className="text-base font-bold text-stone-900 flex items-center gap-2 flex-wrap">
+                <span>修改記帳明細</span>
+                {(transaction.voucherNo || (transaction.id && transaction.id.startsWith('P'))) && (
+                  <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200">
+                    {transaction.voucherNo || transaction.id}
+                  </span>
+                )}
               </h2>
               <p className="text-xs text-stone-500 mt-0.5">
-                單獨彈窗修改，不會動到左側專用的日常登記表單
+                {transaction.rawVoucherId
+                  ? `小管家建檔編號：${transaction.rawVoucherId}`
+                  : '單獨彈窗修改，不會動到左側專用的日常登記表單'}
               </p>
             </div>
           </div>

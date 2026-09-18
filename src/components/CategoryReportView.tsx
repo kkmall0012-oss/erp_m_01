@@ -441,32 +441,36 @@ export const CategoryReportView: React.FC<CategoryReportViewProps> = ({
     ws3['!cols'] = [{ wch: 18 }, { wch: 18 }, { wch: 16 }];
     XLSX.utils.book_append_sheet(wb, ws3, '同仁請領排行');
 
-    // Sheet 4: 當月所有收支明細清單
+    // Sheet 4: 當月所有收支明細清單（收支分開列示）
     const detailRows = monthlyData.monthTx.map((t, idx) => ({
       '項次': idx + 1,
+      '傳票編號': t.voucherNo || t.id,
       '日期': t.date,
-      '收支類型': t.type === 'expense' ? '支出' : '撥補收入',
+      '收支類型': t.type === 'expense' ? '🔴 支出' : '🟢 撥補收入',
       '請領同仁': t.claimant || (t.type === 'income' ? '公司出納' : '未指定'),
       '主分類': t.categoryName,
       '項目細項': t.subItem,
       '憑證類型': t.type === 'expense' ? (t.receiptType === 'invoice' ? '🧾 發票' : t.receiptType === 'receipt' ? '📄 收據' : '無') : '-',
       '發票號碼': t.invoiceNumber || '-',
       '用餐人數': t.peopleCount || '-',
-      '金額 (NT$)': t.amount,
+      '收入金額 (NT$)': t.type === 'income' ? t.amount : '',
+      '支出金額 (NT$)': t.type === 'expense' ? t.amount : '',
       '備註說明': t.note || ''
     }));
     const ws4 = XLSX.utils.json_to_sheet(detailRows);
     ws4['!cols'] = [
       { wch: 6 },
+      { wch: 20 },
       { wch: 12 },
-      { wch: 10 },
+      { wch: 12 },
       { wch: 12 },
       { wch: 14 },
       { wch: 22 },
       { wch: 10 },
       { wch: 14 },
       { wch: 10 },
-      { wch: 14 },
+      { wch: 16 },
+      { wch: 16 },
       { wch: 24 }
     ];
     XLSX.utils.book_append_sheet(wb, ws4, `${selectedMonth}_收支流水明細`);

@@ -13,6 +13,7 @@ interface SearchableOptionPickerProps {
   placeholder?: string;
   itemTypeLabel?: string; // 例如「店家」、「同仁」、「站點」
   badgeColor?: string;
+  initialSortMode?: SortMode;
 }
 
 export const SearchableOptionPicker: React.FC<SearchableOptionPickerProps> = ({
@@ -24,10 +25,11 @@ export const SearchableOptionPicker: React.FC<SearchableOptionPickerProps> = ({
   monthLabel,
   placeholder = '搜尋或點選...',
   itemTypeLabel = '項目',
-  badgeColor = '#d97706'
+  badgeColor = '#d97706',
+  initialSortMode = 'default'
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortMode, setSortMode] = useState<SortMode>('popular');
+  const [sortMode, setSortMode] = useState<SortMode>(initialSortMode);
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
   // 1. 根據排序模式與歷史次數計算排序後的清單
@@ -136,10 +138,10 @@ export const SearchableOptionPicker: React.FC<SearchableOptionPickerProps> = ({
                 ? 'bg-white text-stone-900 shadow-2xs font-bold'
                 : 'text-stone-600 hover:text-stone-900'
             }`}
-            title="依照原本在分類中預設的排序"
+            title="依照在選單項目管理中心自訂排列的順序"
           >
-            <ListOrdered className="w-3 h-3 text-stone-500" />
-            <span>預設</span>
+            <ListOrdered className="w-3 h-3 text-amber-600" />
+            <span>自訂順序</span>
           </button>
         </div>
       </div>

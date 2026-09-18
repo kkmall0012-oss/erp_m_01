@@ -107,8 +107,23 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
   const [justSubmitted, setJustSubmitted] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
 
-  // 取得當前選中的主分類物件
-  const currentCategory = categories.find((c) => c.id === selectedCategoryId) || categories[0];
+  // 取得當前選中的主分類物件 (嚴格區分收支類型，確保撥補項目與選單管理中心掛鉤)
+  const currentCategory = useMemo(() => {
+    if (type === 'income') {
+      return (
+        categories.find((c) => c.type === 'income' && c.id === selectedCategoryId) ||
+        categories.find((c) => c.type === 'income') ||
+        categories.find((c) => c.id === 'replenishment' || c.name.includes('撥補')) ||
+        categories[0]
+      );
+    }
+    return (
+      categories.find((c) => c.type === 'expense' && c.id === selectedCategoryId) ||
+      categories.find((c) => c.type === 'expense') ||
+      categories[0]
+    );
+  }, [type, categories, selectedCategoryId]);
+
   const isDining = type === 'expense' && (currentCategory?.id === 'dining' || currentCategory?.hasPeopleCount);
 
   // 切換收支類型時自動選取合適的分類
@@ -658,15 +673,28 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
                 <Coins className="w-4 h-4 text-emerald-700" />
-                <span>零用金撥補來源 (必選/必填)</span>
+                <span>{currentCategory?.subLabel || '零用金撥補來源 (必選/必填)'}</span>
               </label>
-              <button
-                type="button"
-                onClick={() => setIsCustomMode(!isCustomMode)}
-                className="text-[11px] text-emerald-800 hover:underline font-medium"
-              >
-                {isCustomMode ? '返回常用來源選單' : '+ 手動輸入其他來源'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCustomMode(!isCustomMode)}
+                  className="text-[11px] text-emerald-800 hover:underline font-medium"
+                >
+                  {isCustomMode ? '返回常用來源選單' : '+ 手動輸入其他來源'}
+                </button>
+                {onOpenSettings && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenSettings('categories')}
+                    className="text-[11px] text-stone-500 hover:text-emerald-900 flex items-center gap-1 pl-1 border-l border-emerald-200"
+                    title="開啟選單項目管理中心，調整撥補來源清單"
+                  >
+                    <Settings className="w-3 h-3 text-emerald-700" />
+                    <span>管理選單項目</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {!isCustomMode ? (
@@ -678,12 +706,13 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
                         '銀行提領補充',
                         '主管交付撥款',
                         '會計請款核銷歸墊',
-                        '同仁預支款繳回'
+                        '同仁預支款繳回',
+                        '零星收入 / 押金退還'
                       ]
                 }
                 value={selectedSubItem}
                 onChange={(val) => setSelectedSubItem(val)}
-                label="撥補來源"
+                label={currentCategory?.subLabel || '撥補來源'}
                 itemTypeLabel="來源"
                 placeholder="搜尋撥補來源..."
                 usageCounts={subItemUsageMap}
@@ -707,7 +736,7 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
                     onChange={(e) => setSaveToMenu(e.target.checked)}
                     className="rounded-sm border-emerald-300 text-emerald-600 focus:ring-emerald-500"
                   />
-                  <span>同時加入撥補來源常用下拉選單</span>
+                  <span>同時加入「{currentCategory?.name || '零用金撥補'}」常用選單項目</span>
                 </label>
               </div>
             )}

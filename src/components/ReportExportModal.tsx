@@ -16,6 +16,7 @@ import {
   exportMultipleSelectedReportsExcel,
   ReportFilterOptions 
 } from '../utils/reportGenerators';
+import { exportToMyMoneyCsv } from '../utils/excel';
 
 interface ReportExportModalProps {
   isOpen: boolean;
@@ -227,7 +228,20 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto">
+          <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                exportToMyMoneyCsv(transactions);
+                onClose();
+              }}
+              className="px-3 py-2 text-stone-700 bg-stone-100 hover:bg-stone-200/80 rounded-xl font-medium cursor-pointer inline-flex items-center gap-1.5 transition-colors"
+              title="將零用金帳務明細匯出為帳務小管家相容的 CSV 檔案，可直接回匯備份"
+            >
+              <Download className="w-3.5 h-3.5 text-stone-600" />
+              <span>匯出帳務小管家相容 CSV</span>
+            </button>
+
             <button
               type="button"
               onClick={onClose}

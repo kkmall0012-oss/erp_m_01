@@ -76,6 +76,7 @@ export const TransactionList: React.FC<TransactionListProps> = ({
       case 'transport':
         return <Car className="w-3.5 h-3.5" />;
       case 'replenishment':
+      case 'replenish':
         return <Coins className="w-3.5 h-3.5" />;
       default:
         return <Filter className="w-3.5 h-3.5" />;
@@ -197,12 +198,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
                 return (
                   <tr key={item.id} className="hover:bg-stone-50/80 transition-colors group">
-                    {/* 日期 */}
-                    <td className="py-3 px-4 font-mono text-stone-600 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
+                    {/* 日期與系統傳票號 */}
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5 font-mono text-stone-700">
                         <Calendar className="w-3 h-3 text-stone-400" />
                         <span>{item.date}</span>
                       </div>
+                      {(item.voucherNo || (item.id && item.id.startsWith('P'))) && (
+                        <div 
+                          className="text-[10px] font-mono font-semibold text-amber-700 mt-0.5 tracking-tight"
+                          title={item.rawVoucherId ? `【系統傳票編號】：${item.voucherNo || item.id}\n【帳務小管家建檔模式編號】：${item.rawVoucherId}` : `系統傳票號：${item.voucherNo || item.id}`}
+                        >
+                          {item.voucherNo || item.id}
+                        </div>
+                      )}
                     </td>
 
                     {/* 請領同仁 */}

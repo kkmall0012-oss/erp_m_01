@@ -61,9 +61,10 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
   const [saveToMenu, setSaveToMenu] = useState<boolean>(true);
 
   // 3. 收入第二層細項 (撥補來源)
-  const [incomeSource, setIncomeSource] = useState<string>('公司銀行帳戶提領');
+  const [incomeSource, setIncomeSource] = useState<string>('');
   const [customIncomeSource, setCustomIncomeSource] = useState<string>('');
   const [isCustomIncomeSource, setIsCustomIncomeSource] = useState<boolean>(false);
+  const [saveIncomeSourceToMenu, setSaveIncomeSourceToMenu] = useState<boolean>(true);
 
   // 4. 請領人 / 經手人
   const [selectedClaimant, setSelectedClaimant] = useState<string>(claimants[0] || '自己 / 零用金管理員');
@@ -79,15 +80,6 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
   const [note, setNote] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
-  // 常用撥補來源預設清單
-  const defaultIncomeSources = [
-    '公司銀行帳戶提領',
-    '主管現金提撥',
-    '採買結算剩餘款繳回',
-    '同仁退還預支代墊款',
-    '其他現金收入'
-  ];
-
   // 支出大類：排除零用金撥補（撥補屬收入類別，支出登記頁面嚴禁出現撥補選項）
   const expenseCategories = useMemo(() => {
     return categories.filter(
@@ -95,20 +87,92 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
     );
   }, [categories]);
 
+  // 撥補/收入大類：從 categories 取得 (完全與「選單項目管理」連動)
+  const incomeCategories = useMemo(() => {
+    const list = categories.filter((c) => c.type === 'income');
+    if (list.length > 0) return list;
+    return [
+      {
+        id: 'replenishment',
+        name: '零用金撥補',
+        type: 'income' as const,
+        icon: 'Coins',
+        color: '#16a34a',
+        subLabel: '撥補來源 / 歸墊方式',
+        defaultSubItems: [
+          '銀行提領補充',
+          '主管交付撥款',
+          '會計請款核銷歸墊',
+          '同仁預支款繳回',
+          '零星收入 / 押金退還'
+        ],
+        hasPeopleCount: false
+      }
+    ];
+  }, [categories]);
+
+  // 當前選取的收入/撥補分類
+  const currentIncomeCategory = useMemo(() => {
+    if (defaultCategoryId) {
+      const found = incomeCategories.find((c) => c.id === defaultCategoryId);
+      if (found) return found;
+    }
+    const foundById = incomeCategories.find((c) => c.id === selectedCategoryId);
+    if (foundById) return foundById;
+    return (
+      incomeCategories[0] ||
+      categories.find((c) => c.id === 'replenishment' || c.name.includes('撥補')) || {
+        id: 'replenishment',
+        name: '零用金撥補',
+        type: 'income' as const,
+        icon: 'Coins',
+        color: '#16a34a',
+        subLabel: '撥補來源 / 歸墊方式',
+        defaultSubItems: [
+          '銀行提領補充',
+          '主管交付撥款',
+          '會計請款核銷歸墊',
+          '同仁預支款繳回',
+          '零星收入 / 押金退還'
+        ],
+        hasPeopleCount: false
+      }
+    );
+  }, [categories, incomeCategories, defaultCategoryId, selectedCategoryId]);
+
+  // 當前撥補項目的所有來源清單 (完全掛鉤 categories 中的 defaultSubItems，嚴格保持使用者自訂排序)
+  const currentIncomeSources = useMemo(() => {
+    return currentIncomeCategory.defaultSubItems || [];
+  }, [currentIncomeCategory]);
+
   // 計算查詢月份項目的統計頻率
   const queryMonth = currentYearMonth || date.slice(0, 7);
 
   const subItemUsageMap = useMemo(() => {
     const map: Record<string, number> = {};
+    const targetCatId = type === 'income' ? currentIncomeCategory?.id : selectedCategoryId;
     transactions.forEach((t) => {
       if (t.date && t.date.startsWith(queryMonth)) {
-        if (t.subItem && (!t.categoryId || t.categoryId === selectedCategoryId)) {
-          map[t.subItem] = (map[t.subItem] || 0) + 1;
+        if (t.subItem) {
+          if (type === 'income') {
+            if (
+              t.type === 'income' ||
+              t.categoryId === 'replenish' ||
+              t.categoryId === 'replenishment' ||
+              t.categoryId === targetCatId
+            ) {
+              map[t.subItem] = (map[t.subItem] || 0) + 1;
+            }
+          } else {
+            if (!t.categoryId || t.categoryId === targetCatId) {
+              map[t.subItem] = (map[t.subItem] || 0) + 1;
+            }
+          }
         }
       }
     });
     return map;
-  }, [transactions, selectedCategoryId, queryMonth]);
+  }, [transactions, selectedCategoryId, currentIncomeCategory, type, queryMonth]);
 
   const claimantUsageMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -148,7 +212,14 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
           setSelectedSubItem(targetCat.defaultSubItems[0] || '');
         }
       } else {
-        setIncomeSource(defaultIncomeSources[0]);
+        const targetIncomeCat = (defaultCategoryId && incomeCategories.find((c) => c.id === defaultCategoryId)) ||
+          incomeCategories[0];
+        if (targetIncomeCat) {
+          setSelectedCategoryId(targetIncomeCat.id);
+          const firstSource = targetIncomeCat.defaultSubItems?.[0] || '';
+          setIncomeSource(firstSource);
+          setSelectedSubItem(firstSource);
+        }
       }
 
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -159,7 +230,7 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }
-  }, [isOpen, type, categories, onClose]);
+  }, [isOpen, type, categories, defaultCategoryId, expenseCategories, incomeCategories, onClose]);
 
   // 當分類切換時更新預設細項
   const currentCategory = useMemo(() => {
@@ -192,18 +263,23 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
     }
 
     if (type === 'income') {
-      const finalSource = isCustomIncomeSource ? customIncomeSource.trim() : incomeSource;
+      const finalSource = isCustomIncomeSource ? customIncomeSource.trim() : incomeSource.trim();
       if (!finalSource) {
-        setErrorMessage('請填寫撥補來源');
+        setErrorMessage(`請選擇或填寫「${currentIncomeCategory.subLabel || '撥補來源'}」`);
         return;
+      }
+
+      // 若手動輸入新來源且勾選存入選單，立即同步掛鉤到選單項目管理中！
+      if (isCustomIncomeSource && saveIncomeSourceToMenu && onQuickAddSubItem && finalSource) {
+        onQuickAddSubItem(currentIncomeCategory.id, finalSource);
       }
 
       onAddTransaction({
         type: 'income',
         date,
         amount: parsedAmount,
-        categoryId: 'replenish',
-        categoryName: '撥補收入',
+        categoryId: currentIncomeCategory.id,
+        categoryName: currentIncomeCategory.name || '零用金撥補',
         subItem: finalSource,
         claimant: selectedClaimant.trim() || '零用金管理員',
         note: note.trim()
@@ -683,75 +759,227 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                 </div>
               </div>
 
-              {/* 撥補來源快捷按鈕 */}
+              {/* 撥補分類 (若有多個收入大類時可供切換) */}
+              {incomeCategories.length > 1 && (
+                <div>
+                  <label className="block font-bold text-stone-800 mb-1.5">
+                    選擇撥補/收入分類
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {incomeCategories.map((cat) => {
+                      const isSelected = selectedCategoryId === cat.id;
+                      return (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCategoryId(cat.id);
+                            if (cat.defaultSubItems && cat.defaultSubItems.length > 0) {
+                              setIncomeSource(cat.defaultSubItems[0]);
+                              setIsCustomIncomeSource(false);
+                            }
+                          }}
+                          className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'border-emerald-700 bg-emerald-700 text-white shadow-xs font-bold'
+                              : 'border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 font-medium'
+                          }`}
+                        >
+                          {renderCategoryIcon(cat, isSelected)}
+                          <span className="text-xs truncate">{cat.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 撥補來源 / 方式 (完全掛鉤選單項目管理中心) */}
               <div>
-                <label className="block font-bold text-stone-800 mb-1.5">撥補來源 / 方式</label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
-                  {defaultIncomeSources.map((source) => {
-                    const isSelected = !isCustomIncomeSource && incomeSource === source;
-                    return (
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-bold text-stone-800 flex items-center gap-1.5">
+                    <Coins className="w-4 h-4 text-emerald-700" />
+                    <span>
+                      {currentIncomeCategory.subLabel || '撥補來源 / 歸墊方式'}{' '}
+                      <span className="text-emerald-700 font-bold">*</span>
+                    </span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {!isCustomIncomeSource ? (
                       <button
-                        key={source}
                         type="button"
                         onClick={() => {
-                          setIsCustomIncomeSource(false);
-                          setIncomeSource(source);
+                          setIsCustomIncomeSource(true);
+                          setCustomIncomeSource('');
                         }}
-                        className={`p-2.5 rounded-xl border text-left font-bold transition-all cursor-pointer ${
-                          isSelected
-                            ? 'border-emerald-700 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-600'
-                            : 'border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700'
-                        }`}
+                        className="text-[11px] text-emerald-700 hover:text-emerald-900 font-bold flex items-center gap-1 cursor-pointer"
                       >
-                        {source}
+                        <Plus className="w-3 h-3" />
+                        <span>自訂新來源</span>
                       </button>
-                    );
-                  })}
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsCustomIncomeSource(false)}
+                        className="text-[11px] text-stone-500 hover:text-stone-800 underline cursor-pointer"
+                      >
+                        回到選單快選
+                      </button>
+                    )}
+                    {onOpenSettings && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onOpenSettings('categories');
+                        }}
+                        className="text-[11px] text-stone-500 hover:text-stone-800 flex items-center gap-1 cursor-pointer pl-1 border-l border-stone-200"
+                        title="開啟選單項目管理中心，自訂撥補來源項目與順序"
+                      >
+                        <SlidersHorizontal className="w-3 h-3 text-emerald-700" />
+                        <span>管理選單項目</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                {isCustomIncomeSource ? (
-                  <div className="space-y-1.5">
+                {!isCustomIncomeSource ? (
+                  <div className="space-y-2">
+                    {/* 快捷點擊卡片區 (依照選單項目管理中心的排序顯示) */}
+                    {currentIncomeSources.length > 0 ? (
+                      <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {currentIncomeSources.map((source) => {
+                            const isSelected = incomeSource === source;
+                            const count = subItemUsageMap[source] || 0;
+                            return (
+                              <button
+                                key={source}
+                                type="button"
+                                onClick={() => setIncomeSource(source)}
+                                className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                                  isSelected
+                                    ? 'border-emerald-600 bg-emerald-50 text-emerald-950 ring-1 ring-emerald-600 font-bold shadow-2xs'
+                                    : 'border-stone-200 bg-stone-50/70 hover:bg-stone-100 text-stone-700 hover:border-emerald-300'
+                                }`}
+                              >
+                                <span className="text-xs truncate">{source}</span>
+                                {count > 0 && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100/80 text-emerald-800 font-medium shrink-0">
+                                    本月 {count} 次
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* 搜尋與進階排序下拉選單 (供項目較多時方便快速篩選或切換排序模式) */}
+                        <div className="pt-1">
+                          <SearchableOptionPicker
+                            id="modal-income-source-picker"
+                            options={currentIncomeSources}
+                            value={incomeSource}
+                            onChange={(val) => setIncomeSource(val)}
+                            usageCounts={subItemUsageMap}
+                            monthLabel={queryMonth}
+                            placeholder={`搜尋或點選 ${currentIncomeCategory.subLabel || '撥補來源'}...`}
+                            itemTypeLabel="來源"
+                            badgeColor="#059669"
+                            initialSortMode="default"
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-center space-y-1.5">
+                        <p className="text-xs text-amber-800">
+                          目前「{currentIncomeCategory.name}」尚未設定任何預設來源項目。
+                        </p>
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsCustomIncomeSource(true);
+                              setCustomIncomeSource('');
+                            }}
+                            className="text-xs text-emerald-700 font-bold hover:underline cursor-pointer"
+                          >
+                            ＋ 手動輸入新來源
+                          </button>
+                          {onOpenSettings && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onClose();
+                                onOpenSettings('categories');
+                              }}
+                              className="text-xs text-stone-600 font-medium hover:underline cursor-pointer"
+                            >
+                              開啟選單項目管理中心
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
                     <input
                       type="text"
                       autoFocus
-                      placeholder="請輸入其他撥補來源或款項名稱"
+                      placeholder={`請輸入新${currentIncomeCategory.subLabel || '撥補來源名稱'} (例如：董事長現金注資、廠商押金退回)`}
                       value={customIncomeSource}
                       onChange={(e) => setCustomIncomeSource(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-emerald-300 bg-emerald-50/30 focus:outline-hidden text-xs font-medium text-stone-800"
+                      className="w-full px-3 py-2.5 rounded-xl border border-emerald-300 bg-emerald-50/30 focus:bg-white focus:border-emerald-600 focus:outline-hidden text-xs font-medium text-stone-800"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setIsCustomIncomeSource(false)}
-                      className="text-[11px] text-stone-500 hover:text-stone-800 underline cursor-pointer"
-                    >
-                      回到預設來源
-                    </button>
+                    <label className="flex items-center gap-1.5 text-[11px] text-stone-600 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={saveIncomeSourceToMenu}
+                        onChange={(e) => setSaveIncomeSourceToMenu(e.target.checked)}
+                        className="rounded-sm border-stone-300 text-emerald-700 focus:ring-0"
+                      />
+                      <span>
+                        同時將此來源存入「{currentIncomeCategory.name}」常用清單（同步至選單項目管理中心）
+                      </span>
+                    </label>
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsCustomIncomeSource(true);
-                      setCustomIncomeSource('');
-                    }}
-                    className="text-[11px] text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 cursor-pointer"
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>自訂其他來源名稱</span>
-                  </button>
                 )}
               </div>
 
               {/* 入帳經辦人 */}
               <div>
-                <label className="block font-bold text-stone-700 mb-1">入帳經辦人</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-stone-700">入帳經辦人</label>
+                  {claimants.length > 0 && (
+                    <span className="text-[10px] text-stone-400">點選下方快選同仁</span>
+                  )}
+                </div>
                 <input
                   type="text"
                   value={selectedClaimant}
                   onChange={(e) => setSelectedClaimant(e.target.value)}
-                  placeholder="經手同仁"
+                  placeholder="經手同仁姓名"
                   className="w-full px-3 py-2 rounded-xl border border-stone-200 bg-stone-50 focus:bg-white focus:border-emerald-600 focus:outline-hidden text-xs text-stone-800"
                 />
+                {claimants.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                    {claimants.slice(0, 6).map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setSelectedClaimant(c)}
+                        className={`text-[11px] px-2 py-0.5 rounded-lg border transition-all cursor-pointer ${
+                          selectedClaimant === c
+                            ? 'bg-emerald-100 text-emerald-900 border-emerald-300 font-bold'
+                            : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* 備註說明 */}

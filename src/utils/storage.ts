@@ -397,20 +397,51 @@ export function exportBackupJSON(
   URL.revokeObjectURL(url);
 }
 
-// 還原備份檔 (.json)
+// 單獨匯出選單項目與請領人設定 (.json)
+export function exportSettingsBackupJSON(
+  categories: CategoryConfig[],
+  claimants: string[]
+): void {
+  const data = {
+    version: '1.4.0',
+    type: 'settings_only',
+    exportedAt: new Date().toISOString(),
+    categories,
+    claimants
+  };
+
+  const jsonStr = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  a.href = url;
+  a.download = `公司零用金_主題分類與請領人名冊_${dateStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// 還原備份檔 (.json，支援完整庫備份或單獨分類備份)
 export function parseBackupJSON(jsonStr: string): BackupData | null {
   try {
     const data = JSON.parse(jsonStr);
-    if (!data.transactions || !Array.isArray(data.transactions)) {
-      throw new Error('無效的備份檔案格式：缺少交易紀錄資料');
+    const hasTransactions = Array.isArray(data.transactions);
+    const hasCategories = Array.isArray(data.categories);
+    const hasClaimants = Array.isArray(data.claimants);
+
+    if (!hasTransactions && !hasCategories && !hasClaimants) {
+      throw new Error('無效的備份檔案格式：缺少交易紀錄或分類資料');
     }
     return {
       version: data.version || '1.4.0',
       exportedAt: data.exportedAt || new Date().toISOString(),
-      transactions: data.transactions,
-      categories: Array.isArray(data.categories) ? data.categories : DEFAULT_CATEGORIES,
+      transactions: hasTransactions ? data.transactions : [],
+      categories: hasCategories ? data.categories : DEFAULT_CATEGORIES,
       budgets: typeof data.budgets === 'object' && data.budgets !== null ? data.budgets : {},
-      claimants: Array.isArray(data.claimants) ? data.claimants : DEFAULT_CLAIMANTS,
+      claimants: hasClaimants ? data.claimants : DEFAULT_CLAIMANTS,
       directorWithdrawals: Array.isArray(data.directorWithdrawals) ? data.directorWithdrawals : [],
       subAccounts: Array.isArray(data.subAccounts) ? data.subAccounts : []
     };

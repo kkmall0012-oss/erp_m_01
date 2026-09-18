@@ -537,36 +537,146 @@ export function exportSingleReportExcel(
 
   if (reportId === 'tx_details') {
     const data = buildTxDetailsReport(filteredTxs);
-    const rows = data.rows.map((t, idx) => ({
-      '序號': idx + 1,
-      '記帳日期': t.date,
-      '收支類型': t.type === 'income' ? '撥補入金' : '零用金支出',
-      '科目分類': t.categoryName,
-      '細項/店家': t.subItem,
-      '金額 (NT$)': t.amount,
-      '經辦/請領人': t.claimant || '-',
-      '憑證類型': t.receiptType === 'invoice' ? '統一發票' : t.receiptType === 'receipt' ? '收據' : '無憑證',
-      '發票號碼': t.invoiceNumber || '-',
-      '備註說明': t.note || '-'
-    }));
+
+    // 1. 主要明細表（收支分開列示：獨立「收入金額」與「支出金額」欄位）
+    const rows = data.rows.map((t, idx) => {
+      const isIncome = t.type === 'income';
+      return {
+        '序號': idx + 1,
+        '傳票編號': t.voucherNo || t.id,
+        '記帳日期': t.date,
+        '收支類型': isIncome ? '🟢 撥補入金' : '🔴 零用支出',
+        '科目分類': t.categoryName,
+        '細項/店家/來源': t.subItem,
+        '收入金額 (NT$)': isIncome ? t.amount : '',
+        '支出金額 (NT$)': !isIncome ? t.amount : '',
+        '經辦/請領人': t.claimant || '-',
+        '憑證類型': t.receiptType === 'invoice' ? '統一發票' : t.receiptType === 'receipt' ? '收據' : '無憑證',
+        '發票號碼': t.invoiceNumber || '-',
+        '用餐人數': t.peopleCount && t.peopleCount > 1 ? `${t.peopleCount}人` : '-',
+        '備註說明': t.note || '-'
+      };
+    });
 
     // 合計列
     rows.push({
-      '序號': '【總計】',
-      '記帳日期': `共 ${data.count} 筆`,
-      '收支類型': `總支出 $${data.totalExpense.toLocaleString()}`,
-      '科目分類': `總撥補 $${data.totalIncome.toLocaleString()}`,
-      '細項/店家': `淨額 $${data.netBalance.toLocaleString()}`,
-      '金額 (NT$)': data.totalExpense,
+      '序號': '【合計】',
+      '傳票編號': `共 ${data.count} 筆`,
+      '記帳日期': periodDesc,
+      '收支類型': `結存淨差額 $${data.netBalance.toLocaleString()}`,
+      '科目分類': '-',
+      '細項/店家/來源': `收入 ${data.incomeCount} 筆 / 支出 ${data.expenseCount} 筆`,
+      '收入金額 (NT$)': data.totalIncome,
+      '支出金額 (NT$)': data.totalExpense,
       '經辦/請領人': `發票 ${data.invoiceCount} 張`,
       '憑證類型': `收據 ${data.receiptCount} 張`,
       '發票號碼': `無證 ${data.noDocCount} 筆`,
+      '用餐人數': '-',
       '備註說明': `報表列印時間: ${printTime}`
     } as any);
 
     const ws = XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 8 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 30 }];
-    XLSX.utils.book_append_sheet(wb, ws, '帳務記錄明細');
+    ws['!cols'] = [
+      { wch: 8 },  // 序號
+      { wch: 20 }, // 傳票編號
+      { wch: 13 }, // 記帳日期
+      { wch: 14 }, // 收支類型
+      { wch: 16 }, // 科目分類
+      { wch: 26 }, // 細項/店家/來源
+      { wch: 16 }, // 收入金額
+      { wch: 16 }, // 支出金額
+      { wch: 14 }, // 經辦/請領人
+      { wch: 12 }, // 憑證類型
+      { wch: 16 }, // 發票號碼
+      { wch: 10 }, // 用餐人數
+      { wch: 28 }  // 備註說明
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, '帳務明細(收支分欄)');
+
+    // 2. 獨立「零用金支出明細」工作表（更直觀單獨檢視所有開銷）
+    const expenseRows = data.rows
+      .filter((t) => t.type === 'expense')
+      .map((t, idx) => ({
+        '序號': idx + 1,
+        '傳票編號': t.voucherNo || t.id,
+        '支出日期': t.date,
+        '支出科目': t.categoryName,
+        '開銷細項/店家': t.subItem,
+        '支出金額 (NT$)': t.amount,
+        '請領同仁': t.claimant || '-',
+        '憑證類型': t.receiptType === 'invoice' ? '統一發票' : t.receiptType === 'receipt' ? '收據' : '無憑證',
+        '發票號碼': t.invoiceNumber || '-',
+        '用餐人數': t.peopleCount && t.peopleCount > 1 ? `${t.peopleCount}人` : '-',
+        '備註說明': t.note || '-'
+      }));
+
+    expenseRows.push({
+      '序號': '【支出總計】',
+      '傳票編號': `共 ${data.expenseCount} 筆開支`,
+      '支出日期': periodDesc,
+      '支出科目': '-',
+      '開銷細項/店家': '零用金開銷總額',
+      '支出金額 (NT$)': data.totalExpense,
+      '請領同仁': `發票 ${data.invoiceCount} 張 / 收據 ${data.receiptCount} 張`,
+      '憑證類型': `無憑證 ${data.noDocCount} 筆`,
+      '發票號碼': '-',
+      '用餐人數': '-',
+      '備註說明': `列印時間: ${printTime}`
+    } as any);
+
+    const wsExpense = XLSX.utils.json_to_sheet(expenseRows);
+    wsExpense['!cols'] = [
+      { wch: 8 },
+      { wch: 20 },
+      { wch: 13 },
+      { wch: 16 },
+      { wch: 26 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 16 },
+      { wch: 10 },
+      { wch: 28 }
+    ];
+    XLSX.utils.book_append_sheet(wb, wsExpense, '零用金支出明細');
+
+    // 3. 獨立「撥補收入明細」工作表（更直觀單獨檢視所有入帳款項）
+    const incomeRows = data.rows
+      .filter((t) => t.type === 'income')
+      .map((t, idx) => ({
+        '序號': idx + 1,
+        '傳票編號': t.voucherNo || t.id,
+        '撥入日期': t.date,
+        '收入科目': t.categoryName,
+        '撥入來源/品項': t.subItem,
+        '收入金額 (NT$)': t.amount,
+        '經辦同仁/出納': t.claimant || '公司出納',
+        '備註說明': t.note || '-'
+      }));
+
+    incomeRows.push({
+      '序號': '【撥補總計】',
+      '傳票編號': `共 ${data.incomeCount} 筆撥補`,
+      '撥入日期': periodDesc,
+      '收入科目': '-',
+      '撥入來源/品項': '撥補入金總額',
+      '收入金額 (NT$)': data.totalIncome,
+      '經辦同仁/出納': '-',
+      '備註說明': `列印時間: ${printTime}`
+    } as any);
+
+    const wsIncome = XLSX.utils.json_to_sheet(incomeRows);
+    wsIncome['!cols'] = [
+      { wch: 8 },
+      { wch: 20 },
+      { wch: 13 },
+      { wch: 16 },
+      { wch: 26 },
+      { wch: 16 },
+      { wch: 16 },
+      { wch: 28 }
+    ];
+    XLSX.utils.book_append_sheet(wb, wsIncome, '撥補收入明細');
   } else if (reportId === 'daily_summary') {
     const data = buildDailySummaryReport(filteredTxs);
     const rows = data.rows.map((r) => ({
@@ -686,6 +796,8 @@ export function exportMultipleSelectedReportsExcel(
 ): void {
   if (reportIds.length === 0) return;
   const wb = XLSX.utils.book_new();
+  const printTime = getReportGeneratedTimestamp();
+  const periodDesc = getPeriodDescription(filters);
   const filteredTxs = getFilteredTransactions(context.transactions, filters);
 
   reportIds.forEach((id) => {
@@ -694,19 +806,58 @@ export function exportMultipleSelectedReportsExcel(
 
     if (id === 'tx_details') {
       const data = buildTxDetailsReport(filteredTxs);
-      const rows = data.rows.map((t, idx) => ({
-        '序號': idx + 1,
-        '記帳日期': t.date,
-        '收支類型': t.type === 'income' ? '撥補入金' : '零用金支出',
-        '科目分類': t.categoryName,
-        '細項/店家': t.subItem,
-        '金額 (NT$)': t.amount,
-        '經辦/請領人': t.claimant || '-',
-        '憑證類型': t.receiptType === 'invoice' ? '統一發票' : t.receiptType === 'receipt' ? '收據' : '無憑證',
-        '發票號碼': t.invoiceNumber || '-',
-        '備註說明': t.note || '-'
-      }));
+      const rows = data.rows.map((t, idx) => {
+        const isIncome = t.type === 'income';
+        return {
+          '序號': idx + 1,
+          '傳票編號': t.voucherNo || t.id,
+          '記帳日期': t.date,
+          '收支類型': isIncome ? '🟢 撥補入金' : '🔴 零用支出',
+          '科目分類': t.categoryName,
+          '細項/店家/來源': t.subItem,
+          '收入金額 (NT$)': isIncome ? t.amount : '',
+          '支出金額 (NT$)': !isIncome ? t.amount : '',
+          '經辦/請領人': t.claimant || '-',
+          '憑證類型': t.receiptType === 'invoice' ? '統一發票' : t.receiptType === 'receipt' ? '收據' : '無憑證',
+          '發票號碼': t.invoiceNumber || '-',
+          '用餐人數': t.peopleCount && t.peopleCount > 1 ? `${t.peopleCount}人` : '-',
+          '備註說明': t.note || '-'
+        };
+      });
+
+      // 合計列
+      rows.push({
+        '序號': '【合計】',
+        '傳票編號': `共 ${data.count} 筆`,
+        '記帳日期': periodDesc,
+        '收支類型': `淨差額 $${data.netBalance.toLocaleString()}`,
+        '科目分類': '-',
+        '細項/店家/來源': `收入 ${data.incomeCount} 筆 / 支出 ${data.expenseCount} 筆`,
+        '收入金額 (NT$)': data.totalIncome,
+        '支出金額 (NT$)': data.totalExpense,
+        '經辦/請領人': `發票 ${data.invoiceCount} 張`,
+        '憑證類型': `收據 ${data.receiptCount} 張`,
+        '發票號碼': `無證 ${data.noDocCount} 筆`,
+        '用餐人數': '-',
+        '備註說明': `列印時間: ${printTime}`
+      } as any);
+
       const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = [
+        { wch: 8 },  // 序號
+        { wch: 20 }, // 傳票編號
+        { wch: 13 }, // 記帳日期
+        { wch: 14 }, // 收支類型
+        { wch: 16 }, // 科目分類
+        { wch: 26 }, // 細項/店家/來源
+        { wch: 16 }, // 收入金額
+        { wch: 16 }, // 支出金額
+        { wch: 14 }, // 經辦/請領人
+        { wch: 12 }, // 憑證類型
+        { wch: 16 }, // 發票號碼
+        { wch: 10 }, // 用餐人數
+        { wch: 28 }  // 備註說明
+      ];
       XLSX.utils.book_append_sheet(wb, ws, '帳務記錄明細表');
     } else if (id === 'daily_summary') {
       const data = buildDailySummaryReport(filteredTxs);

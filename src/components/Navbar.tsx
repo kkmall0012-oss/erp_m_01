@@ -152,10 +152,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               id="backup-btn"
               onClick={onOpenBackup}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg bg-stone-100 text-stone-700 hover:bg-stone-200 border border-stone-300/80 active:scale-95 transition-all"
-              title="本地備份與還原（保障10年以上資料安全）"
+              title="完整資料庫備份與還原（全歷史紀錄無期限保存、換機無損遷移）"
             >
               <Database className="w-4 h-4 text-stone-600" />
-              <span>10年資料備份</span>
+              <span>資料備份與還原</span>
             </button>
 
             <button

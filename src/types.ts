@@ -26,6 +26,8 @@ export interface Transaction {
   createdAt: number;
   receiptType?: ReceiptType; // 'receipt' (收據) | 'invoice' (發票) | 'none' (無憑證)
   invoiceNumber?: string; // 發票號碼 (選填，當 receiptType === 'invoice' 時)
+  voucherNo?: string; // 系統加工後之高可讀性傳票編號 (方案 A，例如：P2026090714-0001，當月獨立流水號)
+  rawVoucherId?: string; // 帳務小管家原生建檔模式編號 (例如：P20260907142530123，用於與小管家 100% 相容匯入匯出)
   subAccountSourceId?: string; // 若是由專款子帳戶匯入，記錄來源子帳戶 ID
   subAccountSourceName?: string; // 若是由專款子帳戶匯入，記錄子帳戶名稱
 }
@@ -85,6 +87,12 @@ export interface BackupData {
   claimants?: string[];
   directorWithdrawals?: DirectorWithdrawal[];
   subAccounts?: SubAccount[];
+}
+
+export type RestoreScope = 'full' | 'settings_only' | 'transactions_only';
+
+export interface RestoreOptions {
+  scope: RestoreScope;
 }
 
 // 預設常用請領人名單

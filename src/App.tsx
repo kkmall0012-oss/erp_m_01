@@ -37,7 +37,8 @@ import {
   BackupData, 
   DirectorWithdrawal,
   SubAccount,
-  SubAccountItem
+  SubAccountItem,
+  RestoreOptions
 } from './types';
 import { 
   loadTransactions, 
@@ -54,7 +55,7 @@ import {
   saveSubAccounts,
   getCurrentYearMonth 
 } from './utils/storage';
-import { exportTransactionsToExcel } from './utils/excel';
+import { exportTransactionsToExcel, formatSystemVoucherId, generateMyMoneyNativeVoucherId } from './utils/excel';
 
 export default function App() {
   // 1. 主要狀態
@@ -243,10 +244,20 @@ export default function App() {
 
   // 新增一般零用金記帳 (左側專用表單)
   const handleAddTransaction = (data: Omit<Transaction, 'id' | 'createdAt'>) => {
+    const createdAt = Date.now();
+    const yearMonth = data.date.slice(0, 7);
+    const monthSeq = transactions.filter((t) => t.date.startsWith(yearMonth)).length + 1;
+    // 1. 產生帳務小管家建檔模式編號 (P + 8碼年月日 + 6碼時分秒 + 3碼毫秒)
+    const rawVoucherId = generateMyMoneyNativeVoucherId(data.date, createdAt, monthSeq);
+    // 2. 加工為系統專用高可讀性傳票號 (方案 A: P2026090714-0001)
+    const voucherNo = formatSystemVoucherId(data.date, monthSeq, rawVoucherId, createdAt);
+
     const newRecord: Transaction = {
       ...data,
-      id: `tx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-      createdAt: Date.now()
+      id: voucherNo,
+      voucherNo,
+      rawVoucherId,
+      createdAt
     };
     handleTransactionsChange([newRecord, ...transactions]);
   };
@@ -263,7 +274,11 @@ export default function App() {
   // 使用者自訂快速加入子項目（店家、加油站、來源等）
   const handleQuickAddSubItem = (categoryId: string, newItem: string) => {
     const updated = categories.map((cat) => {
-      if (cat.id === categoryId && !cat.defaultSubItems.includes(newItem)) {
+      const isMatch =
+        cat.id === categoryId ||
+        ((categoryId === 'replenish' || categoryId === 'replenishment') &&
+          (cat.id === 'replenish' || cat.id === 'replenishment' || cat.type === 'income'));
+      if (isMatch && !cat.defaultSubItems.includes(newItem)) {
         return {
           ...cat,
           defaultSubItems: [...cat.defaultSubItems, newItem]
@@ -321,8 +336,51 @@ export default function App() {
     setIsReportExportModalOpen(true);
   };
 
-  // 還原備份檔
-  const handleRestoreBackup = (data: BackupData) => {
+  // 還原備份檔 (支援全庫還原、僅還原選單設定、僅還原流水帳)
+  const handleRestoreBackup = (data: BackupData, options?: RestoreOptions) => {
+    const scope = options?.scope || 'full';
+
+    if (scope === 'settings_only') {
+      // 僅還原選單項目、店家與請領人名冊 (完全保留現有記帳明細)
+      if (data.categories && data.categories.length > 0) {
+        setCategories(data.categories);
+        saveCategories(data.categories);
+      }
+      if (data.claimants && data.claimants.length > 0) {
+        setClaimants(data.claimants);
+        saveClaimants(data.claimants);
+      }
+      if (data.budgets) {
+        setBudgets(data.budgets);
+        saveBudgets(data.budgets);
+      }
+      setImportNotification({
+        type: 'success',
+        message: `✓ 已成功救回自訂主題分類與常用請領人名冊！您現有的 ${transactions.length} 筆流水帳與專款明細完全保留、毫無遺失。`
+      });
+      return;
+    }
+
+    if (scope === 'transactions_only') {
+      // 僅還原流水帳紀錄 (保留現有選單項目設定)
+      setTransactions(data.transactions);
+      saveTransactions(data.transactions);
+      if (data.directorWithdrawals) {
+        setDirectorWithdrawals(data.directorWithdrawals);
+        saveDirectorWithdrawals(data.directorWithdrawals);
+      }
+      if (data.subAccounts) {
+        setSubAccounts(data.subAccounts);
+        saveSubAccounts(data.subAccounts);
+      }
+      setImportNotification({
+        type: 'success',
+        message: `✓ 已成功還原 ${data.transactions.length} 筆歷史記帳流水！現有的自訂選單與請領人名冊維持不變。`
+      });
+      return;
+    }
+
+    // 預設 full：全庫完整覆蓋鏡像還原
     setTransactions(data.transactions);
     saveTransactions(data.transactions);
 
@@ -350,6 +408,11 @@ export default function App() {
       setSubAccounts(data.subAccounts);
       saveSubAccounts(data.subAccounts);
     }
+
+    setImportNotification({
+      type: 'success',
+      message: `✓ 已完成全資料庫完整還原！已恢復 ${data.transactions.length} 筆帳目與 ${data.categories?.length || 0} 個主題分類。`
+    });
   };
 
   // 清空所有資料
@@ -735,7 +798,7 @@ export default function App() {
               onClick={() => setIsBackupModalOpen(true)}
               className="text-stone-600 hover:text-stone-900 underline"
             >
-              10年資料備份導引
+              資料備份與還原導引
             </button>
             <span>·</span>
             <button

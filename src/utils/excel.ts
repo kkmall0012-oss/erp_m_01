@@ -284,7 +284,7 @@ export function exportTransactionsToExcel(
   ];
 
   // ==========================================
-  // 4. 【收支流水明細表】(含系統 ID 供回溯防重複比對)
+  // 4. 【收支流水明細表】(收支分開列示：獨立「收入金額」與「支出金額」欄位)
   // ==========================================
   const detailRows: any[] = filtered.map((t, idx) => {
     const isExpense = t.type === 'expense';
@@ -299,13 +299,14 @@ export function exportTransactionsToExcel(
 
     return {
       '流水序號': idx + 1,
-      '資料識別碼(系統ID)': t.id,
+      '傳票編號(系統ID)': t.voucherNo || t.id,
       '交易日期': t.date,
-      '收支屬性': isExpense ? '零用金支出' : '零用金撥補',
+      '收支屬性': isExpense ? '🔴 零用支出' : '🟢 撥補入帳',
       '請領人/經辦人': t.claimant || '-',
       '主分類': t.categoryName || (isExpense ? '支出' : '撥補'),
       '項目(店家/品項/來源)': t.subItem,
-      '金額 (NT$)': t.amount,
+      '收入金額 (NT$)': !isExpense ? t.amount : '',
+      '支出金額 (NT$)': isExpense ? t.amount : '',
       '單據憑證類型': receiptLabel,
       '發票號碼': t.invoiceNumber || '-',
       '用餐人數': isExpense && t.peopleCount ? `${t.peopleCount} 人` : '-',
@@ -318,35 +319,136 @@ export function exportTransactionsToExcel(
   // 明細合計列
   detailRows.push({
     '流水序號': '【明細合計】',
-    '資料識別碼(系統ID)': `總計 ${filtered.length} 筆資料`,
+    '傳票編號(系統ID)': `總計 ${filtered.length} 筆資料`,
     '交易日期': printDateOnly,
-    '收支屬性': `支出 ${expensesOnly.length} 筆 / 撥補 ${incomesOnly.length} 筆`,
+    '收支屬性': `淨結存差額: NT$ ${netPettyCash.toLocaleString()}`,
     '請領人/經辦人': '-',
     '主分類': '-',
-    '項目(店家/品項/來源)': `總支出 NT$ ${totalExpense.toLocaleString()}，總撥入 NT$ ${totalIncome.toLocaleString()}`,
-    '金額 (NT$)': totalExpense,
+    '項目(店家/品項/來源)': `撥補 ${incomesOnly.length} 筆 / 支出 ${expensesOnly.length} 筆`,
+    '收入金額 (NT$)': totalIncome,
+    '支出金額 (NT$)': totalExpense,
     '單據憑證類型': `發票 ${invoiceCount} 張 / 收據 ${receiptCount} 張`,
     '發票號碼': '-',
     '用餐人數': `${totalDiningPeople} 人次`,
     '每人均攤 (NT$)': '-',
-    '備註說明': `淨差額結餘 NT$ ${netPettyCash.toLocaleString()} 元`,
+    '備註說明': `結餘淨差額 NT$ ${netPettyCash.toLocaleString()} 元`,
     '報表產出日期': printDateStr
   });
 
   const detailSheet = XLSX.utils.json_to_sheet(detailRows);
   detailSheet['!cols'] = [
     { wch: 10 },
-    { wch: 28 },
+    { wch: 20 },
     { wch: 13 },
     { wch: 14 },
     { wch: 16 },
     { wch: 16 },
     { wch: 26 },
-    { wch: 14 },
+    { wch: 16 },
+    { wch: 16 },
     { wch: 16 },
     { wch: 16 },
     { wch: 10 },
     { wch: 14 },
+    { wch: 30 },
+    { wch: 14 }
+  ];
+
+  // 獨立「零用金支出明細表」工作表
+  const expenseSheetRows: any[] = expensesOnly.map((t, idx) => {
+    const perPerson =
+      t.peopleCount && t.peopleCount > 1
+        ? Math.round(t.amount / t.peopleCount)
+        : t.amount;
+
+    let receiptLabel = '無憑證';
+    if (t.receiptType === 'invoice') receiptLabel = '🧾 統一發票';
+    else if (t.receiptType === 'receipt') receiptLabel = '📄 收據';
+
+    return {
+      '流水序號': idx + 1,
+      '傳票編號': t.voucherNo || t.id,
+      '支出日期': t.date,
+      '支出科目': t.categoryName || '零用金支出',
+      '開銷項目(店家/細項)': t.subItem,
+      '支出金額 (NT$)': t.amount,
+      '請領同仁': t.claimant || '-',
+      '單據憑證': receiptLabel,
+      '發票號碼': t.invoiceNumber || '-',
+      '用餐人數': t.peopleCount ? `${t.peopleCount} 人` : '-',
+      '每人均攤 (NT$)': t.peopleCount && t.peopleCount > 1 ? perPerson : '-',
+      '備註說明': t.note || '',
+      '報表產出日期': printDateOnly
+    };
+  });
+
+  expenseSheetRows.push({
+    '流水序號': '【支出合計】',
+    '傳票編號': `總計 ${expensesOnly.length} 筆支出`,
+    '支出日期': printDateOnly,
+    '支出科目': '-',
+    '開銷項目(店家/細項)': '零用金開銷總額',
+    '支出金額 (NT$)': totalExpense,
+    '請領同仁': `發票 ${invoiceCount} 張 / 收據 ${receiptCount} 張`,
+    '單據憑證': `無憑證 ${noDocCount} 筆`,
+    '發票號碼': '-',
+    '用餐人數': `${totalDiningPeople} 人次`,
+    '每人均攤 (NT$)': '-',
+    '備註說明': `期間總開支 NT$ ${totalExpense.toLocaleString()} 元`,
+    '報表產出日期': printDateStr
+  });
+
+  const expenseSheet = XLSX.utils.json_to_sheet(expenseSheetRows);
+  expenseSheet['!cols'] = [
+    { wch: 10 },
+    { wch: 20 },
+    { wch: 13 },
+    { wch: 16 },
+    { wch: 26 },
+    { wch: 16 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 30 },
+    { wch: 14 }
+  ];
+
+  // 獨立「撥補收入明細表」工作表
+  const incomeSheetRows: any[] = incomesOnly.map((t, idx) => ({
+    '流水序號': idx + 1,
+    '傳票編號': t.voucherNo || t.id,
+    '撥入日期': t.date,
+    '撥補科目': t.categoryName || '撥補收入',
+    '撥入來源/品項': t.subItem,
+    '收入金額 (NT$)': t.amount,
+    '經辦同仁/出納': t.claimant || '公司出納',
+    '備註說明': t.note || '',
+    '報表產出日期': printDateOnly
+  }));
+
+  incomeSheetRows.push({
+    '流水序號': '【撥補合計】',
+    '傳票編號': `總計 ${incomesOnly.length} 筆入帳`,
+    '撥入日期': printDateOnly,
+    '撥補科目': '-',
+    '撥入來源/品項': '撥補入帳總額',
+    '收入金額 (NT$)': totalIncome,
+    '經辦同仁/出納': '-',
+    '備註說明': `期間撥入 NT$ ${totalIncome.toLocaleString()} 元`,
+    '報表產出日期': printDateStr
+  });
+
+  const incomeSheet = XLSX.utils.json_to_sheet(incomeSheetRows);
+  incomeSheet['!cols'] = [
+    { wch: 10 },
+    { wch: 20 },
+    { wch: 13 },
+    { wch: 16 },
+    { wch: 26 },
+    { wch: 16 },
+    { wch: 16 },
     { wch: 30 },
     { wch: 14 }
   ];
@@ -430,12 +532,14 @@ export function exportTransactionsToExcel(
     { wch: 14 }
   ];
 
-  // 組合活頁簿 (五大核心財務分析報表)
+  // 組合活頁簿 (核心財務分析報表)
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, reportSheet, '零用金財務綜合指標');
   XLSX.utils.book_append_sheet(workbook, dailySheet, '收支日報表');
   XLSX.utils.book_append_sheet(workbook, categorySheet, '支出分類統計表');
   XLSX.utils.book_append_sheet(workbook, detailSheet, '收支流水明細表');
+  XLSX.utils.book_append_sheet(workbook, expenseSheet, '零用金支出明細表');
+  XLSX.utils.book_append_sheet(workbook, incomeSheet, '撥補收入明細表');
   XLSX.utils.book_append_sheet(workbook, complianceSheet, '憑證與同仁統計表');
 
   // 檔名設定
@@ -447,13 +551,102 @@ export function exportTransactionsToExcel(
 }
 
 /**
- * 產生並下載「空白記帳匯入範本 (Excel)」
- * 提供標準表頭欄位、填寫範例以及防重複匯入機制說明
+ * 智慧日期標準化函數：
+ * 支援輸入 "9/7"、"09/07"、"9-7"、"9.7"、"9月7日"、"2026/09/07"、"2026-09-07"、民國年 "115/9/7" 或 Excel 日期序列
+ * 自動安全轉為標準 "YYYY-MM-DD" 格式（如 2026-09-07），避免匯入時發生日期格式報錯。
+ */
+export function normalizeDateString(rawDate: any, defaultYear: number = new Date().getFullYear()): string {
+  if (!rawDate && rawDate !== 0) return '';
+  if (rawDate instanceof Date) {
+    if (isNaN(rawDate.getTime())) return '';
+    const y = rawDate.getFullYear();
+    const m = String(rawDate.getMonth() + 1).padStart(2, '0');
+    const d = String(rawDate.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+  if (typeof rawDate === 'number') {
+    if (rawDate > 30000 && rawDate < 70000) {
+      const d = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
+      if (!isNaN(d.getTime())) {
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+    }
+  }
+  const str = String(rawDate).trim();
+  if (!str) return '';
+
+  // 移除非必要字元並標準化分隔符號
+  const clean = str
+    .replace(/[年月日號]/g, '-')
+    .replace(/[\/.\_]/g, '-')
+    .replace(/--+/g, '-')
+    .replace(/-$/, '');
+
+  // 1. 完整西元格式 YYYY-M-D
+  const fullMatch = clean.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (fullMatch) {
+    const y = fullMatch[1];
+    const m = fullMatch[2].padStart(2, '0');
+    const d = fullMatch[3].padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // 2. 民國年格式 (例如 115-9-7 或 115-09-07)
+  const minguoMatch = clean.match(/^(\d{2,3})-(\d{1,2})-(\d{1,2})$/);
+  if (minguoMatch && parseInt(minguoMatch[1], 10) < 1900) {
+    const y = parseInt(minguoMatch[1], 10) + 1911;
+    const m = minguoMatch[2].padStart(2, '0');
+    const d = minguoMatch[3].padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // 3. 短日期 M-D (例如 9/7, 09/07, 9-7, 9.7)
+  const shortMatch = clean.match(/^(\d{1,2})-(\d{1,2})$/);
+  if (shortMatch) {
+    const m = parseInt(shortMatch[1], 10);
+    const d = parseInt(shortMatch[2], 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${defaultYear}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+  }
+
+  // 4. 純數字 MMDD 或 YYYYMMDD
+  const pureDigits = str.replace(/\D/g, '');
+  if (pureDigits.length === 8) {
+    const y = pureDigits.slice(0, 4);
+    const m = pureDigits.slice(4, 6);
+    const d = pureDigits.slice(6, 8);
+    return `${y}-${m}-${d}`;
+  } else if (pureDigits.length === 4) {
+    const m = parseInt(pureDigits.slice(0, 2), 10);
+    const d = parseInt(pureDigits.slice(2, 4), 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${defaultYear}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+  } else if (pureDigits.length === 3) {
+    const m = parseInt(pureDigits.slice(0, 1), 10);
+    const d = parseInt(pureDigits.slice(1, 3), 10);
+    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) {
+      return `${defaultYear}-0${m}-${String(d).padStart(2, '0')}`;
+    }
+  }
+
+  return '';
+}
+
+/**
+ * 產生並下載「人性化空白記帳匯入範本 (Excel)」
+ * 包含友善格式指示、強制選單選項對照表、日期智慧輸入範例及防重複機制說明
  */
 export function generateBlankImportTemplate(): void {
+  const currentYear = new Date().getFullYear();
+
   const sampleRows = [
     {
-      '交易日期': '2026-09-15',
+      '交易日期': '9/7',
       '收支屬性': '支出',
       '支出大類': '餐費',
       '店家/品項/細項': '池上便當 (工廠午餐)',
@@ -462,11 +655,11 @@ export function generateBlankImportTemplate(): void {
       '憑證類型': '發票',
       '發票號碼': 'AB-12345678',
       '用餐人數': 10,
-      '備註說明': '工廠加班會議便當',
+      '備註說明': '工廠會議便當 (支援直接輸入 9/7 自動轉為 2026/09/07)',
       '資料識別碼(選填)': ''
     },
     {
-      '交易日期': '2026-09-16',
+      '交易日期': '2026-09-08',
       '收支屬性': '支出',
       '支出大類': '油資/交通',
       '店家/品項/細項': '台灣中油加油站',
@@ -479,7 +672,7 @@ export function generateBlankImportTemplate(): void {
       '資料識別碼(選填)': ''
     },
     {
-      '交易日期': '2026-09-17',
+      '交易日期': '9/9',
       '收支屬性': '支出',
       '支出大類': '其他雜支',
       '店家/品項/細項': '日日新五金行',
@@ -488,11 +681,11 @@ export function generateBlankImportTemplate(): void {
       '憑證類型': '收據',
       '發票號碼': '',
       '用餐人數': '',
-      '備註說明': '廠務修繕水管材料',
+      '備註說明': '廠務修繕水管零件材料',
       '資料識別碼(選填)': ''
     },
     {
-      '交易日期': '2026-09-18',
+      '交易日期': '2026-09-10',
       '收支屬性': '撥補',
       '支出大類': '零用金撥補',
       '店家/品項/細項': '公司銀行帳戶提領',
@@ -508,6 +701,97 @@ export function generateBlankImportTemplate(): void {
 
   const templateSheet = XLSX.utils.json_to_sheet(sampleRows);
   templateSheet['!cols'] = [
+    { wch: 16 },
+    { wch: 12 },
+    { wch: 16 },
+    { wch: 28 },
+    { wch: 12 },
+    { wch: 14 },
+    { wch: 12 },
+    { wch: 16 },
+    { wch: 10 },
+    { wch: 38 },
+    { wch: 22 }
+  ];
+
+  const guideRows = [
+    { '欄位名稱': '【人性化輸入最速技巧】', '必填與規範說明': '日期支援直接輸入「9/7」或「09/07」，匯入時系統會自動辨識為當年度 2026/09/07，絕不報錯！', '範例與快速指南': '填寫 9/7 秒通' },
+    { '欄位名稱': '【重要防重複機制說明】', '必填與規範說明': '本系統具備智慧防重複檢視！即使匯入過程曾經失敗或重複上傳，已存在資料庫的資料會自動略過，只會新增還沒登記的新資料。', '範例與快速指南': '安心重複上傳不重複記帳' },
+    { '欄位名稱': '交易日期', '必填與規範說明': '必填。支援西元年月日(2026-09-07、2026/09/07)或直接輸入月日簡寫(9/7、0907、9-7)', '範例與快速指南': '9/7 或 2026-09-07' },
+    { '欄位名稱': '收支屬性', '必填與規範說明': '必填。請填「支出」或「撥補」（僅此兩種選項，請參閱清單）', '範例與快速指南': '支出 或 撥補' },
+    { '欄位名稱': '支出大類', '必填與規範說明': '選填。如：餐費、油資/交通、同仁代墊款、文具耗材、其他雜支、零用金撥補', '範例與快速指南': '餐費' },
+    { '欄位名稱': '店家/品項/細項', '必填與規範說明': '必填。請填寫消費店家名稱、加油站、或開銷品項', '範例與快速指南': '池上便當、台灣中油' },
+    { '欄位名稱': '金額', '必填與規範說明': '必填。請填大於 0 的正整數金額，勿填負數或特殊符號', '範例與快速指南': '950' },
+    { '欄位名稱': '請領同仁', '必填與規範說明': '選填。請領款項或代辦採買的同仁姓名', '範例與快速指南': '陳小明、李大華' },
+    { '欄位名稱': '憑證類型', '必填與規範說明': '選填。請填「發票」、「收據」或「無」', '範例與快速指南': '發票' },
+    { '欄位名稱': '發票號碼', '必填與規範說明': '選填。若憑證為發票可填入8碼或英數字軌號碼', '範例與快速指南': 'AB-12345678' },
+    { '欄位名稱': '用餐人數', '必填與規範說明': '選填。若為餐飲用餐請款可填人數，以利人均均攤計算', '範例與快速指南': '10' },
+    { '欄位名稱': '備註說明', '必填與規範說明': '選填。開銷事由、專案名稱或特殊備註說明', '範例與快速指南': '工地出勤中餐' },
+    { '欄位名稱': '資料識別碼(選填)', '必填與規範說明': '選填。若是由系統「匯出」的 Excel 修改補登，保留此欄可進行 100% 精準唯一比對', '範例與快速指南': 'tx-1726500000' }
+  ];
+
+  const guideSheet = XLSX.utils.json_to_sheet(guideRows);
+  guideSheet['!cols'] = [{ wch: 22 }, { wch: 65 }, { wch: 30 }];
+
+  // 新增「選單清單對照表」頁籤，方便使用者在 Excel 複製貼上標準項目
+  const listRows = [
+    { '收支屬性選項(僅二選一)': '支出', '標準支出大類選項': '餐費', '憑證類型選項': '發票', '常用快速品項參考': '池上便當' },
+    { '收支屬性選項(僅二選一)': '撥補', '標準支出大類選項': '油資/交通', '憑證類型選項': '收據', '常用快速品項參考': '台灣中油' },
+    { '收支屬性選項(僅二選一)': '', '標準支出大類選項': '同仁代墊款', '憑證類型選項': '無', '常用快速品項參考': '全國加油站' },
+    { '收支屬性選項(僅二選一)': '', '標準支出大類選項': '文具耗材', '憑證類型選項': '', '常用快速品項參考': '五金零件修繕' },
+    { '收支屬性選項(僅二選一)': '', '標準支出大類選項': '其他雜支', '憑證類型選項': '', '常用快速品項參考': '影印紙/墨水' },
+    { '收支屬性選項(僅二選一)': '', '標準支出大類選項': '零用金撥補', '憑證類型選項': '', '常用快速品項參考': '公司銀行帳戶提領' }
+  ];
+  const listSheet = XLSX.utils.json_to_sheet(listRows);
+  listSheet['!cols'] = [{ wch: 24 }, { wch: 20 }, { wch: 16 }, { wch: 24 }];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, templateSheet, '零用金記帳匯入表');
+  XLSX.utils.book_append_sheet(workbook, listSheet, '選單清單與選項對照');
+  XLSX.utils.book_append_sheet(workbook, guideSheet, '填寫規範與防重複說明');
+
+  XLSX.writeFile(workbook, `公司零用金記帳匯入空白範本.xlsx`);
+}
+
+/**
+ * 將線上表格輸入之資料直接匯出為 Excel 檔案
+ */
+export function exportImportGridToExcel(
+  rows: Array<{
+    date: string;
+    type: 'expense' | 'income';
+    categoryName: string;
+    subItem: string;
+    amount: number;
+    claimant?: string;
+    receiptType?: string;
+    invoiceNumber?: string;
+    peopleCount?: number;
+    note?: string;
+  }>
+): void {
+  const exportRows = rows.map((r) => {
+    let receiptLabel = '無';
+    if (r.receiptType === 'invoice') receiptLabel = '發票';
+    else if (r.receiptType === 'receipt') receiptLabel = '收據';
+
+    return {
+      '交易日期': r.date,
+      '收支屬性': r.type === 'expense' ? '支出' : '撥補',
+      '支出大類': r.categoryName || (r.type === 'expense' ? '其他雜支' : '零用金撥補'),
+      '店家/品項/細項': r.subItem,
+      '金額': r.amount,
+      '請領同仁': r.claimant || '',
+      '憑證類型': receiptLabel,
+      '發票號碼': r.invoiceNumber || '',
+      '用餐人數': r.peopleCount || '',
+      '備註說明': r.note || '',
+      '資料識別碼(選填)': ''
+    };
+  });
+
+  const ws = XLSX.utils.json_to_sheet(exportRows);
+  ws['!cols'] = [
     { wch: 14 },
     { wch: 10 },
     { wch: 16 },
@@ -521,29 +805,11 @@ export function generateBlankImportTemplate(): void {
     { wch: 22 }
   ];
 
-  const guideRows = [
-    { '欄位名稱': '【重要防重複機制說明】', '必填與格式規範': '本系統具備智慧防重複檢視！即使匯入過程曾經失敗或重複上傳，已存在資料庫的資料會自動略過，只會新增還沒登記的新資料。', '範例說明': '安心重複上傳不重複記帳' },
-    { '欄位名稱': '交易日期', '必填與格式規範': '必填。請填寫西元年月日格式，如：2026-09-15 或 2026/09/15', '範例說明': '2026-09-15' },
-    { '欄位名稱': '收支屬性', '必填與格式規範': '必填。請填「支出」或「撥補」（或收入）', '範例說明': '支出' },
-    { '欄位名稱': '支出大類', '必填與格式規範': '選填。如：餐費、油資/交通、同仁代墊款、文具耗材、其他雜支、零用金撥補', '範例說明': '餐費' },
-    { '欄位名稱': '店家/品項/細項', '必填與格式規範': '必填。請填寫消費店家名稱、加油站、或開銷品項', '範例說明': '池上便當、台灣中油' },
-    { '欄位名稱': '金額', '必填與格式規範': '必填。請填大於 0 的正整數金額，勿填負數或特殊符號', '範例說明': '950' },
-    { '欄位名稱': '請領同仁', '必填與格式規範': '選填。請領款項或代辦採買的同仁姓名', '範例說明': '陳小明、李大華' },
-    { '欄位名稱': '憑證類型', '必填與格式規範': '選填。請填「發票」、「收據」或「無」', '範例說明': '發票' },
-    { '欄位名稱': '發票號碼', '必填與格式規範': '選填。若憑證為發票可填入8碼或英數字軌號碼', '範例說明': 'AB-12345678' },
-    { '欄位名稱': '用餐人數', '必填與格式規範': '選填。若為餐飲用餐請款可填人數，以利人均均攤計算', '範例說明': '5' },
-    { '欄位名稱': '備註說明', '必填與格式規範': '選填。開銷事由、專案名稱或特殊備註說明', '範例說明': '工地出勤中餐' },
-    { '欄位名稱': '資料識別碼(選填)', '必填與格式規範': '選填。若是由系統「匯出」的 Excel 修改補登，保留此欄可進行 100% 精準唯一比對', '範例說明': 'tx-1726500000' }
-  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '零用金記帳匯入表');
 
-  const guideSheet = XLSX.utils.json_to_sheet(guideRows);
-  guideSheet['!cols'] = [{ wch: 20 }, { wch: 60 }, { wch: 30 }];
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, templateSheet, '零用金記帳匯入表');
-  XLSX.utils.book_append_sheet(workbook, guideSheet, '填寫規範與防重複說明');
-
-  XLSX.writeFile(workbook, `公司零用金記帳匯入空白範本.xlsx`);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `零用金記帳匯入資料_${todayStr}.xlsx`);
 }
 
 export interface ImportResult {
@@ -590,11 +856,448 @@ function getTransactionFingerprint(t: {
 }
 
 /**
+ * 智慧解碼 CSV 二進位資料（自動判別 Big5 / ANSI 與 UTF-8）
+ */
+export function decodeCsvBuffer(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  
+  // 檢查是否含有 UTF-8 BOM
+  let hasUtf8Bom = false;
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    hasUtf8Bom = true;
+  }
+
+  // 嘗試以 UTF-8 解碼
+  try {
+    const utf8Decoder = new TextDecoder('utf-8');
+    const utf8Text = utf8Decoder.decode(buffer);
+    // 若明確為 UTF-8 BOM 或完全無亂碼字元
+    if (hasUtf8Bom || (!utf8Text.includes('\uFFFD') && utf8Text.includes('"'))) {
+      return utf8Text;
+    }
+  } catch (e) {
+    // 忽略錯誤，接續測試 Big5
+  }
+
+  // 嘗試以 Big5 (CP950 繁體中文，傳統 Windows 軟體預設編碼) 解碼
+  try {
+    const big5Decoder = new TextDecoder('big5');
+    const big5Text = big5Decoder.decode(buffer);
+    return big5Text;
+  } catch (e) {
+    // 若環境不支援 Big5，降級使用 UTF-8
+    return new TextDecoder('utf-8').decode(buffer);
+  }
+}
+
+/**
+ * 判斷文字是否為「帳務小管家 (MyMoney)」專屬的 CSV 格式
+ */
+export function isMyMoneyCsvText(text: string): boolean {
+  if (!text) return false;
+  const first1000 = text.slice(0, 2000);
+  return (
+    first1000.includes('"4",') ||
+    first1000.includes('"1",') ||
+    first1000.includes('"2",') ||
+    /P20\d{10,}/.test(first1000)
+  );
+}
+
+/**
+ * 智慧分類模糊比對器：
+ * 當舊記帳軟體（帳務小管家）之科目與本系統分類不同時，自動利用語意關鍵字進行智能歸類，
+ * 即使兩邊設定科目名稱不完全一致，也能精準自動對齊！
+ */
+export function mapMyMoneyCategory(
+  subject: string,
+  item: string,
+  categories: CategoryConfig[],
+  isIncome: boolean
+): { id: string; name: string } {
+  if (isIncome) {
+    return { id: 'replenish', name: '零用金撥補' };
+  }
+
+  const combined = `${subject || ''} ${item || ''}`.trim().toLowerCase();
+
+  // 1. 完全或包含名稱直接比對
+  const directMatch = categories.find((c) => {
+    const cName = c.name.toLowerCase();
+    return combined.includes(cName) || cName.includes(subject.toLowerCase());
+  });
+  if (directMatch) return { id: directMatch.id, name: directMatch.name };
+
+  // 2. 核心語意規則匹配
+  // (A) 餐費 / 伙食
+  if (combined.match(/餐|伙食|便當|午餐|晚餐|早點|飲食|外食|吃飯|飲料|咖啡|下午茶|水果/)) {
+    const dining = categories.find((c) => c.id === 'dining' || c.name.includes('餐'));
+    if (dining) return { id: dining.id, name: dining.name };
+  }
+
+  // (B) 油資 / 交通
+  if (combined.match(/油|加油|中油|全國|台亞|車|客運|捷運|高鐵|計程車|uber|過路|etc|停車|通行/)) {
+    const fuel = categories.find((c) => c.id === 'fuel' || c.name.includes('油') || c.name.includes('交通'));
+    if (fuel) return { id: fuel.id, name: fuel.name };
+  }
+
+  // (C) 文具耗材 / 修繕材料
+  if (combined.match(/文具|耗材|影印|紙|筆|墨水|五金|修繕|零件|水電|材料|包裝|箱|帶|清潔|掃具/)) {
+    const supplies = categories.find((c) => c.id === 'supplies' || c.name.includes('文具') || c.name.includes('耗材'));
+    if (supplies) return { id: supplies.id, name: supplies.name };
+  }
+
+  // (D) 同仁代墊款
+  if (combined.match(/代墊|代付|經辦|請領|代支/)) {
+    const advance = categories.find((c) => c.id === 'advance' || c.name.includes('代墊'));
+    if (advance) return { id: advance.id, name: advance.name };
+  }
+
+  // (E) 郵資 / 運費
+  if (combined.match(/郵|信|郵票|包裹|快遞|宅配|黑貓|郵資/)) {
+    const postage = categories.find((c) => c.name.includes('郵') || c.name.includes('運') || c.id === 'supplies');
+    if (postage) return { id: postage.id, name: postage.name };
+  }
+
+  // 3. 備援預設分類：其他雜支
+  const misc = categories.find((c) => c.id === 'misc' || c.name.includes('雜支'));
+  if (misc) return { id: misc.id, name: misc.name };
+
+  return {
+    id: categories[0]?.id || 'misc',
+    name: categories[0]?.name || '其他雜支'
+  };
+}
+
+/**
+ * 分割 CSV 單行（支援引號字串包含逗號）
+ */
+function parseCsvLineCols(line: string): string[] {
+  const cols: string[] = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      inQuotes = !inQuotes;
+    } else if (c === ',' && !inQuotes) {
+      cols.push(cur.replace(/^"|"$/g, '').trim());
+      cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  cols.push(cur.replace(/^"|"$/g, '').trim());
+  return cols;
+}
+
+export interface MyMoneyParsedRow {
+  voucherId: string;    // 系統加工後傳票號碼 (方案 A: P2026090714-0001)
+  rawVoucherId: string; // 帳務小管家原生建檔模式傳票號碼 (例如 P20260907142530123)
+  date: string;
+  type: TransactionType;
+  categoryId: string;
+  categoryName: string;
+  subItem: string;
+  amount: number;
+  claimant: string;
+  receiptType: ReceiptType;
+  invoiceNumber?: string;
+  peopleCount?: number;
+  note?: string;
+  rawSubject: string;
+}
+
+/**
+ * 產出符合「帳務小管家 (MyMoney)」原生資料庫建檔模式之傳票編號 (Passbook ID)
+ * 格式範例：P20260907142530001
+ * 規格：P + 年月日(8碼) + 時分秒(6碼) + 毫秒/流水序(3碼)，全數字共 18 碼無破折號，
+ * 專門用於「匯入帳務小管家」的 CSV 檔，確保小管家內部資料庫與解析程式 100% 成功通過檢核，絕不報錯！
+ */
+export function generateMyMoneyNativeVoucherId(
+  dateStr: string,
+  createdAt?: number,
+  indexOffset: number = 1
+): string {
+  const cleanDate = (dateStr || '').replace(/[^0-9]/g, '').slice(0, 8).padEnd(8, '0');
+  let h = '12';
+  let m = '00';
+  let s = '00';
+  let ms = String(indexOffset % 1000).padStart(3, '0');
+
+  if (createdAt && !isNaN(createdAt)) {
+    const d = new Date(createdAt);
+    if (!isNaN(d.getTime())) {
+      h = String(d.getHours()).padStart(2, '0');
+      m = String(d.getMinutes()).padStart(2, '0');
+      s = String(d.getSeconds()).padStart(2, '0');
+      ms = String((d.getMilliseconds() + indexOffset) % 1000).padStart(3, '0');
+    }
+  }
+
+  return `P${cleanDate}${h}${m}${s}${ms}`;
+}
+
+/**
+ * 將帳務小管家原生編號 (如 P20260907142530123) 或系統記錄，加工為系統專用的高可讀性傳票編號 (方案 A)
+ * 格式範例：P2026090714-0001
+ * - P + 年月日(8碼) + (時2碼) + '-' + 當月4碼獨立流水號 (每月重新歸零起算)
+ * - 依交易日期與時間先後排序，排序嚴格不亂序，且可一眼得知當月有幾張傳票
+ */
+export function formatSystemVoucherId(
+  dateStr: string,
+  monthSeq: number,
+  rawVoucherId?: string,
+  createdAt?: number
+): string {
+  const cleanDate = (dateStr || '').replace(/[^0-9]/g, '').slice(0, 8).padEnd(8, '0');
+
+  let hourStr = '00';
+  if (rawVoucherId && rawVoucherId.startsWith('P') && rawVoucherId.length >= 11) {
+    const rawHour = rawVoucherId.slice(9, 11);
+    if (/^\d{2}$/.test(rawHour)) {
+      hourStr = rawHour;
+    }
+  } else if (createdAt && !isNaN(createdAt)) {
+    const d = new Date(createdAt);
+    if (!isNaN(d.getTime())) {
+      hourStr = String(d.getHours()).padStart(2, '0');
+    }
+  }
+
+  const seqStr = String(monthSeq).padStart(4, '0');
+  return `P${cleanDate}${hourStr}-${seqStr}`;
+}
+
+/**
+ * 解析帳務小管家 CSV 文字
+ * 自動組合複式傳票（兩筆一對）、提取借貸收支屬性、自適應分類對應、人數解析
+ * 並將小管家建檔模式編號 (rawVoucherId) 加工為系統傳票編號 (voucherId, 方案 A: P2026090714-0001)
+ */
+export function parseMyMoneyCsvText(
+  text: string,
+  categories: CategoryConfig[],
+  claimants: string[]
+): MyMoneyParsedRow[] {
+  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+  const vouchers = new Map<string, string[][]>();
+
+  lines.forEach((line) => {
+    if (!line.startsWith('"4"') && !line.startsWith('4,')) return;
+    const cols = parseCsvLineCols(line);
+    if (cols[0] === '4') {
+      const vId = cols[18] || `gen-${cols[2]}-${cols[6]}-${cols[4]}-${cols[5]}`;
+      if (!vouchers.has(vId)) vouchers.set(vId, []);
+      vouchers.get(vId)!.push(cols);
+    }
+  });
+
+  const parsedList: MyMoneyParsedRow[] = [];
+  const defaultClaimant = claimants[0] || '零用金管理員';
+
+  vouchers.forEach((entries, vId) => {
+    // 找出資產行 (例如科目包含零用金或現金，或類型標示為資產)
+    let assetRow = entries.find(
+      (e) => e[1] === '資產' || e[8] === '資產' || e[3].includes('零用金') || e[3].includes('現金')
+    );
+    let otherRow = entries.find((e) => e !== assetRow);
+
+    if (!assetRow && entries.length >= 2) {
+      assetRow = entries[0];
+      otherRow = entries[1];
+    } else if (!otherRow && assetRow) {
+      otherRow = assetRow;
+    } else if (!assetRow && entries.length === 1) {
+      assetRow = entries[0];
+      otherRow = entries[0];
+    }
+
+    if (!assetRow || !otherRow) return;
+
+    // 解析日期
+    const rawDate = assetRow[2] || otherRow[2] || '';
+    const formattedDate = normalizeDateString(rawDate);
+    if (!formattedDate) return;
+
+    // 解析金額
+    const amtAssetOut = Number(assetRow[4]) || 0;
+    const amtAssetIn = Number(assetRow[5]) || 0;
+    const amtOtherOut = Number(otherRow[4]) || 0;
+    const amtOtherIn = Number(otherRow[5]) || 0;
+    const amount = Math.round(Math.max(amtAssetOut, amtAssetIn, amtOtherOut, amtOtherIn));
+    if (amount <= 0) return;
+
+    // 解析科目與品項
+    const rawSubject = (otherRow[3] || assetRow[3] || '').trim();
+    let subItem = (otherRow[6] || assetRow[6] || rawSubject).trim();
+    if (!subItem) subItem = rawSubject || '日常零用金支出';
+
+    // 判定收支類型 (依複式簿記原則：資產借方增加為撥補，資產貸方減少為支出)
+    let type: TransactionType = 'expense';
+    if (
+      otherRow[1] === '收入' ||
+      otherRow[8] === '收入' ||
+      rawSubject.includes('補充') ||
+      rawSubject.includes('撥補') ||
+      rawSubject.includes('存入') ||
+      rawSubject.includes('提領') ||
+      subItem.includes('起點金額') ||
+      (assetRow[1] === '資產' && amtAssetOut > 0 && amtAssetIn === 0)
+    ) {
+      type = 'income';
+    }
+
+    // 智慧分類對應
+    const catResult = mapMyMoneyCategory(rawSubject, subItem, categories, type === 'income');
+
+    // 解析用餐人數 (如 "便當5人"、"3人"、"4位")
+    let peopleCount: number | undefined;
+    const peopleMatch = subItem.match(/(\d+)\s*(?:人|位)/i);
+    if (peopleMatch) {
+      peopleCount = parseInt(peopleMatch[1], 10);
+    }
+
+    // 備註與附加資訊
+    const rawNote = (otherRow[7] || assetRow[7] || '').trim();
+    const note = rawNote
+      ? `${rawNote} (來源: 帳務小管家 科目[${rawSubject}])`
+      : `來源: 帳務小管家 科目[${rawSubject}]`;
+
+    parsedList.push({
+      voucherId: vId,
+      rawVoucherId: vId,
+      date: formattedDate,
+      type,
+      categoryId: catResult.id,
+      categoryName: catResult.name,
+      subItem,
+      amount,
+      claimant: defaultClaimant,
+      receiptType: 'invoice',
+      peopleCount,
+      note,
+      rawSubject
+    });
+  });
+
+  // 1. 嚴格依交易日期升冪排序，同日則依小管家原始傳票時間戳排序
+  parsedList.sort((a, b) => {
+    const dateComp = a.date.localeCompare(b.date);
+    if (dateComp !== 0) return dateComp;
+    return a.rawVoucherId.localeCompare(b.rawVoucherId);
+  });
+
+  // 2. 按月份累計當月流水號 (YYYY-MM)，將小管家原生編號加工轉化為系統專用傳票編號 (方案 A: P2026090714-0001)
+  const monthSeqMap = new Map<string, number>();
+  parsedList.forEach((row) => {
+    const ym = row.date.slice(0, 7);
+    const curSeq = (monthSeqMap.get(ym) || 0) + 1;
+    monthSeqMap.set(ym, curSeq);
+
+    row.voucherId = formatSystemVoucherId(row.date, curSeq, row.rawVoucherId);
+  });
+
+  return parsedList;
+}
+
+export interface VoucherIdOptions {
+  includeHour?: boolean; // 是否包含小時 (預設 true)
+  separator?: string;    // 分隔符 (預設 '-')
+  seqDigits?: number;    // 流水號位數 (預設 4 碼)
+}
+
+/**
+ * 產出符合會計傳票與系統加工之傳票編號 (Voucher ID) - 方案 A
+ * 格式範例：P2026090714-0001
+ */
+export function generateMonthlyVoucherId(
+  dateStr: string,
+  monthSeq: number,
+  createdAt?: number,
+  options?: VoucherIdOptions
+): string {
+  return formatSystemVoucherId(dateStr, monthSeq, undefined, createdAt);
+}
+
+/**
+ * 將本系統零用金帳務明細匯出為「帳務小管家 (MyMoney)」相容之 CSV 檔案
+ * 
+ * 重要規範：
+ * 1. 匯入帳務小管家的 CSV，傳票識別碼欄位 (第 19 欄) 必須嚴格符合小管家的原生建檔模式：
+ *    「P」+「西元年月日(8碼)」+「時分秒(6碼)」+「毫秒序號(3碼)」(例如 P20260907142530001)，
+ *    絕不可含有破折號「-」或其他非數字字元，否則小管家匯入解析程式會驗證失敗！
+ * 2. 若資料為先前由小管家匯入，則保留其原始建檔編號；若為系統新記帳，則以小管家建檔規格自動生成。
+ */
+export function exportToMyMoneyCsv(transactions: Transaction[]): void {
+  const lines: string[] = [];
+
+  // 1. 嚴格依交易日期升冪排序（同日則依建立時間升冪），確保匯出順序正確無誤
+  const sortedTransactions = [...transactions].sort((a, b) => {
+    const dateComp = a.date.localeCompare(b.date);
+    if (dateComp !== 0) return dateComp;
+    return (a.createdAt || 0) - (b.createdAt || 0);
+  });
+
+  sortedTransactions.forEach((tx, idx) => {
+    const overallSeq = idx + 1;
+    const dateFormatted = tx.date.replace(/-/g, '/');
+
+    // 確保第 19 欄傳票識別碼符合帳務小管家建檔模式 (P + yyyyMMdd + HHmmss + fff)
+    let myMoneyNativeVoucherId: string;
+    if (
+      tx.rawVoucherId &&
+      tx.rawVoucherId.startsWith('P') &&
+      !tx.rawVoucherId.includes('-') &&
+      tx.rawVoucherId.length >= 15
+    ) {
+      myMoneyNativeVoucherId = tx.rawVoucherId;
+    } else {
+      myMoneyNativeVoucherId = generateMyMoneyNativeVoucherId(tx.date, tx.createdAt, overallSeq);
+    }
+
+    const subItemEscaped = tx.subItem.replace(/"/g, '""');
+    const noteEscaped = (tx.note || '').replace(/"/g, '""');
+
+    if (tx.type === 'income') {
+      // 撥補 (收入): 行1 收入科目, 行2 零用金資產增加
+      lines.push(
+        `"4","收入","${dateFormatted}","補充零用金","0","${tx.amount}","${subItemEscaped}","${noteEscaped}","收入","1","","","","","1","${overallSeq}","0","","${myMoneyNativeVoucherId}","","","","","","","","","","","",""`
+      );
+      lines.push(
+        `"4","資產","${dateFormatted}","零用金","${tx.amount}","0","${subItemEscaped}","${noteEscaped}","資產","2","","","","","1","${overallSeq}","0","","${myMoneyNativeVoucherId}","","","","","","","","","","","",""`
+      );
+    } else {
+      // 支出: 行1 零用金資產減少, 行2 支出科目
+      const categoryName = tx.categoryName || '日常雜支';
+      lines.push(
+        `"4","資產","${dateFormatted}","零用金","0","${tx.amount}","${subItemEscaped}","${noteEscaped}","資產","1","","","","","1","${overallSeq}","0","","${myMoneyNativeVoucherId}","","","","","","","","","","","",""`
+      );
+      lines.push(
+        `"4","支出","${dateFormatted}","${categoryName}","${tx.amount}","0","${subItemEscaped}","${noteEscaped}","支出","2","","","","","1","${overallSeq}","0","","${myMoneyNativeVoucherId}","","","","","","","","","","","",""`
+      );
+    }
+  });
+
+  // 加入 UTF-8 BOM 避免 Excel 或純文字編輯器開檔亂碼
+  const csvContent = '\uFEFF' + lines.join('\r\n') + '\r\n';
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  link.setAttribute('download', `帳務小管家相容_零用金帳務明細_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
  * 匯入並檢核 Excel / CSV 檔案：
- * 1. 支援「智慧防重複檢核」
- * 2. 比對資料庫現有 ID 與複合交易特徵
- * 3. 略過重複項目，只加入全新資料
- * 4. 即使多次上傳或斷點續傳，也保證資料庫完全不會有重複登記事項
+ * 1. 支援「一般 Excel / CSV 試算表」以及「帳務小管家 (MyMoney) CSV 匯出檔」
+ * 2. 支援「智慧防重複檢核」
+ * 3. 比對資料庫現有 ID 與複合交易特徵
+ * 4. 略過重複項目，只加入全新資料
+ * 5. 即使多次上傳或斷點續傳，也保證資料庫完全不會有重複登記事項
  */
 export async function parseAndValidateImportFile(
   file: File,
@@ -607,7 +1310,115 @@ export async function parseAndValidateImportFile(
 
     reader.onload = (e) => {
       try {
-        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const arrayBuffer = e.target?.result as ArrayBuffer;
+        const decodedText = decodeCsvBuffer(arrayBuffer);
+
+        // 建立現有資料的防重複檢索索引 (Set)
+        const existingIdSet = new Set<string>();
+        const existingFingerprintSet = new Set<string>();
+
+        existingTransactions.forEach((t) => {
+          if (t.id) existingIdSet.add(t.id.trim().toLowerCase());
+          const fp = getTransactionFingerprint(t);
+          existingFingerprintSet.add(fp);
+        });
+
+        // 記錄當前批次內已辨識出的特徵，防止同一個檔案內有兩筆完全相同的一起匯入
+        const inBatchIdSet = new Set<string>();
+        const inBatchFingerprintSet = new Set<string>();
+
+        const newTransactions: Transaction[] = [];
+        const duplicates: ImportResult['duplicates'] = [];
+        const invalidRows: ImportResult['invalidRows'] = [];
+
+        // =========================================================
+        // 分支 A：若是「帳務小管家 (MyMoney)」CSV 檔案
+        // =========================================================
+        if (isMyMoneyCsvText(decodedText)) {
+          const myMoneyRows = parseMyMoneyCsvText(decodedText, categories, claimants);
+
+          if (myMoneyRows.length === 0) {
+            resolve({
+              success: false,
+              totalRows: 0,
+              newTransactions: [],
+              duplicates: [],
+              invalidRows: [],
+              errorMessage: '在「帳務小管家」CSV 檔案中未辨識出任何有效的帳務傳票記錄。'
+            });
+            return;
+          }
+
+          myMoneyRows.forEach((r, idx) => {
+            const rowNumber = idx + 1;
+            const fp = getTransactionFingerprint({
+              date: r.date,
+              type: r.type,
+              amount: r.amount,
+              subItem: r.subItem,
+              claimant: r.claimant,
+              categoryName: r.categoryName
+            });
+
+            // 檢查是否已存在於系統中 (比對原生傳票號、加工後系統號、以及指紋)
+            const isDuplicate =
+              (r.rawVoucherId && existingIdSet.has(r.rawVoucherId.toLowerCase())) ||
+              existingIdSet.has(r.voucherId.toLowerCase()) ||
+              existingFingerprintSet.has(fp) ||
+              (r.rawVoucherId && inBatchIdSet.has(r.rawVoucherId.toLowerCase())) ||
+              inBatchIdSet.has(r.voucherId.toLowerCase()) ||
+              inBatchFingerprintSet.has(fp);
+
+            if (isDuplicate) {
+              duplicates.push({
+                rowNumber,
+                reason: `已存在於資料庫中（系統傳票號: ${r.voucherId} / 小管家編號: ${r.rawVoucherId}）`,
+                date: r.date,
+                subItem: r.subItem,
+                amount: r.amount,
+                type: r.type === 'expense' ? '支出' : '撥補',
+                claimant: r.claimant
+              });
+              return;
+            }
+
+            if (r.rawVoucherId) inBatchIdSet.add(r.rawVoucherId.toLowerCase());
+            inBatchIdSet.add(r.voucherId.toLowerCase());
+            inBatchFingerprintSet.add(fp);
+
+            newTransactions.push({
+              id: r.voucherId,
+              voucherNo: r.voucherId,
+              rawVoucherId: r.rawVoucherId,
+              date: r.date,
+              type: r.type,
+              categoryId: r.categoryId,
+              categoryName: r.categoryName,
+              subItem: r.subItem,
+              amount: r.amount,
+              claimant: r.claimant,
+              receiptType: r.receiptType,
+              invoiceNumber: r.invoiceNumber,
+              peopleCount: r.peopleCount,
+              note: r.note,
+              createdAt: Date.now()
+            });
+          });
+
+          resolve({
+            success: true,
+            totalRows: myMoneyRows.length,
+            newTransactions,
+            duplicates,
+            invalidRows
+          });
+          return;
+        }
+
+        // =========================================================
+        // 分支 B：一般 Excel / CSV 試算表處理流程
+        // =========================================================
+        const data = new Uint8Array(arrayBuffer);
         const workbook = XLSX.read(data, { type: 'array', cellDates: true });
 
         // 優先找「零用金記帳匯入表」或「收支流水明細」或第一個頁籤
@@ -643,23 +1454,22 @@ export async function parseAndValidateImportFile(
           return;
         }
 
-        // 建立現有資料的防重複檢索索引 (Set)
-        const existingIdSet = new Set<string>();
-        const existingFingerprintSet = new Set<string>();
-
-        existingTransactions.forEach((t) => {
-          if (t.id) existingIdSet.add(t.id.trim().toLowerCase());
-          const fp = getTransactionFingerprint(t);
-          existingFingerprintSet.add(fp);
-        });
-
-        // 記錄當前批次內已辨識出的特徵，防止同一個檔案內有兩筆完全相同的一起匯入
-        const inBatchIdSet = new Set<string>();
-        const inBatchFingerprintSet = new Set<string>();
-
-        const newTransactions: Transaction[] = [];
-        const duplicates: ImportResult['duplicates'] = [];
-        const invalidRows: ImportResult['invalidRows'] = [];
+        // 欄位輔助取得函數：比對多種可能表頭名稱或包含關鍵字的欄位
+        const getRowVal = (rowObj: any, keywords: string[]): any => {
+          for (const kw of keywords) {
+            if (rowObj[kw] !== undefined && rowObj[kw] !== null && rowObj[kw] !== '') {
+              return rowObj[kw];
+            }
+          }
+          const keys = Object.keys(rowObj);
+          for (const kw of keywords) {
+            const matchedKey = keys.find((k) => k.trim().toLowerCase().includes(kw.toLowerCase()));
+            if (matchedKey && rowObj[matchedKey] !== undefined && rowObj[matchedKey] !== null && rowObj[matchedKey] !== '') {
+              return rowObj[matchedKey];
+            }
+          }
+          return '';
+        };
 
         rawRows.forEach((row, index) => {
           const rowNumber = index + 2; // 表頭為第 1 列，資料從第 2 列起算
@@ -670,57 +1480,38 @@ export async function parseAndValidateImportFile(
             firstVal.startsWith('【') ||
             firstVal.includes('合計') ||
             firstVal.includes('總計') ||
-            firstVal.startsWith('---')
+            firstVal.startsWith('---') ||
+            firstVal.includes('說明') ||
+            firstVal.includes('指南')
           ) {
             return;
           }
 
-          // 欄位辨識（相容多種常見表頭名稱）
+          // 彈性相容各種表頭名稱
           const rawId = String(
-            row['資料識別碼(系統ID)'] ||
-            row['資料識別碼(選填)'] ||
-            row['資料識別碼'] ||
-            row['系統ID'] ||
-            row['ID'] ||
-            ''
+            getRowVal(row, ['資料識別碼(系統ID)', '資料識別碼(選填)', '資料識別碼', '系統ID', 'ID', '識別碼'])
           ).trim();
 
-          const rawDate = row['交易日期'] || row['日期'] || row['Date'] || '';
-          const rawType = String(row['收支屬性'] || row['收支類別'] || row['類型'] || row['Type'] || '支出').trim();
-          const rawCategory = String(row['支出大類'] || row['主分類'] || row['分類'] || '').trim();
-          const rawSubItem = String(row['店家/品項/細項'] || row['項目(店家/品項/來源)'] || row['店家'] || row['品項'] || row['細項'] || row['項目'] || '').trim();
-          const rawAmount = row['金額 (NT$)'] || row['金額'] || row['Amount'] || '';
-          const rawClaimant = String(row['請領同仁'] || row['請領人/經辦人'] || row['請領人'] || row['經辦人'] || '').trim();
-          const rawReceipt = String(row['單據憑證類型'] || row['憑證類型'] || row['憑證'] || '').trim();
-          const rawInvoice = String(row['發票號碼'] || row['發票字軌'] || '').trim();
-          const rawPeople = row['用餐人數'] || row['人數'] || '';
-          const rawNote = String(row['備註說明'] || row['備註'] || '').trim();
+          const rawDate = getRowVal(row, ['交易日期', '日期', 'Date', '帳務日期']);
+          const rawType = String(getRowVal(row, ['收支屬性', '收支類別', '收支', '類型', 'Type']) || '支出').trim();
+          const rawCategory = String(getRowVal(row, ['支出大類', '主分類', '類別', '分類', 'Category'])).trim();
+          const rawSubItem = String(getRowVal(row, ['店家/品項/細項', '項目(店家/品項/來源)', '店家', '品項', '細項', '項目', '摘要', '開銷內容'])).trim();
+          const rawAmount = getRowVal(row, ['金額 (NT$)', '金額', 'Amount', '費用', '小計']);
+          const rawClaimant = String(getRowVal(row, ['請領同仁', '請領人/經辦人', '請領人', '經辦人', '同仁', 'Claimant'])).trim();
+          const rawReceipt = String(getRowVal(row, ['單據憑證類型', '憑證類型', '憑證', '發票/收據'])).trim();
+          const rawInvoice = String(getRowVal(row, ['發票號碼', '發票字軌', '發票號', 'Invoice'])).trim();
+          const rawPeople = getRowVal(row, ['用餐人數', '人數', '人次', '用餐人數(人)']);
+          const rawNote = String(getRowVal(row, ['備註說明', '備註', 'Note', '說明'])).trim();
 
-          // 格式化日期
-          let formattedDate = '';
-          if (rawDate instanceof Date) {
-            formattedDate = rawDate.toISOString().slice(0, 10);
-          } else if (typeof rawDate === 'number') {
-            // Excel serial date format
-            const d = new Date(Math.round((rawDate - 25569) * 86400 * 1000));
-            if (!isNaN(d.getTime())) {
-              formattedDate = d.toISOString().slice(0, 10);
-            }
-          } else if (typeof rawDate === 'string') {
-            const trimmed = rawDate.trim().replace(/\//g, '-');
-            const match = trimmed.match(/^\d{4}-\d{1,2}-\d{1,2}/);
-            if (match) {
-              const parts = match[0].split('-');
-              formattedDate = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
-            }
-          }
+          // 智慧格式化日期：全面支援 "9/7"、"09/07"、"2026/09/07"、"2026-09-07"、"115/9/7"
+          const formattedDate = normalizeDateString(rawDate);
 
           if (!formattedDate) {
             // 若整行全是空的則略過
             if (!rawSubItem && !rawAmount) return;
             invalidRows.push({
               rowNumber,
-              reason: '日期格式無法辨識（請填寫 YYYY-MM-DD）',
+              reason: '日期格式無法辨識（支援 YYYY-MM-DD、YYYY/MM/DD 或直接輸入簡寫 9/7）',
               raw: row
             });
             return;
