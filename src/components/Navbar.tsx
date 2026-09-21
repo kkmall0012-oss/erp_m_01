@@ -74,9 +74,15 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <h1 className="text-lg font-bold tracking-tight text-stone-900">
                   公司零用金管理與開支分析
                 </h1>
-                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/60">
-                  單機安全存檔
-                </span>
+                <button
+                  type="button"
+                  onClick={onOpenBackup}
+                  title="🟢 已連線後端 SQLite 實體資料庫 (data/petty_cash.sqlite)，不依賴瀏覽器暫存，點擊可管理或下載資料庫檔案帶著走"
+                  className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100/90 text-emerald-800 border border-emerald-300 flex items-center gap-1.5 hover:bg-emerald-200 transition-colors cursor-pointer"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                  <span>SQLite 資料庫 (帶著走)</span>
+                </button>
               </div>
               <p className="text-xs text-stone-500">
                 階層式選單 · 水位與撥補警示 · 靜態快照存檔 · Excel 匯出

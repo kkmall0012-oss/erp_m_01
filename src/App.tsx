@@ -56,6 +56,19 @@ import {
   getCurrentYearMonth 
 } from './utils/storage';
 import { exportTransactionsToExcel, formatSystemVoucherId, generateMyMoneyNativeVoucherId } from './utils/excel';
+import { 
+  fetchBootstrap, 
+  createTransactionApi, 
+  updateTransactionApi, 
+  deleteTransactionApi, 
+  syncAllTransactionsApi, 
+  syncCategoriesApi, 
+  syncClaimantsApi, 
+  syncBudgetsApi, 
+  syncSubAccountsApi, 
+  syncDirectorWithdrawalsApi, 
+  migrateFromLocalApi 
+} from './services/api';
 
 export default function App() {
   // 1. 主要狀態
@@ -87,52 +100,89 @@ export default function App() {
   const [isReportExportModalOpen, setIsReportExportModalOpen] = useState<boolean>(false);
   const [reportsSubTab, setReportsSubTab] = useState<'center' | 'analytics'>('center');
 
-  // 初次載入本機所有資料
-  useEffect(() => {
-    const loadedTx = loadTransactions();
-    const loadedCats = loadCategories();
-    const loadedClaimants = loadClaimants();
-    const loadedDW = loadDirectorWithdrawals();
-    const loadedSubs = loadSubAccounts();
-    const loadedBdg = loadBudgets();
+  // 初次載入：優先從後端 SQLite 資料庫讀取所有資料
+  const reloadFromDb = async () => {
+    try {
+      const bootstrap = await fetchBootstrap();
+      if (bootstrap && bootstrap.success) {
+        // 如果 SQLite 是全新空的，而瀏覽器過去曾有資料，自動遷移至 SQLite
+        const localTx = loadTransactions();
+        if (bootstrap.transactions.length === 0 && localTx.length > 0) {
+          console.log('偵測到瀏覽器舊有資料，正在自動無縫遷移至 SQLite 資料庫...');
+          await migrateFromLocalApi({
+            transactions: localTx,
+            categories: loadCategories(),
+            claimants: loadClaimants(),
+            budgets: loadBudgets(),
+            subAccounts: loadSubAccounts(),
+            directorWithdrawals: loadDirectorWithdrawals()
+          });
+          const refreshed = await fetchBootstrap();
+          setTransactions(refreshed.transactions);
+          setCategories(refreshed.categories);
+          setClaimants(refreshed.claimants);
+          setBudgets(refreshed.budgets);
+          setSubAccounts(refreshed.subAccounts);
+          setDirectorWithdrawals(refreshed.directorWithdrawals);
+        } else {
+          setTransactions(bootstrap.transactions);
+          setCategories(bootstrap.categories);
+          setClaimants(bootstrap.claimants);
+          setBudgets(bootstrap.budgets);
+          setSubAccounts(bootstrap.subAccounts);
+          setDirectorWithdrawals(bootstrap.directorWithdrawals);
+        }
+      }
+    } catch (err) {
+      console.warn('載入 SQLite 資料庫失敗，切換至本機備援快照', err);
+      setTransactions(loadTransactions());
+      setCategories(loadCategories());
+      setClaimants(loadClaimants());
+      setDirectorWithdrawals(loadDirectorWithdrawals());
+      setSubAccounts(loadSubAccounts());
+      setBudgets(loadBudgets());
+    } finally {
+      setIsLoaded(true);
+    }
+  };
 
-    setTransactions(loadedTx);
-    setCategories(loadedCats);
-    setClaimants(loadedClaimants);
-    setDirectorWithdrawals(loadedDW);
-    setSubAccounts(loadedSubs);
-    setBudgets(loadedBdg);
-    setIsLoaded(true);
+  useEffect(() => {
+    reloadFromDb();
   }, []);
 
-  // 當 transactions 變更時儲存
+  // 當 transactions 變更時儲存至記憶體、本機快照與 SQLite
   const handleTransactionsChange = (newTxList: Transaction[]) => {
     setTransactions(newTxList);
     saveTransactions(newTxList);
+    syncAllTransactionsApi(newTxList).catch((err) => console.error('SQLite transactions sync error:', err));
   };
 
   // 當 categories 變更時儲存
   const handleCategoriesChange = (newCats: CategoryConfig[]) => {
     setCategories(newCats);
     saveCategories(newCats);
+    syncCategoriesApi(newCats).catch((err) => console.error('SQLite categories sync error:', err));
   };
 
   // 當 claimants 變更時儲存
   const handleClaimantsChange = (newClaimants: string[]) => {
     setClaimants(newClaimants);
     saveClaimants(newClaimants);
+    syncClaimantsApi(newClaimants).catch((err) => console.error('SQLite claimants sync error:', err));
   };
 
   // 當 directorWithdrawals 變更時儲存
   const handleDirectorWithdrawalsChange = (newDW: DirectorWithdrawal[]) => {
     setDirectorWithdrawals(newDW);
     saveDirectorWithdrawals(newDW);
+    syncDirectorWithdrawalsApi(newDW).catch((err) => console.error('SQLite directorWithdrawals sync error:', err));
   };
 
   // 當 subAccounts 變更時儲存
   const handleSubAccountsChange = (newSubs: SubAccount[]) => {
     setSubAccounts(newSubs);
     saveSubAccounts(newSubs);
+    syncSubAccountsApi(newSubs).catch((err) => console.error('SQLite subAccounts sync error:', err));
   };
 
   // 建立新專款子帳號 (有撥款才放，可自訂初始撥款或為 0)
@@ -164,6 +214,7 @@ export default function App() {
   const handleBudgetsChange = (newBudgets: Record<string, MonthBudget>) => {
     setBudgets(newBudgets);
     saveBudgets(newBudgets);
+    syncBudgetsApi(newBudgets).catch((err) => console.error('SQLite budgets sync error:', err));
   };
 
   // 採買子帳明細整批匯入零用金總帳
@@ -874,6 +925,7 @@ export default function App() {
         subAccounts={subAccounts}
         onRestoreBackup={handleRestoreBackup}
         onClearAllData={handleClearAllData}
+        onReloadAllData={reloadFromDb}
       />
 
       {/* 帳務資料匯入視窗 (支援 Excel 空白範本下載、上傳與智慧防重複檢視) */}

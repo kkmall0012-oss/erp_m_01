@@ -19,11 +19,12 @@ import {
   MonthBudget, 
   BackupData, 
   DirectorWithdrawal, 
-  SubAccount,
-  RestoreScope,
-  RestoreOptions
+  SubAccount, 
+  RestoreScope, 
+  RestoreOptions 
 } from '../types';
 import { exportBackupJSON, parseBackupJSON } from '../utils/storage';
+import { triggerDownloadSqliteFile, uploadSqliteFileApi } from '../services/api';
 import { ConfirmDialog } from './ConfirmDialog';
 
 interface BackupModalProps {
@@ -37,6 +38,7 @@ interface BackupModalProps {
   subAccounts?: SubAccount[];
   onRestoreBackup: (data: BackupData, options?: RestoreOptions) => void;
   onClearAllData: () => void;
+  onReloadAllData?: () => void;
 }
 
 export const BackupModal: React.FC<BackupModalProps> = ({
@@ -49,16 +51,46 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   directorWithdrawals,
   subAccounts,
   onRestoreBackup,
-  onClearAllData
+  onClearAllData,
+  onReloadAllData
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sqliteInputRef = useRef<HTMLInputElement>(null);
   const [restoreStatus, setRestoreStatus] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [isUploadingSqlite, setIsUploadingSqlite] = useState<boolean>(false);
   const [pendingRestore, setPendingRestore] = useState<BackupData | null>(null);
   const [restoreScope, setRestoreScope] = useState<RestoreScope>('settings_only');
   const [showClearConfirm, setShowClearConfirm] = useState<boolean>(false);
 
   if (!isOpen) return null;
+
+  // 下載實體 SQLite 資料庫檔案 (帶著走)
+  const handleDownloadSqlite = () => {
+    triggerDownloadSqliteFile();
+    setRestoreStatus('已開始下載 SQLite 實體資料庫檔案 (petty_cash.sqlite)！可直接存放隨身碟帶著走。');
+  };
+
+  // 匯入實體 SQLite 資料庫檔案 (換機直接置換)
+  const handleSqliteFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploadingSqlite(true);
+      setErrorMessage('');
+      await uploadSqliteFileApi(file);
+      setRestoreStatus('🎉 SQLite 資料庫實體檔案已成功載入並替換！');
+      if (onReloadAllData) {
+        onReloadAllData();
+      }
+    } catch (err: any) {
+      setErrorMessage(err.message || '載入 SQLite 資料庫失敗');
+    } finally {
+      setIsUploadingSqlite(false);
+      e.target.value = '';
+    }
+  };
 
   // 下載 JSON 備份檔
   const handleDownloadBackup = () => {
@@ -156,14 +188,80 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               </span>
             </div>
             <div>
-              <span className="text-[11px] text-stone-500 block">儲存技術格式</span>
-              <span className="text-sm font-bold text-emerald-700 font-mono">
-                JSON / LocalDB
+              <span className="text-[11px] text-stone-500 block">儲存核心技術</span>
+              <span className="text-xs font-bold text-emerald-700 font-mono flex items-center gap-1 mt-0.5">
+                <HardDrive className="w-3.5 h-3.5" />
+                SQLite 3 實體檔案
               </span>
             </div>
           </div>
 
-          {/* 備份與還原主要按鈕 */}
+          {/* SQLite 資料庫帶著走專用管理專區 */}
+          <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-300/80 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1 rounded-md bg-emerald-700 text-white">
+                  <Database className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-stone-900 text-xs">
+                    SQLite 資料庫實體檔案（帶著走隨身攜帶專區）
+                  </h4>
+                  <p className="text-[11px] text-emerald-900">
+                    系統資料直接保存於伺服器檔案 <code className="px-1 py-0.5 rounded-sm bg-emerald-100 font-mono font-bold text-emerald-800">data/petty_cash.sqlite</code>，完全不依賴瀏覽器快取。
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              {/* 下載 SQLite 實體檔 */}
+              <button
+                type="button"
+                onClick={handleDownloadSqlite}
+                className="p-3 rounded-xl border border-emerald-400 bg-white hover:bg-emerald-50 text-left transition-all flex items-center justify-between group cursor-pointer shadow-2xs"
+              >
+                <div>
+                  <span className="font-bold text-emerald-950 block text-xs flex items-center gap-1.5">
+                    <Download className="w-3.5 h-3.5 text-emerald-700" />
+                    下載 SQLite 資料庫檔 (.sqlite)
+                  </span>
+                  <span className="text-[10px] text-stone-500 mt-0.5 block">
+                    可存放隨身碟攜帶，或以 SQLite 工具開啟
+                  </span>
+                </div>
+              </button>
+
+              {/* 載入/替換 SQLite 實體檔 */}
+              <div>
+                <input
+                  ref={sqliteInputRef}
+                  type="file"
+                  accept=".sqlite,.db"
+                  onChange={handleSqliteFileChange}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  disabled={isUploadingSqlite}
+                  onClick={() => sqliteInputRef.current?.click()}
+                  className="w-full p-3 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-left transition-all flex items-center justify-between group cursor-pointer shadow-2xs"
+                >
+                  <div>
+                    <span className="font-bold text-stone-900 block text-xs flex items-center gap-1.5">
+                      <Upload className="w-3.5 h-3.5 text-stone-700" />
+                      {isUploadingSqlite ? '載入處理中...' : '載入 SQLite 資料庫檔 (.sqlite)'}
+                    </span>
+                    <span className="text-[10px] text-stone-500 mt-0.5 block">
+                      換機或從隨身碟拷貝過來的實體庫直接置換
+                    </span>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* 備份與還原主要按鈕 (JSON 快照) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             {/* 下載備份 */}
             <button
