@@ -11,15 +11,18 @@ import {
   Calendar, 
   Users, 
   Coins, 
-  Car 
+  Car,
+  Building2
 } from 'lucide-react';
-import { Transaction, CategoryConfig } from '../types';
+import { Transaction, CategoryConfig, CompanyProfile } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
 
 interface TransactionListProps {
   transactions: Transaction[];
   categories: CategoryConfig[];
   currentYearMonth: string;
+  companies?: CompanyProfile[];
+  activeCompanyId?: string;
   onDeleteTransaction: (id: string) => void;
   onEditTransaction: (transaction: Transaction) => void;
 }
@@ -28,6 +31,8 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   transactions,
   categories,
   currentYearMonth,
+  companies = [],
+  activeCompanyId = 'comp_1',
   onDeleteTransaction,
   onEditTransaction
 }) => {
@@ -212,6 +217,27 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                           {item.voucherNo || item.id}
                         </div>
                       )}
+                      {/* 關係企業行號標籤 */}
+                      {companies.length > 0 && (() => {
+                        const itemComp = companies.find(c => c.id === item.companyId);
+                        if (!itemComp) return null;
+                        return (
+                          <div className="mt-1">
+                            <span 
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border"
+                              style={{
+                                backgroundColor: `${itemComp.color || '#0066cc'}12`,
+                                borderColor: `${itemComp.color || '#0066cc'}35`,
+                                color: itemComp.color || '#0066cc'
+                              }}
+                              title={`歸屬行號：${itemComp.name} (統編：${itemComp.taxId || '未設定'})`}
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: itemComp.color || '#0066cc' }} />
+                              <span className="max-w-[90px] truncate">{itemComp.shortName || itemComp.name}</span>
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* 請領同仁 */}

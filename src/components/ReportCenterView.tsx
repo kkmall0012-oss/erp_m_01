@@ -33,7 +33,7 @@ import {
   FileSpreadsheet,
   ExternalLink
 } from 'lucide-react';
-import { Transaction, CategoryConfig, MonthBudget, SubAccount, DirectorWithdrawal } from '../types';
+import { Transaction, CategoryConfig, MonthBudget, SubAccount, DirectorWithdrawal, CompanyProfile } from '../types';
 import {
   REPORT_CATALOG,
   ReportDefinition,
@@ -59,6 +59,7 @@ interface ReportCenterViewProps {
   budgets?: Record<string, MonthBudget>;
   subAccounts?: SubAccount[];
   directorWithdrawals?: DirectorWithdrawal[];
+  companyProfile?: CompanyProfile;
 }
 
 export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
@@ -67,7 +68,8 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
   currentYearMonth,
   budgets = {},
   subAccounts = [],
-  directorWithdrawals = []
+  directorWithdrawals = [],
+  companyProfile
 }) => {
   // 目前選取的報表 ID
   const [activeReportId, setActiveReportId] = useState<string>('tx_details');
@@ -601,10 +603,10 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
                     <div className="report-header-banner border-b-2 border-stone-900 pb-3 mb-4 bg-white">
                       <div className="text-center space-y-1">
                         <span className="text-xs font-semibold text-stone-500 tracking-wider">
-                          公司內部零用金帳務管理系統
+                          {companyProfile?.name ? `${companyProfile.name} 內部帳務管理系統` : '公司內部零用金帳務管理系統'}
                         </span>
                         <h3 className="text-xl font-black text-stone-900 tracking-tight">
-                          【{currentReportDef.name}】
+                          【{companyProfile?.shortName ? `${companyProfile.shortName} ` : ''}{currentReportDef.name}】
                         </h3>
                         <p className="text-xs text-stone-600 font-medium">
                           {currentReportDef.shortDesc}
@@ -617,6 +619,12 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
                             <span className="text-stone-400">統計期間：</span>
                             <span className="font-bold text-stone-800">{periodDesc}</span>
                           </div>
+                          {companyProfile?.taxId && (
+                            <div>
+                              <span className="text-stone-400">統一編號：</span>
+                              <span className="font-mono font-bold text-stone-800">{companyProfile.taxId}</span>
+                            </div>
+                          )}
                           <div>
                             <span className="text-stone-400">篩選記錄：</span>
                             <span className="font-bold text-stone-800">{filteredTransactions.length} 筆資料</span>
@@ -689,11 +697,19 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
                       </div>
                       <div className="border-b border-stone-300 pb-2">
                         <span className="font-semibold text-stone-500">出納/財務覆核：</span>
+                        <span className="font-medium text-stone-800 ml-1">{companyProfile?.cashier || ''}</span>
                       </div>
                       <div className="border-b border-stone-300 pb-2">
-                        <span className="font-semibold text-stone-500">主管/廠長核決：</span>
+                        <span className="font-semibold text-stone-500">主管/會計核決：</span>
+                        <span className="font-medium text-stone-800 ml-1">{companyProfile?.chiefAccountant || companyProfile?.representative || ''}</span>
                       </div>
                     </div>
+
+                    {companyProfile?.taxInvoiceNote && (
+                      <div className="pt-2 text-[10px] text-stone-400 text-center font-normal">
+                        {companyProfile.taxInvoiceNote}
+                      </div>
+                    )}
                   </td>
                 </tr>
               </tbody>

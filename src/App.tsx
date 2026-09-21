@@ -15,6 +15,12 @@ import {
   Building
 } from 'lucide-react';
 import { Navbar } from './components/Navbar';
+import { ErpTopBar } from './components/erp/ErpTopBar';
+import { ErpSidebar, ERP_APPS, ErpAppId } from './components/erp/ErpSidebar';
+import { ErpDashboardView } from './components/erp/ErpDashboardView';
+import { ErpModulePlaceholder } from './components/erp/ErpModulePlaceholder';
+import { ErpDatabaseView } from './components/erp/ErpDatabaseView';
+import { CompanySettingsView } from './components/erp/CompanySettingsView';
 import { StatCards } from './components/StatCards';
 import { QuickActionHub } from './components/QuickActionHub';
 import { TransactionCreateModal } from './components/TransactionCreateModal';
@@ -38,7 +44,10 @@ import {
   DirectorWithdrawal,
   SubAccount,
   SubAccountItem,
-  RestoreOptions
+  RestoreOptions,
+  CompanyProfile,
+  DEFAULT_COMPANY_PROFILE,
+  DEFAULT_COMPANIES
 } from './types';
 import { 
   loadTransactions, 
@@ -67,7 +76,8 @@ import {
   syncBudgetsApi, 
   syncSubAccountsApi, 
   syncDirectorWithdrawalsApi, 
-  migrateFromLocalApi 
+  migrateFromLocalApi,
+  saveCompanyProfileApi
 } from './services/api';
 
 export default function App() {
@@ -79,7 +89,20 @@ export default function App() {
   const [directorWithdrawals, setDirectorWithdrawals] = useState<DirectorWithdrawal[]>([]);
   const [subAccounts, setSubAccounts] = useState<SubAccount[]>([]);
   const [budgets, setBudgets] = useState<Record<string, MonthBudget>>({});
+  const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
+  const [companies, setCompanies] = useState<CompanyProfile[]>(DEFAULT_COMPANIES);
+  const [activeCompanyId, setActiveCompanyId] = useState<string>('all');
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
+
+  // 0. 客製化 ERP 大框架模組狀態 ('home' | 'petty_cash' | 'fleet' | 'assets' | 'workflow' | 'database')
+  const [activeApp, setActiveApp] = useState<ErpAppId>('petty_cash');
+  // 左側邊欄展開/收合 (預設 true：仿鼎新經典圖示+下方文字直立欄，展開為 200px 抽屜)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
+
+  // 當前選取的 ERP 模組設定
+  const activeAppItem = useMemo(() => {
+    return ERP_APPS.find(app => app.id === activeApp) || ERP_APPS[1];
+  }, [activeApp]);
 
   // 2. 視圖切換：'general' (零用金總帳本)、'reports' (分類月報表及年報表)、'director' (廠長領取記錄)、'subaccounts' (專款代管與採買子帳號)
   const [activeTab, setActiveTab] = useState<'general' | 'reports' | 'director' | 'subaccounts'>('general');
@@ -124,6 +147,13 @@ export default function App() {
           setBudgets(refreshed.budgets);
           setSubAccounts(refreshed.subAccounts);
           setDirectorWithdrawals(refreshed.directorWithdrawals);
+          if (refreshed.companies && refreshed.companies.length > 0) {
+            setCompanies(refreshed.companies);
+            const def = refreshed.companies.find((c: any) => c.isDefault) || refreshed.companies[0];
+            setCompanyProfile(def);
+          } else if (refreshed.companyProfile) {
+            setCompanyProfile(refreshed.companyProfile);
+          }
         } else {
           setTransactions(bootstrap.transactions);
           setCategories(bootstrap.categories);
@@ -131,6 +161,13 @@ export default function App() {
           setBudgets(bootstrap.budgets);
           setSubAccounts(bootstrap.subAccounts);
           setDirectorWithdrawals(bootstrap.directorWithdrawals);
+          if (bootstrap.companies && bootstrap.companies.length > 0) {
+            setCompanies(bootstrap.companies);
+            const def = bootstrap.companies.find((c: any) => c.isDefault) || bootstrap.companies[0];
+            setCompanyProfile(def);
+          } else if (bootstrap.companyProfile) {
+            setCompanyProfile(bootstrap.companyProfile);
+          }
         }
       }
     } catch (err) {
@@ -302,12 +339,14 @@ export default function App() {
     const rawVoucherId = generateMyMoneyNativeVoucherId(data.date, createdAt, monthSeq);
     // 2. 加工為系統專用高可讀性傳票號 (方案 A: P2026090714-0001)
     const voucherNo = formatSystemVoucherId(data.date, monthSeq, rawVoucherId, createdAt);
+    const assignedCompanyId = data.companyId || (activeCompanyId === 'all' ? (companies[0]?.id || 'comp_1') : activeCompanyId);
 
     const newRecord: Transaction = {
       ...data,
       id: voucherNo,
       voucherNo,
       rawVoucherId,
+      companyId: assignedCompanyId,
       createdAt
     };
     handleTransactionsChange([newRecord, ...transactions]);
@@ -460,6 +499,11 @@ export default function App() {
       saveSubAccounts(data.subAccounts);
     }
 
+    if (data.companyProfile) {
+      setCompanyProfile(data.companyProfile);
+      saveCompanyProfileApi(data.companyProfile).catch(console.error);
+    }
+
     setImportNotification({
       type: 'success',
       message: `✓ 已完成全資料庫完整還原！已恢復 ${data.transactions.length} 筆帳目與 ${data.categories?.length || 0} 個主題分類。`
@@ -479,10 +523,26 @@ export default function App() {
     setIsSettingsModalOpen(true);
   };
 
-  // 計算當月指標數據
+  // 當前選取的作帳公司物件 (若是 'all' 則代表合併檢視三間關係企業)
+  const activeCompany = useMemo(() => {
+    if (activeCompanyId === 'all') return null;
+    return companies.find((c) => c.id === activeCompanyId) || companies[0] || companyProfile;
+  }, [companies, activeCompanyId, companyProfile]);
+
+  // 依當前選取的公司行號篩選之交易清單 (三間公司分開記帳核心，隨時切換)
+  const activeTransactions = useMemo(() => {
+    if (activeCompanyId === 'all') {
+      return transactions;
+    }
+    return transactions.filter(
+      (t) => (t.companyId || companies[0]?.id || 'comp_1') === activeCompanyId
+    );
+  }, [transactions, activeCompanyId, companies]);
+
+  // 計算當月指標數據 (依選定之公司或合併)
   const monthlyTransactions = useMemo(() => {
-    return transactions.filter((t) => t.date.startsWith(currentYearMonth));
-  }, [transactions, currentYearMonth]);
+    return activeTransactions.filter((t) => t.date.startsWith(currentYearMonth));
+  }, [activeTransactions, currentYearMonth]);
 
   const totalExpense = useMemo(() => {
     return monthlyTransactions
@@ -542,8 +602,8 @@ export default function App() {
   const cumulativeTransactions = useMemo(() => {
     // 統計至當前月份底的所有收支紀錄
     const endOfMonth = `${currentYearMonth}-99`;
-    return transactions.filter((t) => t.date <= endOfMonth);
-  }, [transactions, currentYearMonth]);
+    return activeTransactions.filter((t) => t.date <= endOfMonth);
+  }, [activeTransactions, currentYearMonth]);
 
   const cumulativeIncome = useMemo(() => {
     return cumulativeTransactions
@@ -573,33 +633,92 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 text-stone-900 flex flex-col font-sans">
-      {/* 頂部導覽列 */}
-      <Navbar
-        currentYearMonth={currentYearMonth}
-        onMonthChange={setCurrentYearMonth}
-        onExportExcel={handleExportExcel}
-        onOpenImport={() => setIsImportModalOpen(true)}
-        onOpenBackup={() => setIsBackupModalOpen(true)}
-        onOpenSettings={() => handleOpenSettingsModal('categories')}
-        onOpenBudget={() => setIsBudgetModalOpen(true)}
+    <div className="min-h-screen h-screen flex flex-col bg-stone-100 text-stone-900 font-sans overflow-hidden">
+      {/* 1. 最頂部：深藍色企業級導航列 (仿鼎新 A1 頂欄) */}
+      <ErpTopBar
+        isSidebarCollapsed={isSidebarCollapsed}
+        onToggleSidebar={() => setIsSidebarCollapsed((prev) => !prev)}
+        activeAppTitle={activeAppItem.name}
+        onOpenBackupModal={() => setIsBackupModalOpen(true)}
+        onReloadData={reloadFromDb}
+        companies={companies}
+        activeCompanyId={activeCompanyId}
+        onSelectCompany={(id) => setActiveCompanyId(id)}
+        onGoToCompanySettings={() => setActiveApp('company')}
       />
 
-      {/* 匯入通知提示列 */}
-      {importNotification && (
-        <div className="bg-emerald-600 text-white text-xs px-4 py-2.5 text-center font-bold flex items-center justify-center gap-2 shadow-sm animate-fade-in">
-          <span>{importNotification.message}</span>
-          <button
-            onClick={() => setImportNotification(null)}
-            className="text-emerald-100 hover:text-white ml-2 text-sm cursor-pointer"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+      {/* 2. 主體架構：左側直立選單 + 右側工作視窗 */}
+      <div className="flex-1 flex overflow-hidden min-h-0">
+        {/* 左側鼎新風格直立導航欄 (整合各小程式入口) */}
+        <ErpSidebar
+          activeApp={activeApp}
+          onSelectApp={(id) => setActiveApp(id)}
+          isCollapsed={isSidebarCollapsed}
+        />
 
-      {/* 主工作區容器 */}
-      <main className="grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* 右側主工作視窗 (各功能視窗獨立純淨排版) */}
+        <div className="flex-1 flex flex-col overflow-y-auto bg-stone-50/90 min-h-0">
+          {/* 小程式 1：系統總覽首頁 */}
+          {activeApp === 'home' && (
+            <div className="p-4 sm:p-6 lg:p-8">
+              <ErpDashboardView
+                onSelectApp={(id) => setActiveApp(id)}
+                transactions={activeTransactions}
+                cashOnHand={cashOnHand}
+                currentYearMonth={currentYearMonth}
+                onOpenBackupModal={() => setIsBackupModalOpen(true)}
+              />
+            </div>
+          )}
+
+          {/* 小程式 2：公司基本設定 (三間獨立公司之企業基礎主檔庫維護) */}
+          {activeApp === 'company' && (
+            <div className="p-4 sm:p-6 lg:p-8">
+              <CompanySettingsView
+                companies={companies}
+                activeCompanyId={activeCompanyId}
+                onUpdateCompanies={(updated) => {
+                  setCompanies(updated);
+                  const def = updated.find(c => c.isDefault) || updated[0];
+                  if (def) setCompanyProfile(def);
+                  // 若目前選取的 activeCompanyId 已被刪除，自動導向現存有效公司
+                  if (activeCompanyId !== 'all' && !updated.some(c => c.id === activeCompanyId)) {
+                    setActiveCompanyId(def ? def.id : 'all');
+                  }
+                }}
+              />
+            </div>
+          )}
+
+          {/* 小程式 2：公司零用金管理系統 (原完整零用金工作台) */}
+          {activeApp === 'petty_cash' && (
+            <div className="flex-1 flex flex-col min-h-0">
+              {/* 零用金月份與工具導覽列 */}
+              <Navbar
+                currentYearMonth={currentYearMonth}
+                onMonthChange={setCurrentYearMonth}
+                onExportExcel={handleExportExcel}
+                onOpenImport={() => setIsImportModalOpen(true)}
+                onOpenBackup={() => setIsBackupModalOpen(true)}
+                onOpenSettings={() => handleOpenSettingsModal('categories')}
+                onOpenBudget={() => setIsBudgetModalOpen(true)}
+              />
+
+              {/* 匯入通知提示列 */}
+              {importNotification && (
+                <div className="bg-emerald-600 text-white text-xs px-4 py-2.5 text-center font-bold flex items-center justify-center gap-2 shadow-sm animate-fade-in">
+                  <span>{importNotification.message}</span>
+                  <button
+                    onClick={() => setImportNotification(null)}
+                    className="text-emerald-100 hover:text-white ml-2 text-sm cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              {/* 零用金主工作區 */}
+              <main className="grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* 分頁導航切換：總帳本 vs 分類財務報表 vs 廠長專用領取紀錄 */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2.5 rounded-2xl border border-stone-200 shadow-xs">
           <div className="inline-flex p-1 bg-stone-100 rounded-xl flex-wrap gap-1">
@@ -726,19 +845,21 @@ export default function App() {
 
               <div className="lg:col-span-7 flex flex-col">
                 <ExpensePieChart
-                  transactions={transactions}
+                  transactions={activeTransactions}
                   categories={categories}
                   currentYearMonth={currentYearMonth}
                 />
               </div>
             </div>
 
-            {/* 3. 下方：收支流水明細清單 */}
+            {/* 3. 下方：收支流水明細清單 (支援顯示關係企業歸屬與分開作帳) */}
             <div>
               <TransactionList
-                transactions={transactions}
+                transactions={activeTransactions}
                 categories={categories}
                 currentYearMonth={currentYearMonth}
+                companies={companies}
+                activeCompanyId={activeCompanyId}
                 onDeleteTransaction={handleDeleteTransaction}
                 onEditTransaction={(item) => {
                   setEditingTransaction(item);
@@ -794,16 +915,17 @@ export default function App() {
 
             {reportsSubTab === 'center' ? (
               <ReportCenterView
-                transactions={transactions}
+                transactions={activeTransactions}
                 categories={categories}
                 currentYearMonth={currentYearMonth}
                 budgets={budgets}
                 subAccounts={subAccounts}
                 directorWithdrawals={directorWithdrawals}
+                companyProfile={activeCompany || companyProfile}
               />
             ) : (
               <CategoryReportView
-                transactions={transactions}
+                transactions={activeTransactions}
                 categories={categories}
                 currentYearMonth={currentYearMonth}
                 budgets={budgets}
@@ -839,40 +961,63 @@ export default function App() {
           />
         )}
       </main>
+    </div>
+  )}
 
-      {/* 頁腳資訊 */}
-      <footer className="py-6 border-t border-stone-200/80 bg-white/60 text-center text-xs text-stone-500 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>公司零用金管理與開支分析工具 · 單機離線安全版 (NT$ 新台幣)</span>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsBackupModalOpen(true)}
-              className="text-stone-600 hover:text-stone-900 underline"
-            >
-              資料備份與還原導引
-            </button>
-            <span>·</span>
-            <button
-              onClick={() => handleOpenSettingsModal('categories')}
-              className="text-stone-600 hover:text-stone-900 underline"
-            >
-              自訂下拉選單
-            </button>
-            <span>·</span>
-            <button
-              onClick={() => setIsImportModalOpen(true)}
-              className="text-sky-700 hover:text-sky-800 font-medium cursor-pointer"
-            >
-              匯入 Excel 帳務 (智慧防重複)
-            </button>
-            <span>·</span>
-            <button
-              onClick={handleExportExcel}
-              className="text-emerald-700 hover:text-emerald-800 font-medium cursor-pointer"
-            >
-              匯出本月綜合報表 (Excel)
-            </button>
-          </div>
+          {/* 小程式 6：SQLite 實體資料庫中心 */}
+          {activeApp === 'database' && (
+            <div className="p-4 sm:p-6 lg:p-8">
+              <ErpDatabaseView
+                onOpenBackupModal={() => setIsBackupModalOpen(true)}
+                onGoToPettyCash={() => setActiveApp('petty_cash')}
+                onReloadData={reloadFromDb}
+              />
+            </div>
+          )}
+
+          {/* 預留客製化模組 (車輛油資、物品資產、洽談簽核) */}
+          {(activeApp === 'fleet' || activeApp === 'assets' || activeApp === 'workflow') && (
+            <div className="p-4 sm:p-6 lg:p-8">
+              <ErpModulePlaceholder
+                app={activeAppItem}
+                onGoToPettyCash={() => setActiveApp('petty_cash')}
+                onGoToHome={() => setActiveApp('home')}
+              />
+            </div>
+          )}
+
+        </div>
+      </div>
+
+      {/* 3. 最底部：父視窗切割出的專屬固定底部狀態列 (Down Frame)，完全獨立於各子頁面 */}
+      <footer className="shrink-0 py-1.5 px-4 bg-white border-t border-stone-200 text-[11px] text-stone-500 flex flex-wrap items-center justify-between gap-2 select-none z-20 shadow-xs">
+        <div className="flex items-center gap-2">
+          <span className="font-bold text-[#0066cc]">企業客製化商務系統 (ERP)</span>
+          <span className="text-stone-300">|</span>
+          <span>實體資料庫：SQLite 3 (data/petty_cash.sqlite)</span>
+          {activeCompany && (
+            <>
+              <span className="text-stone-300">|</span>
+              <span className="font-medium text-stone-700">
+                目前作帳：<span className="font-bold text-[#0066cc]">{activeCompany.name}</span> (統編: {activeCompany.taxId || '未設定'})
+              </span>
+            </>
+          )}
+          {activeCompanyId === 'all' && (
+            <>
+              <span className="text-stone-300">|</span>
+              <span className="font-medium text-amber-700 font-semibold">
+                目前作帳：3間關係企業合併視圖
+              </span>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-stone-500">當前工作模組：{activeAppItem.name}</span>
+          <span className="text-emerald-700 font-medium flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 inline-block animate-pulse"></span>
+            資料庫連線中
+          </span>
         </div>
       </footer>
 
@@ -890,6 +1035,8 @@ export default function App() {
         claimants={claimants}
         transactions={transactions}
         currentYearMonth={currentYearMonth}
+        companies={companies}
+        activeCompanyId={activeCompanyId}
         onAddTransaction={handleAddTransaction}
         onQuickAddSubItem={handleQuickAddSubItem}
         onQuickAddClaimant={handleQuickAddClaimant}
@@ -945,6 +1092,7 @@ export default function App() {
         transaction={editingTransaction}
         categories={categories}
         claimants={claimants}
+        companies={companies}
         onSave={handleUpdateTransaction}
         onDelete={handleDeleteTransaction}
       />
@@ -957,7 +1105,7 @@ export default function App() {
           setActiveTab('reports');
           setReportsSubTab('center');
         }}
-        transactions={transactions}
+        transactions={activeTransactions}
         categories={categories}
         currentYearMonth={currentYearMonth}
         budgets={budgets}

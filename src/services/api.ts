@@ -3,7 +3,8 @@ import {
   CategoryConfig, 
   MonthBudget, 
   SubAccount, 
-  DirectorWithdrawal 
+  DirectorWithdrawal,
+  CompanyProfile
 } from '../types';
 
 export interface BootstrapResponse {
@@ -16,6 +17,8 @@ export interface BootstrapResponse {
   budgets: Record<string, MonthBudget>;
   subAccounts: SubAccount[];
   directorWithdrawals: DirectorWithdrawal[];
+  companyProfile?: CompanyProfile;
+  companies?: CompanyProfile[];
 }
 
 // 取得 SQLite 後端完整初始資料
@@ -131,6 +134,67 @@ export async function syncDirectorWithdrawalsApi(withdrawals: DirectorWithdrawal
   if (!res.ok) {
     throw new Error('儲存提領紀錄至 SQLite 失敗');
   }
+}
+
+// 取得所有公司/行號主檔資料 (支援 3 間關係企業)
+export async function fetchCompanies(): Promise<CompanyProfile[]> {
+  const res = await fetch('/api/companies');
+  if (!res.ok) {
+    throw new Error('讀取公司行號列表失敗');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+// 批次儲存所有公司/行號資料
+export async function saveCompaniesApi(companies: CompanyProfile[]): Promise<CompanyProfile[]> {
+  const res = await fetch('/api/companies', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ companies })
+  });
+  if (!res.ok) {
+    throw new Error('儲存公司行號列表失敗');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+// 取得單一公司基本設定資料
+export async function fetchCompanyProfile(id?: string): Promise<CompanyProfile> {
+  const url = id ? `/api/company-profile?id=${encodeURIComponent(id)}` : '/api/company-profile';
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error('讀取公司設定失敗');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+// 儲存單一公司基本設定至 SQLite
+export async function saveCompanyProfileApi(profile: CompanyProfile): Promise<CompanyProfile> {
+  const res = await fetch('/api/company-profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(profile)
+  });
+  if (!res.ok) {
+    throw new Error('儲存公司設定至 SQLite 失敗');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+// 刪除特定行號
+export async function deleteCompanyApi(id: string): Promise<CompanyProfile[]> {
+  const res = await fetch(`/api/companies/${encodeURIComponent(id)}`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) {
+    throw new Error('刪除公司行號失敗');
+  }
+  const json = await res.json();
+  return json.data;
 }
 
 // 一鍵下載實體 SQLite 檔案 (帶著走)

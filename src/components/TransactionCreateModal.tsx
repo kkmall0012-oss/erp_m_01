@@ -15,9 +15,10 @@ import {
   Fuel,
   HandCoins,
   Car,
-  PackageCheck
+  PackageCheck,
+  Building2
 } from 'lucide-react';
-import { CategoryConfig, Transaction, TransactionType, ReceiptType } from '../types';
+import { CategoryConfig, Transaction, TransactionType, ReceiptType, CompanyProfile } from '../types';
 import { getTodayDateStr } from '../utils/storage';
 import { SearchableOptionPicker } from './SearchableOptionPicker';
 
@@ -30,6 +31,8 @@ interface TransactionCreateModalProps {
   claimants: string[];
   transactions?: Transaction[];
   currentYearMonth?: string;
+  companies?: CompanyProfile[];
+  activeCompanyId?: string;
   onAddTransaction: (t: Omit<Transaction, 'id' | 'createdAt'>) => void;
   onQuickAddSubItem?: (categoryId: string, newItem: string) => void;
   onQuickAddClaimant?: (newClaimant: string) => void;
@@ -45,11 +48,26 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
   claimants,
   transactions = [],
   currentYearMonth,
+  companies = [],
+  activeCompanyId = 'comp_1',
   onAddTransaction,
   onQuickAddSubItem,
   onQuickAddClaimant,
   onOpenSettings
 }) => {
+  // 0. 帳單歸屬公司 (支援三間關係企業分開記帳)
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>(
+    activeCompanyId === 'all' ? (companies[0]?.id || 'comp_1') : activeCompanyId
+  );
+
+  useEffect(() => {
+    if (activeCompanyId && activeCompanyId !== 'all') {
+      setSelectedCompanyId(activeCompanyId);
+    } else if (companies.length > 0 && (!selectedCompanyId || selectedCompanyId === 'all')) {
+      setSelectedCompanyId(companies[0].id);
+    }
+  }, [activeCompanyId, companies]);
+
   // 1. 日期與分類
   const [date, setDate] = useState<string>(getTodayDateStr());
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('dining');
@@ -282,7 +300,8 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
         categoryName: currentIncomeCategory.name || '零用金撥補',
         subItem: finalSource,
         claimant: selectedClaimant.trim() || '零用金管理員',
-        note: note.trim()
+        note: note.trim(),
+        companyId: selectedCompanyId
       });
 
       onClose();
@@ -329,7 +348,8 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
       peopleCount: currentCategory?.hasPeopleCount ? Math.max(1, peopleCount) : undefined,
       receiptType,
       invoiceNumber: receiptType === 'invoice' ? invoiceNumber.trim().toUpperCase() : undefined,
-      note: note.trim()
+      note: note.trim(),
+      companyId: selectedCompanyId
     });
 
     onClose();
@@ -407,6 +427,47 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
             <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span className="font-semibold">{errorMessage}</span>
+            </div>
+          )}
+
+          {/* 🏢 帳單歸屬公司行號選擇 (關係企業 3 間分開記帳核心功能) */}
+          {companies.length > 0 && (
+            <div className="bg-stone-50/90 p-3 rounded-xl border border-stone-200">
+              <div className="flex items-center justify-between mb-2">
+                <label className="font-bold text-stone-700 flex items-center gap-1.5 text-xs">
+                  <Building2 className="w-3.5 h-3.5 text-[#0066cc]" />
+                  <span>此筆帳單歸屬公司行號（三間關係企業分開記帳）：</span>
+                </label>
+                <span className="text-[10px] text-stone-500 font-mono">
+                  統編：{companies.find(c => c.id === selectedCompanyId)?.taxId || '未設定統編'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {companies.map(c => {
+                  const isSelected = selectedCompanyId === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setSelectedCompanyId(c.id)}
+                      className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-[#0066cc] bg-white text-[#0066cc] shadow-2xs ring-2 ring-[#0066cc]/15'
+                          : 'border-stone-200 bg-white/70 text-stone-600 hover:bg-white hover:border-stone-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 pr-1">
+                        <span 
+                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-2xs" 
+                          style={{ backgroundColor: c.color || '#0066cc' }} 
+                        />
+                        <span className="truncate">{c.shortName || c.name}</span>
+                      </div>
+                      {isSelected && <Check className="w-3.5 h-3.5 text-[#0066cc] shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
 

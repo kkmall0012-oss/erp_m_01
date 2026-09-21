@@ -9,7 +9,7 @@ import {
   Eye,
   FileText
 } from 'lucide-react';
-import { Transaction, CategoryConfig, MonthBudget, SubAccount, DirectorWithdrawal } from '../types';
+import { Transaction, CategoryConfig, MonthBudget, SubAccount, DirectorWithdrawal, CompanyProfile } from '../types';
 import { 
   REPORT_CATALOG, 
   exportSingleReportExcel, 
@@ -28,6 +28,7 @@ interface ReportExportModalProps {
   budgets?: Record<string, MonthBudget>;
   subAccounts?: SubAccount[];
   directorWithdrawals?: DirectorWithdrawal[];
+  companyProfile?: CompanyProfile;
 }
 
 export const ReportExportModal: React.FC<ReportExportModalProps> = ({
@@ -39,7 +40,8 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
   currentYearMonth,
   budgets = {},
   subAccounts = [],
-  directorWithdrawals = []
+  directorWithdrawals = [],
+  companyProfile
 }) => {
   if (!isOpen) return null;
 
@@ -70,7 +72,8 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
     categories,
     budgets,
     subAccounts,
-    directorWithdrawals
+    directorWithdrawals,
+    companyProfile
   };
 
   const handleExport = () => {

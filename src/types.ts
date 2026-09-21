@@ -30,6 +30,7 @@ export interface Transaction {
   rawVoucherId?: string; // 帳務小管家原生建檔模式編號 (例如：P20260907142530123，用於與小管家 100% 相容匯入匯出)
   subAccountSourceId?: string; // 若是由專款子帳戶匯入，記錄來源子帳戶 ID
   subAccountSourceName?: string; // 若是由專款子帳戶匯入，記錄子帳戶名稱
+  companyId?: string; // 所屬公司/行號 ID (支援 3 間關係企業獨立作帳與切換)
 }
 
 // 採買子帳號 (例如：小明每週午餐採買備用金5000元、工地臨時採買備用金等)
@@ -78,6 +79,149 @@ export interface MonthBudget {
   alertThresholdPercent: number; // 警戒百分比 (預設 20%，即零用金低於20%時發出請款撥補警示)
 }
 
+export interface CompanyProfile {
+  id: string; // e.g. 'comp_1', 'comp_2', 'comp_3'
+  name: string; // 公司全名 (如「宏揚精密工業股份有限公司」)
+  shortName?: string; // 公司簡稱 (如「宏揚精密」)
+  taxId?: string; // 統一編號 (8 碼)
+  representative?: string; // 負責人 / 代表人
+  phone?: string; // 公司代表號電話
+  fax?: string; // 傳真號碼
+  email?: string; // 電子郵件信箱
+  website?: string; // 官方網站
+  postalCode?: string; // 郵遞區號
+  address?: string; // 登記/營運地址
+  // 財務與匯款銀行帳號 (未來供表格、請款單、撥補匯款帶入)
+  bankName?: string; // 往來銀行 (如「臺灣銀行」)
+  bankBranch?: string; // 分行 (如「營業部」)
+  bankCode?: string; // 銀行代碼 (如「004」)
+  bankAccount?: string; // 帳號
+  accountName?: string; // 戶名
+  // 表格與簽核常用人員
+  chiefAccountant?: string; // 主辦會計 / 財務主管
+  cashier?: string; // 出納 / 零用金經管人
+  // 表單抬頭與發票設定
+  reportHeader?: string; // 報表列印大抬頭 (留空則預設顯示公司全名)
+  invoiceBuyerName?: string; // 常用發票買受人
+  taxInvoiceNote?: string; // 表格下方附註文字
+  color?: string; // 行號專屬識別色標 (如 #0066cc, #059669, #d97706)
+  isDefault?: boolean; // 是否為主要預設行號
+  sortOrder?: number;
+  updatedAt?: number;
+}
+
+export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
+  id: 'comp_1',
+  name: '宏揚精密工業股份有限公司',
+  shortName: '宏揚精密',
+  taxId: '84920193',
+  representative: '陳負責人',
+  phone: '02-2345-6789',
+  fax: '02-2345-6790',
+  email: 'finance@hongyang.com.tw',
+  website: '',
+  postalCode: '221',
+  address: '新北市汐止區新台五路一段100號',
+  bankName: '臺灣銀行 南港分行',
+  bankBranch: '南港分行',
+  bankCode: '004',
+  bankAccount: '004-012-3456789',
+  accountName: '宏揚精密工業股份有限公司',
+  chiefAccountant: '林會計',
+  cashier: '張出納',
+  reportHeader: '',
+  invoiceBuyerName: '宏揚精密工業股份有限公司',
+  taxInvoiceNote: '發票開立請開立三聯式發票並載明統一編號 84920193',
+  color: '#0066cc',
+  isDefault: true,
+  sortOrder: 1,
+  updatedAt: Date.now()
+};
+
+export const DEFAULT_COMPANIES: CompanyProfile[] = [
+  {
+    id: 'comp_1',
+    name: '宏揚精密工業股份有限公司',
+    shortName: '宏揚精密',
+    taxId: '84920193',
+    representative: '陳負責人',
+    phone: '02-2345-6789',
+    fax: '02-2345-6790',
+    email: 'finance@hongyang.com.tw',
+    website: '',
+    postalCode: '221',
+    address: '新北市汐止區新台五路一段100號',
+    bankName: '臺灣銀行 南港分行',
+    bankBranch: '南港分行',
+    bankCode: '004',
+    bankAccount: '004-012-3456789',
+    accountName: '宏揚精密工業股份有限公司',
+    chiefAccountant: '林會計',
+    cashier: '張出納',
+    reportHeader: '宏揚精密工業 零用金收支報表',
+    invoiceBuyerName: '宏揚精密工業股份有限公司',
+    taxInvoiceNote: '請開立三聯式發票，載明統編 84920193',
+    color: '#0066cc', // 經典海軍藍
+    isDefault: true,
+    sortOrder: 1,
+    updatedAt: Date.now()
+  },
+  {
+    id: 'comp_2',
+    name: '宏揚智能科技有限公司',
+    shortName: '宏揚科技',
+    taxId: '90218842',
+    representative: '陳負責人',
+    phone: '02-2345-6780',
+    fax: '02-2345-6791',
+    email: 'smart@hongyang.com.tw',
+    website: '',
+    postalCode: '114',
+    address: '台北市內湖區瑞光路500號',
+    bankName: '玉山銀行 內湖分行',
+    bankBranch: '內湖分行',
+    bankCode: '808',
+    bankAccount: '808-987-6543210',
+    accountName: '宏揚智能科技有限公司',
+    chiefAccountant: '林會計',
+    cashier: '張出納',
+    reportHeader: '宏揚智能科技 零用金收支月報表',
+    invoiceBuyerName: '宏揚智能科技有限公司',
+    taxInvoiceNote: '請開立三聯式發票，載明統編 90218842',
+    color: '#059669', // 翡翠綠
+    isDefault: false,
+    sortOrder: 2,
+    updatedAt: Date.now()
+  },
+  {
+    id: 'comp_3',
+    name: '弘揚工程商行',
+    shortName: '弘揚商行',
+    taxId: '38472910',
+    representative: '陳負責人',
+    phone: '02-2345-6788',
+    fax: '',
+    email: 'engineering@hongyang.com.tw',
+    website: '',
+    postalCode: '221',
+    address: '新北市汐止區工建路200號',
+    bankName: '第一銀行 汐止分行',
+    bankBranch: '汐止分行',
+    bankCode: '007',
+    bankAccount: '007-567-8901234',
+    accountName: '弘揚工程商行',
+    chiefAccountant: '林會計',
+    cashier: '張出納',
+    reportHeader: '弘揚工程商行 現金收支帳簿',
+    invoiceBuyerName: '弘揚工程商行',
+    taxInvoiceNote: '二聯式發票或收據請蓋公司/商行專用印章',
+    color: '#d97706', // 琥珀橘
+    isDefault: false,
+    sortOrder: 3,
+    updatedAt: Date.now()
+  }
+];
+
 export interface BackupData {
   version: string;
   exportedAt: string;
@@ -87,6 +231,8 @@ export interface BackupData {
   claimants?: string[];
   directorWithdrawals?: DirectorWithdrawal[];
   subAccounts?: SubAccount[];
+  companyProfile?: CompanyProfile;
+  companies?: CompanyProfile[];
 }
 
 export type RestoreScope = 'full' | 'settings_only' | 'transactions_only';

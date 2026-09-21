@@ -20,6 +20,11 @@ import {
   saveAllSubAccounts,
   getAllDirectorWithdrawals,
   saveAllDirectorWithdrawals,
+  getCompanyProfile,
+  getAllCompanyProfiles,
+  saveCompanyProfile,
+  saveAllCompanyProfiles,
+  deleteCompanyProfile,
   replaceWithDatabaseBinary,
   persist
 } from './server/db';
@@ -58,15 +63,25 @@ async function startServer() {
   // 一次性取得所有初始資料 (Bootstrap，大幅提升前端載入效能)
   app.get('/api/bootstrap', async (req, res) => {
     try {
-      const [transactions, categories, claimants, budgets, subAccounts, directorWithdrawals] =
-        await Promise.all([
-          getAllTransactions(),
-          getAllCategories(),
-          getAllClaimants(),
-          getAllBudgets(),
-          getAllSubAccounts(),
-          getAllDirectorWithdrawals()
-        ]);
+      const [
+        transactions,
+        categories,
+        claimants,
+        budgets,
+        subAccounts,
+        directorWithdrawals,
+        companyProfile,
+        companies
+      ] = await Promise.all([
+        getAllTransactions(),
+        getAllCategories(),
+        getAllClaimants(),
+        getAllBudgets(),
+        getAllSubAccounts(),
+        getAllDirectorWithdrawals(),
+        getCompanyProfile(),
+        getAllCompanyProfiles()
+      ]);
 
       res.json({
         success: true,
@@ -77,7 +92,9 @@ async function startServer() {
         claimants,
         budgets,
         subAccounts,
-        directorWithdrawals
+        directorWithdrawals,
+        companyProfile,
+        companies
       });
     } catch (err: any) {
       console.error('Error fetching bootstrap data:', err);
@@ -247,6 +264,80 @@ async function startServer() {
       }
       await saveAllDirectorWithdrawals(withdrawals);
       res.json({ success: true, data: withdrawals });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 公司基本設定與表格抬頭 API (支援多行號/關係企業)
+  app.get('/api/companies', async (req, res) => {
+    try {
+      const companies = await getAllCompanyProfiles();
+      res.json({ success: true, data: companies });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.put('/api/companies', async (req, res) => {
+    try {
+      const { companies } = req.body;
+      if (!Array.isArray(companies)) {
+        return res.status(400).json({ success: false, error: '格式錯誤，必須為公司陣列' });
+      }
+      await saveAllCompanyProfiles(companies);
+      const updated = await getAllCompanyProfiles();
+      res.json({ success: true, data: updated, message: '全數公司行號設定已成功儲存！' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.put('/api/companies/:id', async (req, res) => {
+    try {
+      const company = req.body;
+      if (!company || typeof company !== 'object') {
+        return res.status(400).json({ success: false, error: '格式錯誤' });
+      }
+      company.id = req.params.id;
+      await saveCompanyProfile(company);
+      const updated = await getAllCompanyProfiles();
+      res.json({ success: true, data: updated, message: '公司行號設定已更新！' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/companies/:id', async (req, res) => {
+    try {
+      const id = req.params.id;
+      await deleteCompanyProfile(id);
+      const updated = await getAllCompanyProfiles();
+      res.json({ success: true, data: updated, message: '公司行號已刪除' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/company-profile', async (req, res) => {
+    try {
+      const id = req.query.id as string | undefined;
+      const profile = await getCompanyProfile(id);
+      res.json({ success: true, data: profile });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.put('/api/company-profile', async (req, res) => {
+    try {
+      const profile = req.body;
+      if (!profile || typeof profile !== 'object') {
+        return res.status(400).json({ success: false, error: '格式錯誤' });
+      }
+      await saveCompanyProfile(profile);
+      const updated = await getCompanyProfile(profile.id);
+      res.json({ success: true, data: updated, message: '公司設定已成功儲存至 SQLite 資料庫！' });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }

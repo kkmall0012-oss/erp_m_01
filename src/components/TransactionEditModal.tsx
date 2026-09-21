@@ -8,9 +8,11 @@ import {
   AlertCircle,
   Clock,
   ShieldCheck,
-  Receipt
+  Receipt,
+  Building2,
+  Check
 } from 'lucide-react';
-import { CategoryConfig, Transaction, ReceiptType } from '../types';
+import { CategoryConfig, Transaction, ReceiptType, CompanyProfile } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
 
 interface TransactionEditModalProps {
@@ -19,6 +21,7 @@ interface TransactionEditModalProps {
   transaction: Transaction | null;
   categories: CategoryConfig[];
   claimants: string[];
+  companies?: CompanyProfile[];
   onSave: (updatedTransaction: Transaction) => void;
   onDelete?: (id: string) => void;
 }
@@ -29,6 +32,7 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
   transaction,
   categories,
   claimants,
+  companies = [],
   onSave,
   onDelete
 }) => {
@@ -43,6 +47,7 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [note, setNote] = useState<string>('');
+  const [companyId, setCompanyId] = useState<string>('comp_1');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
 
@@ -58,10 +63,11 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
       setInvoiceNumber(transaction.invoiceNumber || '');
       setAmount(String(transaction.amount));
       setNote(transaction.note || '');
+      setCompanyId(transaction.companyId || (companies[0]?.id || 'comp_1'));
       setErrorMessage('');
       setShowDeleteConfirm(false);
     }
-  }, [transaction]);
+  }, [transaction, companies]);
 
   // 取得所屬分類物件 (若為收入，優先匹配收入大類，確保自訂細項正確掛鉤)
   const currentCategory = useMemo(() => {
@@ -118,7 +124,8 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
       peopleCount: isDining ? (peopleCount > 0 ? peopleCount : 1) : undefined,
       claimant: isExpense ? claimant : undefined,
       receiptType: isExpense ? receiptType : undefined,
-      invoiceNumber: isExpense && receiptType === 'invoice' ? (invoiceNumber.trim() ? invoiceNumber.trim().toUpperCase() : undefined) : undefined
+      invoiceNumber: isExpense && receiptType === 'invoice' ? (invoiceNumber.trim() ? invoiceNumber.trim().toUpperCase() : undefined) : undefined,
+      companyId: companyId
     };
 
     onSave(updated);
@@ -200,6 +207,44 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
               {isExpense ? '🔴 支出開銷' : '🟢 撥補補充'}
             </span>
           </div>
+
+          {/* 🏢 帳單歸屬公司行號 (三間關係企業切換) */}
+          {companies.length > 0 && (
+            <div className="bg-stone-50 p-3 rounded-xl border border-stone-200">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-[#0066cc]" />
+                  <span>歸屬關係企業/行號：</span>
+                </label>
+                <span className="text-[10px] text-stone-400 font-mono">
+                  統編：{companies.find(c => c.id === companyId)?.taxId || '未設定'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {companies.map(c => {
+                  const isSelected = companyId === c.id;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setCompanyId(c.id)}
+                      className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+                        isSelected
+                          ? 'border-[#0066cc] bg-white text-[#0066cc] shadow-2xs ring-2 ring-[#0066cc]/15'
+                          : 'border-stone-200 bg-white/60 text-stone-600 hover:bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 truncate">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: c.color || '#0066cc' }} />
+                        <span className="truncate">{c.shortName || c.name}</span>
+                      </div>
+                      {isSelected && <Check className="w-3 h-3 text-[#0066cc] shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* 日期與主分類 */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -31,6 +31,7 @@ export interface TransactionRow {
   rawVoucherId?: string;
   subAccountSourceId?: string;
   subAccountSourceName?: string;
+  companyId?: string;
 }
 
 export interface MonthBudgetRow {
@@ -76,6 +77,119 @@ export interface DirectorWithdrawalRow {
   note?: string;
   createdAt: number;
 }
+
+export interface CompanyProfileRow {
+  id: string;
+  name: string;
+  shortName?: string;
+  taxId?: string;
+  representative?: string;
+  phone?: string;
+  fax?: string;
+  email?: string;
+  website?: string;
+  postalCode?: string;
+  address?: string;
+  bankName?: string;
+  bankBranch?: string;
+  bankCode?: string;
+  bankAccount?: string;
+  accountName?: string;
+  chiefAccountant?: string;
+  cashier?: string;
+  reportHeader?: string;
+  invoiceBuyerName?: string;
+  taxInvoiceNote?: string;
+  color?: string;
+  isDefault?: boolean;
+  sortOrder?: number;
+  updatedAt: number;
+}
+
+// 預設 3 間關係企業/行號主檔種子
+export const DEFAULT_COMPANIES_SEED: CompanyProfileRow[] = [
+  {
+    id: 'comp_1',
+    name: '宏揚精密工業股份有限公司',
+    shortName: '宏揚精密',
+    taxId: '84920193',
+    representative: '陳負責人',
+    phone: '02-2345-6789',
+    fax: '02-2345-6790',
+    email: 'finance@hongyang.com.tw',
+    website: '',
+    postalCode: '221',
+    address: '新北市汐止區新台五路一段100號',
+    bankName: '臺灣銀行 南港分行',
+    bankBranch: '南港分行',
+    bankCode: '004',
+    bankAccount: '004-012-3456789',
+    accountName: '宏揚精密工業股份有限公司',
+    chiefAccountant: '林會計',
+    cashier: '張出納',
+    reportHeader: '宏揚精密工業 零用金收支報表',
+    invoiceBuyerName: '宏揚精密工業股份有限公司',
+    taxInvoiceNote: '請開立三聯式發票，載明統編 84920193',
+    color: '#0066cc',
+    isDefault: true,
+    sortOrder: 1,
+    updatedAt: Date.now()
+  },
+  {
+    id: 'comp_2',
+    name: '宏揚智能科技有限公司',
+    shortName: '宏揚科技',
+    taxId: '90218842',
+    representative: '陳負責人',
+    phone: '02-2345-6780',
+    fax: '02-2345-6791',
+    email: 'smart@hongyang.com.tw',
+    website: '',
+    postalCode: '114',
+    address: '台北市內湖區瑞光路500號',
+    bankName: '玉山銀行 內湖分行',
+    bankBranch: '內湖分行',
+    bankCode: '808',
+    bankAccount: '808-987-6543210',
+    accountName: '宏揚智能科技有限公司',
+    chiefAccountant: '林會計',
+    cashier: '張出納',
+    reportHeader: '宏揚智能科技 零用金收支月報表',
+    invoiceBuyerName: '宏揚智能科技有限公司',
+    taxInvoiceNote: '請開立三聯式發票，載明統編 90218842',
+    color: '#059669',
+    isDefault: false,
+    sortOrder: 2,
+    updatedAt: Date.now()
+  },
+  {
+    id: 'comp_3',
+    name: '弘揚工程商行',
+    shortName: '弘揚商行',
+    taxId: '38472910',
+    representative: '陳負責人',
+    phone: '02-2345-6788',
+    fax: '',
+    email: 'engineering@hongyang.com.tw',
+    website: '',
+    postalCode: '221',
+    address: '新北市汐止區工建路200號',
+    bankName: '第一銀行 汐止分行',
+    bankBranch: '汐止分行',
+    bankCode: '007',
+    bankAccount: '007-567-8901234',
+    accountName: '弘揚工程商行',
+    chiefAccountant: '林會計',
+    cashier: '張出納',
+    reportHeader: '弘揚工程商行 現金收支帳簿',
+    invoiceBuyerName: '弘揚工程商行',
+    taxInvoiceNote: '二聯式發票或收據請蓋商行專用印章',
+    color: '#d97706',
+    isDefault: false,
+    sortOrder: 3,
+    updatedAt: Date.now()
+  }
+];
 
 // 預設分類種子資料
 const INITIAL_CATEGORIES: CategoryConfigRow[] = [
@@ -239,7 +353,123 @@ function initSchema(database: Database) {
       note TEXT,
       createdAt INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS company_profile (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      shortName TEXT,
+      taxId TEXT,
+      representative TEXT,
+      phone TEXT,
+      fax TEXT,
+      email TEXT,
+      website TEXT,
+      postalCode TEXT,
+      address TEXT,
+      bankName TEXT,
+      bankBranch TEXT,
+      bankCode TEXT,
+      bankAccount TEXT,
+      accountName TEXT,
+      chiefAccountant TEXT,
+      cashier TEXT,
+      reportHeader TEXT,
+      invoiceBuyerName TEXT,
+      taxInvoiceNote TEXT,
+      color TEXT,
+      isDefault INTEGER DEFAULT 0,
+      sortOrder INTEGER DEFAULT 0,
+      updatedAt INTEGER NOT NULL
+    );
   `);
+
+  // 欄位升級防護
+  try { database.run(`ALTER TABLE transactions ADD COLUMN companyId TEXT`); } catch (e) {}
+  try { database.run(`ALTER TABLE company_profile ADD COLUMN color TEXT`); } catch (e) {}
+  try { database.run(`ALTER TABLE company_profile ADD COLUMN isDefault INTEGER DEFAULT 0`); } catch (e) {}
+  try { database.run(`ALTER TABLE company_profile ADD COLUMN sortOrder INTEGER DEFAULT 0`); } catch (e) {}
+
+  // 檢查既有行號主檔，並初始化 3 間關係企業
+  const cpCountRes = database.exec('SELECT COUNT(*) AS cnt FROM company_profile');
+  const cpCount = (cpCountRes[0]?.values[0]?.[0] as number) || 0;
+  
+  if (cpCount === 0) {
+    DEFAULT_COMPANIES_SEED.forEach((cp) => {
+      database.run(
+        `INSERT INTO company_profile (
+          id, name, shortName, taxId, representative, phone, fax, email, website,
+          postalCode, address, bankName, bankBranch, bankCode, bankAccount, accountName,
+          chiefAccountant, cashier, reportHeader, invoiceBuyerName, taxInvoiceNote,
+          color, isDefault, sortOrder, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          cp.id, cp.name, cp.shortName || null, cp.taxId || null, cp.representative || null,
+          cp.phone || null, cp.fax || null, cp.email || null, cp.website || null,
+          cp.postalCode || null, cp.address || null, cp.bankName || null, cp.bankBranch || null,
+          cp.bankCode || null, cp.bankAccount || null, cp.accountName || null,
+          cp.chiefAccountant || null, cp.cashier || null, cp.reportHeader || null,
+          cp.invoiceBuyerName || null, cp.taxInvoiceNote || null,
+          cp.color || '#0066cc', cp.isDefault ? 1 : 0, cp.sortOrder || 1, cp.updatedAt
+        ]
+      );
+    });
+  } else if (cpCount === 1) {
+    // 若只有 default 一筆且是空白佔位，替換為 3 間示範企業；若是真實資料則重命名為 comp_1 並補齊 comp_2, comp_3
+    const defRes = database.exec(`SELECT * FROM company_profile WHERE id = 'default' LIMIT 1`);
+    if (defRes && defRes.length > 0 && defRes[0].values.length > 0) {
+      const defaultName = String(defRes[0].values[0][1] || '');
+      if (defaultName.includes('您的公司全名')) {
+        database.run(`DELETE FROM company_profile WHERE id = 'default'`);
+        DEFAULT_COMPANIES_SEED.forEach((cp) => {
+          database.run(
+            `INSERT INTO company_profile (
+              id, name, shortName, taxId, representative, phone, fax, email, website,
+              postalCode, address, bankName, bankBranch, bankCode, bankAccount, accountName,
+              chiefAccountant, cashier, reportHeader, invoiceBuyerName, taxInvoiceNote,
+              color, isDefault, sortOrder, updatedAt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              cp.id, cp.name, cp.shortName || null, cp.taxId || null, cp.representative || null,
+              cp.phone || null, cp.fax || null, cp.email || null, cp.website || null,
+              cp.postalCode || null, cp.address || null, cp.bankName || null, cp.bankBranch || null,
+              cp.bankCode || null, cp.bankAccount || null, cp.accountName || null,
+              cp.chiefAccountant || null, cp.cashier || null, cp.reportHeader || null,
+              cp.invoiceBuyerName || null, cp.taxInvoiceNote || null,
+              cp.color || '#0066cc', cp.isDefault ? 1 : 0, cp.sortOrder || 1, cp.updatedAt
+            ]
+          );
+        });
+      } else {
+        database.run(`UPDATE company_profile SET id = 'comp_1', isDefault = 1, sortOrder = 1, color = '#0066cc' WHERE id = 'default'`);
+        // 補上第二、第三家公司
+        const otherSeeds = DEFAULT_COMPANIES_SEED.filter(c => c.id !== 'comp_1');
+        otherSeeds.forEach((cp) => {
+          database.run(
+            `INSERT OR IGNORE INTO company_profile (
+              id, name, shortName, taxId, representative, phone, fax, email, website,
+              postalCode, address, bankName, bankBranch, bankCode, bankAccount, accountName,
+              chiefAccountant, cashier, reportHeader, invoiceBuyerName, taxInvoiceNote,
+              color, isDefault, sortOrder, updatedAt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              cp.id, cp.name, cp.shortName || null, cp.taxId || null, cp.representative || null,
+              cp.phone || null, cp.fax || null, cp.email || null, cp.website || null,
+              cp.postalCode || null, cp.address || null, cp.bankName || null, cp.bankBranch || null,
+              cp.bankCode || null, cp.bankAccount || null, cp.accountName || null,
+              cp.chiefAccountant || null, cp.cashier || null, cp.reportHeader || null,
+              cp.invoiceBuyerName || null, cp.taxInvoiceNote || null,
+              cp.color || '#059669', 0, cp.sortOrder || 2, cp.updatedAt
+            ]
+          );
+        });
+      }
+    }
+  }
+
+  // 確保舊交易若無 companyId 預設補為 comp_1
+  try {
+    database.run(`UPDATE transactions SET companyId = 'comp_1' WHERE companyId IS NULL OR companyId = ''`);
+  } catch (e) {}
 
   // Seed default categories if empty
   const catCountRes = database.exec('SELECT COUNT(*) AS cnt FROM categories');
@@ -316,7 +546,8 @@ export async function getAllTransactions(): Promise<TransactionRow[]> {
       voucherNo: obj.voucherNo || undefined,
       rawVoucherId: obj.rawVoucherId || undefined,
       subAccountSourceId: obj.subAccountSourceId || undefined,
-      subAccountSourceName: obj.subAccountSourceName || undefined
+      subAccountSourceName: obj.subAccountSourceName || undefined,
+      companyId: obj.companyId ? String(obj.companyId) : 'comp_1'
     };
   });
 }
@@ -327,8 +558,8 @@ export async function addTransaction(t: TransactionRow): Promise<void> {
     `INSERT OR REPLACE INTO transactions (
       id, date, type, categoryId, categoryName, subItem, claimant, peopleCount,
       amount, note, createdAt, receiptType, invoiceNumber, voucherNo, rawVoucherId,
-      subAccountSourceId, subAccountSourceName
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      subAccountSourceId, subAccountSourceName, companyId
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       t.id,
       t.date,
@@ -346,7 +577,8 @@ export async function addTransaction(t: TransactionRow): Promise<void> {
       t.voucherNo || null,
       t.rawVoucherId || null,
       t.subAccountSourceId || null,
-      t.subAccountSourceName || null
+      t.subAccountSourceName || null,
+      t.companyId || 'comp_1'
     ]
   );
   persist();
@@ -370,8 +602,8 @@ export async function replaceAllTransactions(transactions: TransactionRow[]): Pr
       `INSERT INTO transactions (
         id, date, type, categoryId, categoryName, subItem, claimant, peopleCount,
         amount, note, createdAt, receiptType, invoiceNumber, voucherNo, rawVoucherId,
-        subAccountSourceId, subAccountSourceName
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        subAccountSourceId, subAccountSourceName, companyId
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         t.id,
         t.date,
@@ -389,7 +621,8 @@ export async function replaceAllTransactions(transactions: TransactionRow[]): Pr
         t.voucherNo || null,
         t.rawVoucherId || null,
         t.subAccountSourceId || null,
-        t.subAccountSourceName || null
+        t.subAccountSourceName || null,
+        t.companyId || 'comp_1'
       ]
     );
   }
@@ -572,6 +805,132 @@ export async function saveAllDirectorWithdrawals(withdrawals: DirectorWithdrawal
       [w.id, w.date, w.amount, w.note || null, w.createdAt]
     );
   });
+  persist();
+}
+
+export function mapRowToCompanyProfile(obj: any): CompanyProfileRow {
+  return {
+    id: String(obj.id || 'comp_1'),
+    name: String(obj.name || ''),
+    shortName: obj.shortName ? String(obj.shortName) : '',
+    taxId: obj.taxId ? String(obj.taxId) : '',
+    representative: obj.representative ? String(obj.representative) : '',
+    phone: obj.phone ? String(obj.phone) : '',
+    fax: obj.fax ? String(obj.fax) : '',
+    email: obj.email ? String(obj.email) : '',
+    website: obj.website ? String(obj.website) : '',
+    postalCode: obj.postalCode ? String(obj.postalCode) : '',
+    address: obj.address ? String(obj.address) : '',
+    bankName: obj.bankName ? String(obj.bankName) : '',
+    bankBranch: obj.bankBranch ? String(obj.bankBranch) : '',
+    bankCode: obj.bankCode ? String(obj.bankCode) : '',
+    bankAccount: obj.bankAccount ? String(obj.bankAccount) : '',
+    accountName: obj.accountName ? String(obj.accountName) : '',
+    chiefAccountant: obj.chiefAccountant ? String(obj.chiefAccountant) : '',
+    cashier: obj.cashier ? String(obj.cashier) : '',
+    reportHeader: obj.reportHeader ? String(obj.reportHeader) : '',
+    invoiceBuyerName: obj.invoiceBuyerName ? String(obj.invoiceBuyerName) : '',
+    taxInvoiceNote: obj.taxInvoiceNote ? String(obj.taxInvoiceNote) : '',
+    color: obj.color ? String(obj.color) : '#0066cc',
+    isDefault: Boolean(obj.isDefault),
+    sortOrder: Number(obj.sortOrder || 1),
+    updatedAt: Number(obj.updatedAt || Date.now())
+  };
+}
+
+export async function getAllCompanyProfiles(): Promise<CompanyProfileRow[]> {
+  const database = await getDb();
+  const res = database.exec(`SELECT * FROM company_profile ORDER BY sortOrder ASC, id ASC`);
+  if (!res || res.length === 0 || !res[0].values.length) {
+    return DEFAULT_COMPANIES_SEED;
+  }
+  const columns = res[0].columns;
+  return res[0].values.map((row) => {
+    const obj: any = {};
+    columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+    return mapRowToCompanyProfile(obj);
+  });
+}
+
+export async function getCompanyProfile(id?: string): Promise<CompanyProfileRow> {
+  const database = await getDb();
+  let query = `SELECT * FROM company_profile WHERE isDefault = 1 LIMIT 1`;
+  if (id) {
+    query = `SELECT * FROM company_profile WHERE id = '${id.replace(/'/g, "''")}' LIMIT 1`;
+  }
+  let res = database.exec(query);
+  if (!res || res.length === 0 || !res[0].values.length) {
+    res = database.exec(`SELECT * FROM company_profile ORDER BY sortOrder ASC LIMIT 1`);
+  }
+  if (!res || res.length === 0 || !res[0].values.length) {
+    return DEFAULT_COMPANIES_SEED[0];
+  }
+
+  const columns = res[0].columns;
+  const row = res[0].values[0];
+  const obj: any = {};
+  columns.forEach((col, i) => {
+    obj[col] = row[i];
+  });
+
+  return mapRowToCompanyProfile(obj);
+}
+
+export async function saveCompanyProfile(profile: CompanyProfileRow): Promise<void> {
+  const database = await getDb();
+  if (profile.isDefault) {
+    database.run(`UPDATE company_profile SET isDefault = 0 WHERE id != ?`, [profile.id]);
+  }
+  database.run(
+    `INSERT OR REPLACE INTO company_profile (
+      id, name, shortName, taxId, representative, phone, fax, email, website,
+      postalCode, address, bankName, bankBranch, bankCode, bankAccount, accountName,
+      chiefAccountant, cashier, reportHeader, invoiceBuyerName, taxInvoiceNote,
+      color, isDefault, sortOrder, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      profile.id || 'comp_1',
+      profile.name || '公司名稱',
+      profile.shortName || null,
+      profile.taxId || null,
+      profile.representative || null,
+      profile.phone || null,
+      profile.fax || null,
+      profile.email || null,
+      profile.website || null,
+      profile.postalCode || null,
+      profile.address || null,
+      profile.bankName || null,
+      profile.bankBranch || null,
+      profile.bankCode || null,
+      profile.bankAccount || null,
+      profile.accountName || null,
+      profile.chiefAccountant || null,
+      profile.cashier || null,
+      profile.reportHeader || null,
+      profile.invoiceBuyerName || null,
+      profile.taxInvoiceNote || null,
+      profile.color || '#0066cc',
+      profile.isDefault ? 1 : 0,
+      profile.sortOrder ?? 1,
+      Date.now()
+    ]
+  );
+  persist();
+}
+
+export async function saveAllCompanyProfiles(profiles: CompanyProfileRow[]): Promise<void> {
+  for (const profile of profiles) {
+    await saveCompanyProfile(profile);
+  }
+  persist();
+}
+
+export async function deleteCompanyProfile(id: string): Promise<void> {
+  const database = await getDb();
+  database.run(`DELETE FROM company_profile WHERE id = ?`, [id]);
   persist();
 }
 
