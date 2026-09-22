@@ -20,11 +20,12 @@ import {
   BackupData, 
   DirectorWithdrawal, 
   SubAccount, 
+  CompanyProfile,
   RestoreScope, 
   RestoreOptions 
 } from '../types';
 import { exportBackupJSON, parseBackupJSON } from '../utils/storage';
-import { triggerDownloadSqliteFile, uploadSqliteFileApi } from '../services/api';
+import { triggerDownloadSqliteFile, triggerDownloadSqlDumpFile, uploadSqliteFileApi } from '../services/api';
 import { ConfirmDialog } from './ConfirmDialog';
 
 interface BackupModalProps {
@@ -36,6 +37,8 @@ interface BackupModalProps {
   claimants?: string[];
   directorWithdrawals?: DirectorWithdrawal[];
   subAccounts?: SubAccount[];
+  companies?: CompanyProfile[];
+  companyProfile?: CompanyProfile;
   onRestoreBackup: (data: BackupData, options?: RestoreOptions) => void;
   onClearAllData: () => void;
   onReloadAllData?: () => void;
@@ -50,6 +53,8 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   claimants,
   directorWithdrawals,
   subAccounts,
+  companies,
+  companyProfile,
   onRestoreBackup,
   onClearAllData,
   onReloadAllData
@@ -68,10 +73,16 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   // 下載實體 SQLite 資料庫檔案 (帶著走)
   const handleDownloadSqlite = () => {
     triggerDownloadSqliteFile();
-    setRestoreStatus('已開始下載 SQLite 實體資料庫檔案 (petty_cash.sqlite)！可直接存放隨身碟帶著走。');
+    setRestoreStatus('已開始下載 SQLite 實體資料庫檔案 (petty_cash.sqlite)！包含全部公司主檔與所有帳目，可直接存放隨身碟帶著走。');
   };
 
-  // 匯入實體 SQLite 資料庫檔案 (換機直接置換)
+  // 下載純文字標準 SQL 語法備份檔 (.sql)
+  const handleDownloadSqlDump = () => {
+    triggerDownloadSqlDumpFile();
+    setRestoreStatus('已開始下載標準 SQL 語法備份檔 (.sql)！包含全部 7 大資料表與所有公司設定主檔。');
+  };
+
+  // 匯入實體 SQLite 資料庫檔案、.sql 腳本或備份 (換機直接置換)
   const handleSqliteFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -79,13 +90,25 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     try {
       setIsUploadingSqlite(true);
       setErrorMessage('');
-      await uploadSqliteFileApi(file);
-      setRestoreStatus('🎉 SQLite 資料庫實體檔案已成功載入並替換！');
+      setRestoreStatus('');
+
+      const fileName = file.name.toLowerCase();
+      if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+        setErrorMessage('⚠️ 您選取的是 Excel 試算表檔案，若要匯入多筆記帳明細，請關閉此視窗並至主畫面點選【快速匯入】。');
+        return;
+      }
+      if (fileName.endsWith('.csv')) {
+        setErrorMessage('⚠️ 您選取的是 CSV 試算表文字檔，若要匯入收支資料，請關閉此視窗並至主畫面點選【快速匯入】。');
+        return;
+      }
+
+      const res = await uploadSqliteFileApi(file);
+      setRestoreStatus(res.message || '🎉 資料庫已成功載入並替換！所有公司設定與帳目已 100% 恢復！');
       if (onReloadAllData) {
-        onReloadAllData();
+        await onReloadAllData();
       }
     } catch (err: any) {
-      setErrorMessage(err.message || '載入 SQLite 資料庫失敗');
+      setErrorMessage(err.message || '載入資料庫檔案失敗');
     } finally {
       setIsUploadingSqlite(false);
       e.target.value = '';
@@ -94,7 +117,17 @@ export const BackupModal: React.FC<BackupModalProps> = ({
 
   // 下載 JSON 備份檔
   const handleDownloadBackup = () => {
-    exportBackupJSON(transactions, categories, budgets, claimants, directorWithdrawals, subAccounts);
+    exportBackupJSON(
+      transactions,
+      categories,
+      budgets,
+      claimants,
+      directorWithdrawals,
+      subAccounts,
+      companies,
+      companyProfile
+    );
+    setRestoreStatus('已下載完整 JSON 備份檔！包含全部公司主檔、收支明細與系統設定。');
   };
 
   // 匯入 JSON 備份檔
@@ -156,7 +189,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           )}
 
           {/* 無期限永久保存與換機遷移說明 */}
-          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200/80 space-y-2">
+          <div className="p-4 rounded-xl bg-stone-50 border border-stone-200/80 space-y-2.5">
             <div className="flex items-center gap-1.5 text-stone-900 font-bold">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
               <span>全歷史資料無年限限制 · 換機遷移 100% 一模一樣</span>
@@ -164,21 +197,32 @@ export const BackupModal: React.FC<BackupModalProps> = ({
             <p className="text-stone-600 leading-relaxed">
               本備份功能<strong>包含系統全部歷史資料，沒有任何年份或時間限制</strong>。不論是 5 年、10 年或更久的每一筆收支流水、發票憑證、傳票編號、自訂科目與專款子帳，都會完整打包無損保存。
             </p>
+            <div className="p-3 bg-emerald-50/90 border border-emerald-300 rounded-xl text-stone-800 space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-emerald-950">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>公司基本資料與所有關係企業設定已 100% 完整納入資料庫備份</span>
+              </div>
+              <p className="text-stone-600 leading-relaxed pl-5 text-[11px]">
+                公司全名、統一編號、負責人、電話地址、銀行帳號、會計出納與報表抬頭，皆完整儲存於 SQLite 資料庫的 <code className="px-1.5 py-0.5 rounded bg-white font-mono font-bold text-emerald-800 border border-emerald-200">company_profile</code> 資料表。出問題時只要匯出的資料庫備份檔案還在，直接上傳還原即可立刻恢復、馬上繼續使用！
+              </p>
+            </div>
             <p className="text-stone-600 leading-relaxed">
               <strong>關於換機「還原」機制</strong>：還原功能採用<strong>「鏡像覆蓋寫入」</strong>。在新機器執行還原時，系統會先清空新機器的初始範例資料，再將備份檔中的真實資料完全寫入，確保新機器與原先機器<strong>100% 一模一樣</strong>，絕不會發生舊資料殘留或帳目重複疊加問題。
             </p>
-            <ul className="list-disc pl-5 space-y-1 text-stone-600">
-              <li><strong>匯出遷移</strong>：點擊「下載完整資料庫備份檔 (.json)」，將檔案存至隨身碟或雲端硬碟。</li>
-              <li><strong>新機還原</strong>：在新電腦開啟系統，點擊「選擇檔案進行資料還原」，選取該 .json 檔案即可瞬間恢復。</li>
-            </ul>
           </div>
 
           {/* 目前資料庫狀態 */}
-          <div className="grid grid-cols-3 gap-3 p-3.5 bg-stone-100/60 rounded-xl border border-stone-200">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3.5 bg-stone-100/60 rounded-xl border border-stone-200">
             <div>
               <span className="text-[11px] text-stone-500 block">目前記帳筆數</span>
               <span className="text-sm font-bold text-stone-900 font-mono">
                 {transactions.length} 筆
+              </span>
+            </div>
+            <div>
+              <span className="text-[11px] text-stone-500 block">公司設定主檔</span>
+              <span className="text-sm font-bold text-emerald-800 font-mono">
+                {companies?.length || 1} 家行號
               </span>
             </div>
             <div>
@@ -191,53 +235,107 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               <span className="text-[11px] text-stone-500 block">儲存核心技術</span>
               <span className="text-xs font-bold text-emerald-700 font-mono flex items-center gap-1 mt-0.5">
                 <HardDrive className="w-3.5 h-3.5" />
-                SQLite 3 實體檔案
+                SQLite 3 實體庫
               </span>
             </div>
           </div>
 
-          {/* SQLite 資料庫帶著走專用管理專區 */}
+          {/* 資料庫匯出與帶著走專用專區 */}
           <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-300/80 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="p-1 rounded-md bg-emerald-700 text-white">
-                  <Database className="w-3.5 h-3.5" />
+                <div className="p-1.5 rounded-lg bg-emerald-700 text-white">
+                  <Database className="w-4 h-4" />
                 </div>
                 <div>
                   <h4 className="font-bold text-stone-900 text-xs">
-                    SQLite 資料庫實體檔案（帶著走隨身攜帶專區）
+                    資料庫匯出備份專區（100% 完整收錄 7 大核心資料表與公司設定）
                   </h4>
-                  <p className="text-[11px] text-emerald-900">
-                    系統資料直接保存於伺服器檔案 <code className="px-1 py-0.5 rounded-sm bg-emerald-100 font-mono font-bold text-emerald-800">data/petty_cash.sqlite</code>，完全不依賴瀏覽器快取。
+                  <p className="text-[11px] text-emerald-900 mt-0.5">
+                    實體存於伺服器檔案 <code className="px-1 py-0.5 rounded-sm bg-emerald-100 font-mono font-bold text-emerald-800">data/petty_cash.sqlite</code>。提供 SQLite 原生實體庫、標準 SQL 語法指令檔與 JSON 備份檔任選。
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-              {/* 下載 SQLite 實體檔 */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+              {/* 1. 下載 SQLite 實體檔 */}
               <button
                 type="button"
                 onClick={handleDownloadSqlite}
-                className="p-3 rounded-xl border border-emerald-400 bg-white hover:bg-emerald-50 text-left transition-all flex items-center justify-between group cursor-pointer shadow-2xs"
+                className="p-3 rounded-xl border border-emerald-400 bg-white hover:bg-emerald-50 text-left transition-all flex flex-col justify-between group cursor-pointer shadow-2xs"
               >
                 <div>
                   <span className="font-bold text-emerald-950 block text-xs flex items-center gap-1.5">
-                    <Download className="w-3.5 h-3.5 text-emerald-700" />
-                    下載 SQLite 資料庫檔 (.sqlite)
+                    <Download className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                    下載 SQLite 檔 (.sqlite)
                   </span>
-                  <span className="text-[10px] text-stone-500 mt-0.5 block">
-                    可存放隨身碟攜帶，或以 SQLite 工具開啟
+                  <span className="text-[10px] text-stone-500 mt-1 block leading-normal">
+                    二進位原生資料庫，隨身碟攜帶直接置換換機
                   </span>
                 </div>
               </button>
 
-              {/* 載入/替換 SQLite 實體檔 */}
+              {/* 2. 下載標準 SQL 語法檔 (.sql) */}
+              <button
+                type="button"
+                onClick={handleDownloadSqlDump}
+                className="p-3 rounded-xl border border-blue-400 bg-white hover:bg-blue-50 text-left transition-all flex flex-col justify-between group cursor-pointer shadow-2xs"
+              >
+                <div>
+                  <span className="font-bold text-blue-950 block text-xs flex items-center gap-1.5">
+                    <Download className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+                    下載 SQL 語法檔 (.sql)
+                  </span>
+                  <span className="text-[10px] text-stone-500 mt-1 block leading-normal">
+                    純文字標準 SQL 指令（含全公司主檔與流水帳 INSERT）
+                  </span>
+                </div>
+              </button>
+
+              {/* 3. 下載 JSON 備份檔 */}
+              <button
+                id="download-backup-btn"
+                type="button"
+                onClick={handleDownloadBackup}
+                className="p-3 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-left transition-all flex flex-col justify-between group cursor-pointer shadow-2xs"
+              >
+                <div>
+                  <span className="font-bold text-stone-900 block text-xs flex items-center gap-1.5">
+                    <Download className="w-3.5 h-3.5 text-stone-700 shrink-0" />
+                    下載 JSON 備份 (.json)
+                  </span>
+                  <span className="text-[10px] text-stone-500 mt-1 block leading-normal">
+                    結構化文字備份，跨系統相容性最高
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* 換機還原專區 */}
+          <div className="p-4 rounded-xl bg-stone-50 border border-stone-300 space-y-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-stone-800 text-white">
+                <Upload className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="font-bold text-stone-900 text-xs">
+                  換機資料庫鏡像還原（支援 .sqlite / .sql / .json）
+                </h4>
+                <p className="text-[11px] text-stone-500">
+                  出問題或換電腦時，選取上述任一種備份檔，即可一鍵秒級鏡像還原，所有公司設定與收支流水帳馬上恢復正常使用。
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              {/* 載入/替換 SQLite 實體檔、.sql 腳本或 JSON 備份 */}
               <div>
                 <input
                   ref={sqliteInputRef}
                   type="file"
-                  accept=".sqlite,.db"
+                  accept=".sqlite,.db,.sql,.json"
                   onChange={handleSqliteFileChange}
                   className="hidden"
                 />
@@ -245,81 +343,52 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                   type="button"
                   disabled={isUploadingSqlite}
                   onClick={() => sqliteInputRef.current?.click()}
-                  className="w-full p-3 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-left transition-all flex items-center justify-between group cursor-pointer shadow-2xs"
+                  className="w-full p-3.5 rounded-xl border-2 border-dashed border-emerald-400 bg-emerald-50/40 hover:bg-emerald-50 text-left transition-all flex flex-col justify-between group cursor-pointer"
                 >
-                  <div>
-                    <span className="font-bold text-stone-900 block text-xs flex items-center gap-1.5">
-                      <Upload className="w-3.5 h-3.5 text-stone-700" />
-                      {isUploadingSqlite ? '載入處理中...' : '載入 SQLite 資料庫檔 (.sqlite)'}
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-bold text-emerald-950 text-xs flex items-center gap-1.5">
+                      <Upload className="w-4 h-4 text-emerald-700" />
+                      {isUploadingSqlite ? '資料庫還原中...' : '選取資料庫備份檔還原'}
                     </span>
-                    <span className="text-[10px] text-stone-500 mt-0.5 block">
-                      換機或從隨身碟拷貝過來的實體庫直接置換
+                    <span className="text-[10px] font-bold text-emerald-800 bg-white px-2 py-0.5 rounded-full border border-emerald-300">
+                      一鍵全庫覆蓋
                     </span>
                   </div>
+                  <span className="text-[10px] text-stone-500 mt-1.5 block">
+                    支援 <strong className="text-emerald-900">.sqlite / .sql / .json</strong> 任一檔案，自動寫入 SQLite 資料庫並重新載入
+                  </span>
                 </button>
               </div>
-            </div>
-          </div>
 
-          {/* 備份與還原主要按鈕 (JSON 快照) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-            {/* 下載備份 */}
-            <button
-              id="download-backup-btn"
-              type="button"
-              onClick={handleDownloadBackup}
-              className="p-4 rounded-xl border border-emerald-300 bg-emerald-50/60 hover:bg-emerald-100/80 text-left transition-all flex flex-col justify-between group"
-            >
-              <div className="flex items-center justify-between">
-                <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
-                  <Download className="w-4 h-4" />
-                </div>
-                <span className="text-[11px] font-bold text-emerald-700 bg-white px-2 py-0.5 rounded-full border border-emerald-200">
-                  推薦定期執行
-                </span>
-              </div>
-              <div className="mt-3">
-                <span className="font-bold text-stone-900 block text-xs">
-                  1. 下載完整資料庫備份檔 (.json)
-                </span>
-                <span className="text-[11px] text-stone-500 mt-0.5 block leading-normal">
-                  包含全部歷史流水帳、店家名單與預算設定
-                </span>
-              </div>
-            </button>
-
-            {/* 匯入還原 */}
-            <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                onChange={handleFileChange}
-                className="hidden"
-              />
-              <button
-                id="restore-backup-btn"
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full h-full p-4 rounded-xl border border-stone-300 bg-stone-50 hover:bg-stone-100 text-left transition-all flex flex-col justify-between group"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="w-8 h-8 rounded-lg bg-stone-800 text-white flex items-center justify-center shadow-xs">
-                    <Upload className="w-4 h-4" />
+              {/* 亦可由 JSON 備份檔選擇性還原 */}
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <button
+                  id="restore-backup-btn"
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full p-3.5 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 text-left transition-all flex flex-col justify-between group cursor-pointer shadow-2xs"
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-bold text-stone-900 text-xs flex items-center gap-1.5">
+                      <Upload className="w-4 h-4 text-stone-700" />
+                      進階：依範圍選取還原 (.json)
+                    </span>
+                    <span className="text-[10px] text-stone-500 bg-stone-100 px-2 py-0.5 rounded-full">
+                      自選範圍
+                    </span>
                   </div>
-                  <span className="text-[11px] font-medium text-stone-600 bg-white px-2 py-0.5 rounded-full border border-stone-200">
-                    換機/重灌必用
+                  <span className="text-[10px] text-stone-500 mt-1.5 block">
+                    可自選「僅還原主題選單與名冊」或「全庫覆蓋」，靈活度最高
                   </span>
-                </div>
-                <div className="mt-3">
-                  <span className="font-bold text-stone-900 block text-xs">
-                    2. 選擇檔案進行資料還原
-                  </span>
-                  <span className="text-[11px] text-stone-500 mt-0.5 block leading-normal">
-                    載入電腦中儲存的 .json 備份檔恢復歷史帳目
-                  </span>
-                </div>
-              </button>
+                </button>
+              </div>
             </div>
           </div>
 

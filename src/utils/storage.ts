@@ -6,7 +6,10 @@ import {
   DEFAULT_CATEGORIES, 
   DEFAULT_CLAIMANTS, 
   DirectorWithdrawal,
-  SubAccount
+  SubAccount,
+  CompanyProfile,
+  DEFAULT_COMPANIES,
+  DEFAULT_COMPANY_PROFILE
 } from '../types';
 
 const STORAGE_KEYS = {
@@ -16,6 +19,8 @@ const STORAGE_KEYS = {
   CLAIMANTS: 'expense_tracker_claimants_v1',
   DIRECTOR_WITHDRAWALS: 'expense_tracker_director_v1',
   SUB_ACCOUNTS: 'expense_tracker_sub_accounts_v1',
+  COMPANIES: 'expense_tracker_companies_v1',
+  COMPANY_PROFILE: 'expense_tracker_company_profile_v1',
   LAST_BACKUP: 'expense_tracker_last_backup_date'
 };
 
@@ -266,6 +271,45 @@ export function saveBudgets(budgets: Record<string, MonthBudget>): void {
   }
 }
 
+// 讀取本機公司主檔設定
+export function loadCompanies(): CompanyProfile[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.COMPANIES);
+    if (!raw) return DEFAULT_COMPANIES;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_COMPANIES;
+  } catch {
+    return DEFAULT_COMPANIES;
+  }
+}
+
+// 儲存本機公司主檔設定
+export function saveCompanies(companies: CompanyProfile[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.COMPANIES, JSON.stringify(companies));
+  } catch (e) {
+    console.error('Failed to save companies', e);
+  }
+}
+
+export function loadCompanyProfile(): CompanyProfile {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.COMPANY_PROFILE);
+    if (!raw) return DEFAULT_COMPANY_PROFILE;
+    return JSON.parse(raw);
+  } catch {
+    return DEFAULT_COMPANY_PROFILE;
+  }
+}
+
+export function saveCompanyProfile(profile: CompanyProfile): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.COMPANY_PROFILE, JSON.stringify(profile));
+  } catch (e) {
+    console.error('Failed to save company profile', e);
+  }
+}
+
 // 產生初次使用的範例記帳（精準符合公司零用金收支：零用金撥補、餐飲、加油、同仁預支、雜支）
 function generateInitialSeedData(): Transaction[] {
   const currentYM = getCurrentYearMonth();
@@ -363,15 +407,20 @@ function generateInitialSeedData(): Transaction[] {
   ];
 }
 
-// 產生可存 10 年以上的全本機備份檔 (.json)
+// 產生可存 10 年以上的全本機備份檔 (.json，100% 完整包含公司主檔與所有流水帳目)
 export function exportBackupJSON(
   transactions: Transaction[],
   categories: CategoryConfig[],
   budgets: Record<string, MonthBudget>,
   claimants?: string[],
   directorWithdrawals?: DirectorWithdrawal[],
-  subAccounts?: SubAccount[]
+  subAccounts?: SubAccount[],
+  companies?: CompanyProfile[],
+  companyProfile?: CompanyProfile
 ): void {
+  const allCompanies = companies && companies.length > 0 ? companies : loadCompanies();
+  const defCompany = companyProfile || allCompanies.find(c => c.isDefault) || allCompanies[0] || loadCompanyProfile();
+
   const data: BackupData = {
     version: '1.4.0',
     exportedAt: new Date().toISOString(),
@@ -380,7 +429,9 @@ export function exportBackupJSON(
     budgets,
     claimants: claimants || loadClaimants(),
     directorWithdrawals: directorWithdrawals || loadDirectorWithdrawals(),
-    subAccounts: subAccounts || loadSubAccounts()
+    subAccounts: subAccounts || loadSubAccounts(),
+    companies: allCompanies,
+    companyProfile: defCompany
   };
 
   const jsonStr = JSON.stringify(data, null, 2);

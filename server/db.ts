@@ -561,17 +561,17 @@ export async function addTransaction(t: TransactionRow): Promise<void> {
       subAccountSourceId, subAccountSourceName, companyId
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      t.id,
-      t.date,
-      t.type,
-      t.categoryId,
-      t.categoryName,
-      t.subItem,
+      t.id || `tx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      t.date || new Date().toISOString().slice(0, 10),
+      t.type || 'expense',
+      t.categoryId || 'misc',
+      t.categoryName || '雜支',
+      t.subItem || '',
       t.claimant || null,
       t.peopleCount ?? null,
-      t.amount,
+      Number(t.amount) || 0,
       t.note || '',
-      t.createdAt,
+      t.createdAt || Date.now(),
       t.receiptType || null,
       t.invoiceNumber || null,
       t.voucherNo || null,
@@ -605,17 +605,17 @@ export async function replaceAllTransactions(transactions: TransactionRow[]): Pr
         subAccountSourceId, subAccountSourceName, companyId
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        t.id,
-        t.date,
-        t.type,
-        t.categoryId,
-        t.categoryName,
-        t.subItem,
+        t.id || `tx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        t.date || new Date().toISOString().slice(0, 10),
+        t.type || 'expense',
+        t.categoryId || 'misc',
+        t.categoryName || '雜支',
+        t.subItem || '',
         t.claimant || null,
         t.peopleCount ?? null,
-        t.amount,
+        Number(t.amount) || 0,
         t.note || '',
-        t.createdAt,
+        t.createdAt || Date.now(),
         t.receiptType || null,
         t.invoiceNumber || null,
         t.voucherNo || null,
@@ -936,6 +936,14 @@ export async function deleteCompanyProfile(id: string): Promise<void> {
 
 // 載入外部傳入的全新 SQLite 二進位檔案（用於使用者自備檔案還原或攜帶換機）
 export async function replaceWithDatabaseBinary(fileBuffer: Uint8Array): Promise<void> {
+  if (!fileBuffer || fileBuffer.length < 16) {
+    throw new Error('檔案過小，並非有效的 SQLite 資料庫檔案');
+  }
+  // 檢驗 SQLite 檔案標頭，防止傳入非 SQLite 檔案導致 WASM 拋出 raw exception
+  const header = Buffer.from(fileBuffer.buffer, fileBuffer.byteOffset, 16).toString('ascii');
+  if (!header.startsWith('SQLite format 3')) {
+    throw new Error('所提供的二進位資料並非有效的 SQLite 3 資料庫格式（缺少 SQLite format 3 識別標頭）');
+  }
   if (!SQL) {
     SQL = await initSqlJs();
   }
@@ -944,3 +952,69 @@ export async function replaceWithDatabaseBinary(fileBuffer: Uint8Array): Promise
   db = newDb;
   persist();
 }
+
+// 匯出包含完整 7 大資料表結構與所有資料列的標準 SQL 文字備份檔 (.sql)
+export async function generateSqlDump(): Promise<string> {
+  const database = await getDb();
+  persist();
+
+  const tables = [
+    'company_profile',
+    'categories',
+    'claimants',
+    'budgets',
+    'sub_accounts',
+    'director_withdrawals',
+    'transactions'
+  ];
+
+  let sql = `-- ==================================================================\n`;
+  sql += `-- 企業零用金與財務管理系統 - SQLite 完整資料庫 SQL 語法備份檔 (.sql)\n`;
+  sql += `-- 匯出時間: ${new Date().toISOString()} (${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })})\n`;
+  sql += `-- 備份內容: 100% 完整收錄 7 大核心資料表（含全部公司主檔設定、流水帳目與各項設定）\n`;
+  sql += `--   1. company_profile (公司主檔設定、多行號關係企業、統編、負責人、電話地址、銀行帳戶、報表抬頭)\n`;
+  sql += `--   2. transactions (全歷史收支流水帳、發票號碼、單據憑證、傳票編號、公司關聯)\n`;
+  sql += `--   3. categories (主題科目與階層自訂選單、圖示、色碼、人數設定)\n`;
+  sql += `--   4. claimants (常用經辦請領人名冊)\n`;
+  sql += `--   5. budgets (各月預算額度與警戒百分比)\n`;
+  sql += `--   6. sub_accounts (專案採買專款子帳與明細)\n`;
+  sql += `--   7. director_withdrawals (主管/負責人大額提領紀錄)\n`;
+  sql += `-- 適用環境: 換機一鍵還原、本機離線保存、DBeaver / Navicat / SQLite Studio 工具直接檢視\n`;
+  sql += `-- ==================================================================\n\n`;
+  sql += `PRAGMA foreign_keys = OFF;\n`;
+  sql += `BEGIN TRANSACTION;\n\n`;
+
+  for (const tableName of tables) {
+    const schemaRes = database.exec(`SELECT sql FROM sqlite_master WHERE type='table' AND name='${tableName}';`);
+    if (!schemaRes || !schemaRes.length || !schemaRes[0].values.length) continue;
+    const createTableSql = schemaRes[0].values[0][0];
+
+    sql += `-- ------------------------------------------------------------------\n`;
+    sql += `-- 資料表結構: ${tableName}\n`;
+    sql += `-- ------------------------------------------------------------------\n`;
+    sql += `DROP TABLE IF EXISTS ${tableName};\n`;
+    sql += `${createTableSql};\n\n`;
+
+    const rowsRes = database.exec(`SELECT * FROM ${tableName};`);
+    if (rowsRes && rowsRes.length && rowsRes[0].values.length) {
+      const columns = rowsRes[0].columns;
+      const colList = columns.map(c => `"${c}"`).join(', ');
+
+      sql += `-- 匯入資料: ${tableName} (共 ${rowsRes[0].values.length} 筆紀錄)\n`;
+      for (const row of rowsRes[0].values) {
+        const valList = row.map((val) => {
+          if (val === null || val === undefined) return 'NULL';
+          if (typeof val === 'number') return String(val);
+          const str = String(val).replace(/'/g, "''");
+          return `'${str}'`;
+        }).join(', ');
+        sql += `INSERT INTO ${tableName} (${colList}) VALUES (${valList});\n`;
+      }
+      sql += `\n`;
+    }
+  }
+
+  sql += `COMMIT;\n`;
+  return sql;
+}
+

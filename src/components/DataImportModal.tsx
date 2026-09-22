@@ -133,9 +133,9 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({
 
   if (!isOpen) return null;
 
-  // 下載標準空白 Excel 範本
+  // 下載標準空白 Excel 範本 (含原生的 Excel 清單下拉選單功能與日期格式化)
   const handleDownloadTemplate = () => {
-    generateBlankImportTemplate();
+    generateBlankImportTemplate(categories, claimants);
   };
 
   // -------------------------------------------------------------
@@ -806,7 +806,16 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({
                     className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium border border-stone-300 shadow-2xs active:scale-95 transition-all cursor-pointer"
                   >
                     <Plus className="w-3.5 h-3.5 text-stone-500" />
-                    <span>批量新增 5 列</span>
+                    <span>+5 列</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleAddMultipleRows(10)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white hover:bg-stone-50 text-stone-700 text-xs font-medium border border-stone-300 shadow-2xs active:scale-95 transition-all cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 text-stone-500" />
+                    <span>+10 列</span>
                   </button>
 
                   <button
@@ -987,13 +996,24 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({
                                   <input
                                     type="text"
                                     value={row.dateInput}
-                                    onChange={(e) =>
-                                      updateRowField(row.id, 'dateInput', e.target.value)
-                                    }
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      updateRowField(row.id, 'dateInput', val);
+                                      const normalized = normalizeDateString(val);
+                                      if (normalized) {
+                                        updateRowField(row.id, 'date', normalized);
+                                      }
+                                    }}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleDateInputBlur(row.id);
+                                      }
+                                    }}
                                     onBlur={() => handleDateInputBlur(row.id)}
                                     placeholder="如 9/7 或 2026-09-07"
                                     className="w-full py-1 px-2 text-xs font-mono font-medium rounded-lg border border-stone-300 focus:border-sky-500 focus:ring-1 focus:ring-sky-500 focus:outline-hidden bg-white"
-                                    title="支援直接輸入 9/7、0907 或西元年月日，失焦後自動標準化為 2026-09-07"
+                                    title="支援直接輸入 9/7、0907 或西元年月日，按 Enter 或失焦立即轉為標準 2026-09-07"
                                   />
                                   <input
                                     type="date"
@@ -1008,6 +1028,12 @@ export const DataImportModal: React.FC<DataImportModalProps> = ({
                                     title="點擊開啟月曆小幫手"
                                   />
                                 </div>
+                                {row.dateInput && row.date && row.dateInput !== row.date && (
+                                  <div className="text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                                    <span>✓ 自動轉換為</span>
+                                    <span className="font-mono font-bold">{row.date}</span>
+                                  </div>
+                                )}
                                 <div className="flex items-center gap-1 text-[10px] text-stone-400">
                                   <button
                                     type="button"

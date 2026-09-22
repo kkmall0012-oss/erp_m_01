@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { Transaction, MonthBudget, CategoryConfig, ReceiptType, TransactionType } from '../types';
 
 /**
@@ -639,19 +640,348 @@ export function normalizeDateString(rawDate: any, defaultYear: number = new Date
 
 /**
  * 產生並下載「人性化空白記帳匯入範本 (Excel)」
- * 包含友善格式指示、強制選單選項對照表、日期智慧輸入範例及防重複機制說明
+ * 使用 ExcelJS 原生產生支援【Excel 清單功能（資料驗證下拉選單）】與【標準日期自動格式化】之專用範本
+ * 包含：
+ * 1. 收支屬性：強制下拉選單（僅可點選「支出」或「撥補」）
+ * 2. 憑證類型：強制下拉選單（發票、收據、無）
+ * 3. 支出大類：支援依系統現有分類自訂或常用選單
+ * 4. 請領同仁：支援同仁選單或手動填寫
+ * 5. 交易日期：支援 Excel 標準日期格式 (YYYY/MM/DD) 以及輸入 9/7 自動轉換
+ * 6. 預載 60 列格式化表格，開檔後即可直接用滑鼠點選與快速鍵入
  */
-export function generateBlankImportTemplate(): void {
+export async function generateBlankImportTemplate(
+  categories?: CategoryConfig[],
+  claimants?: string[]
+): Promise<void> {
   const currentYear = new Date().getFullYear();
 
+  try {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = '零用金收支管理系統';
+    workbook.lastModifiedBy = '零用金收支管理系統';
+    workbook.created = new Date();
+    workbook.modified = new Date();
+
+    // ==========================================
+    // 1. 主工作表：零用金記帳匯入表
+    // ==========================================
+    const worksheet = workbook.addWorksheet('零用金記帳匯入表', {
+      views: [{ state: 'frozen', ySplit: 1 }]
+    });
+
+    worksheet.columns = [
+      { header: '交易日期 (例: 9/7)', key: 'date', width: 18 },
+      { header: '收支屬性 (選單強制)', key: 'type', width: 16 },
+      { header: '支出大類 (選單可選)', key: 'category', width: 18 },
+      { header: '店家/品項/細項 (必填)', key: 'subItem', width: 32 },
+      { header: '金額 (NT$ 必填)', key: 'amount', width: 15 },
+      { header: '請領同仁 (選單或自填)', key: 'claimant', width: 18 },
+      { header: '憑證類型 (選單強制)', key: 'receiptType', width: 15 },
+      { header: '發票號碼 (選填)', key: 'invoiceNumber', width: 18 },
+      { header: '用餐人數 (選填)', key: 'peopleCount', width: 12 },
+      { header: '備註說明 (選填)', key: 'note', width: 38 },
+      { header: '資料識別碼(選填)', key: 'id', width: 22 }
+    ];
+
+    // 標題列樣式設計
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 30;
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF1E293B' } // slate-800
+      };
+      cell.font = {
+        name: 'Microsoft JhengHei',
+        bold: true,
+        color: { argb: 'FFFFFFFF' },
+        size: 11
+      };
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+        wrapText: false
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+        bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
+        left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+        right: { style: 'thin', color: { argb: 'FF94A3B8' } }
+      };
+    });
+
+    // 提取支出大類選項字串
+    const defaultCategoryNames = categories && categories.length > 0
+      ? categories.map((c) => c.name.trim()).filter(Boolean)
+      : ['餐費', '油資/交通', '同仁代墊款', '文具耗材', '其他雜支', '零用金撥補'];
+    const categoryFormula = `"${defaultCategoryNames.join(',')}"`;
+
+    // 提取請領同仁選項字串
+    const defaultClaimantNames = claimants && claimants.length > 0
+      ? claimants.map((c) => c.trim()).filter(Boolean)
+      : ['陳小明', '李大華', '王小美', '零用金管理員'];
+    const claimantFormula = `"${defaultClaimantNames.join(',')}"`;
+
+    // 示範資料列（前 4 筆）
+    const sampleRows = [
+      {
+        date: `${currentYear}-09-07`,
+        type: '支出',
+        category: '餐費',
+        subItem: '池上便當 (工廠會議午餐)',
+        amount: 950,
+        claimant: '陳小明',
+        receiptType: '發票',
+        invoiceNumber: 'AB-12345678',
+        peopleCount: 10,
+        note: '支援直接輸入 9/7 自動轉為 2026/09/07',
+        id: ''
+      },
+      {
+        date: `${currentYear}-09-08`,
+        type: '支出',
+        category: '油資/交通',
+        subItem: '台灣中油加油站',
+        amount: 1200,
+        claimant: '李大華',
+        receiptType: '發票',
+        invoiceNumber: 'CD-87654321',
+        peopleCount: null,
+        note: '公務車9座加油出勤',
+        id: ''
+      },
+      {
+        date: `${currentYear}-09-09`,
+        type: '支出',
+        category: '其他雜支',
+        subItem: '日日新五金行',
+        amount: 450,
+        claimant: '王小美',
+        receiptType: '收據',
+        invoiceNumber: '',
+        peopleCount: null,
+        note: '廠務修繕水管零件材料',
+        id: ''
+      },
+      {
+        date: `${currentYear}-09-10`,
+        type: '撥補',
+        category: '零用金撥補',
+        subItem: '公司銀行帳戶提領',
+        amount: 20000,
+        claimant: '零用金管理員',
+        receiptType: '無',
+        invoiceNumber: '',
+        peopleCount: null,
+        note: '補足零用金安全水位',
+        id: ''
+      }
+    ];
+
+    sampleRows.forEach((r) => {
+      worksheet.addRow(r);
+    });
+
+    // 預先產生 50 列預設可輸入空白列，每一列均已掛載 Excel 清單功能
+    for (let i = 0; i < 50; i++) {
+      worksheet.addRow({
+        date: '',
+        type: '支出',
+        category: '',
+        subItem: '',
+        amount: null,
+        claimant: '',
+        receiptType: '發票',
+        invoiceNumber: '',
+        peopleCount: null,
+        note: '',
+        id: ''
+      });
+    }
+
+    // 為所有資料列 (第 2 列 ~ 第 55 列) 套用格式與 Excel 清單功能 (Data Validation)
+    const totalRowCount = worksheet.rowCount;
+    for (let rowIdx = 2; rowIdx <= totalRowCount; rowIdx++) {
+      const row = worksheet.getRow(rowIdx);
+      row.height = 24;
+      const isSample = rowIdx <= 5;
+      const isEven = rowIdx % 2 === 0;
+
+      // 1. 日期欄：設置日期格式
+      const dateCell = row.getCell(1);
+      dateCell.numFmt = 'yyyy/mm/dd';
+      dateCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      // 2. 收支屬性：強制下拉選單 (支出、撥補)
+      const typeCell = row.getCell(2);
+      typeCell.dataValidation = {
+        type: 'list',
+        allowBlank: false,
+        formulae: ['"支出,撥補"'],
+        showErrorMessage: true,
+        errorTitle: '無效的收支屬性',
+        error: '請點選儲存格右側箭頭，由清單中選擇「支出」或「撥補」。'
+      };
+      typeCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      // 3. 支出大類：下拉選單
+      const catCell = row.getCell(3);
+      catCell.dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: [categoryFormula],
+        showErrorMessage: false
+      };
+      catCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      // 4. 店家/品項：左對齊
+      const itemCell = row.getCell(4);
+      itemCell.alignment = { horizontal: 'left', vertical: 'middle' };
+
+      // 5. 金額：千分位數字格式
+      const amtCell = row.getCell(5);
+      amtCell.numFmt = '#,##0';
+      amtCell.alignment = { horizontal: 'right', vertical: 'middle' };
+
+      // 6. 請領同仁：下拉選單
+      const claimantCell = row.getCell(6);
+      claimantCell.dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: [claimantFormula],
+        showErrorMessage: false
+      };
+      claimantCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      // 7. 憑證類型：強制下拉選單 (發票、收據、無)
+      const receiptCell = row.getCell(7);
+      receiptCell.dataValidation = {
+        type: 'list',
+        allowBlank: true,
+        formulae: ['"發票,收據,無"'],
+        showErrorMessage: true,
+        errorTitle: '無效的憑證類型',
+        error: '請點選儲存格右側箭頭，由清單中選擇「發票」、「收據」或「無」。'
+      };
+      receiptCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      // 8. 發票號碼：居中
+      const invCell = row.getCell(8);
+      invCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      // 9. 用餐人數：居中
+      const pplCell = row.getCell(9);
+      pplCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      // 10. 備註：靠左
+      const noteCell = row.getCell(10);
+      noteCell.alignment = { horizontal: 'left', vertical: 'middle' };
+
+      // 格線與背景微著色
+      row.eachCell({ includeEmpty: true }, (c) => {
+        c.font = { name: 'Microsoft JhengHei', size: 10 };
+        c.border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+        };
+        if (isSample) {
+          c.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: isEven ? 'FFF8FAFC' : 'FFF1F5F9' }
+          };
+        }
+      });
+    }
+
+    // ==========================================
+    // 2. 第二工作表：選單清單與填寫規範說明
+    // ==========================================
+    const guideSheet = workbook.addWorksheet('選單清單與速填指南');
+    guideSheet.columns = [
+      { header: '欄位名稱', key: 'col', width: 22 },
+      { header: '人性化規則與填寫說明', key: 'rule', width: 55 },
+      { header: 'Excel 選單清單選項或速記格式', key: 'example', width: 35 }
+    ];
+
+    const guideHeader = guideSheet.getRow(1);
+    guideHeader.height = 28;
+    guideHeader.eachCell((c) => {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } };
+      c.font = { name: 'Microsoft JhengHei', bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      c.alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+
+    const guideData = [
+      { col: '★ 日期智慧速填技巧', rule: '日期欄位支援直接輸入「9/7」或「09/07」，匯入系統時會自動精準識別為 2026/09/07，絕不報錯！', example: '輸入 9/7 秒通' },
+      { col: '★ Excel 下拉選單功能', rule: '「收支屬性」、「支出大類」、「憑證類型」欄位點選右側倒三角即可以滑鼠快速點選，防止輸入錯字。', example: '滑鼠點選倒三角清單' },
+      { col: '★ 智慧防重複機制', rule: '系統具備防重複檢查機制！重複上傳同一張表會自動過濾已存在的紀錄，只會新增還沒登記的新資料。', example: '安心重複匯入不重複記帳' },
+      { col: '交易日期', rule: '必填。支援西元年月日(2026-09-07、2026/09/07)或月日簡寫(9/7、0907、9-7)', example: '9/7 或 2026-09-07' },
+      { col: '收支屬性', rule: '必填。Excel 已啟用清單功能，請點選「支出」或「撥補」（僅此兩種選項）', example: '支出 / 撥補' },
+      { col: '支出大類', rule: '選填。可由下拉選單選取常用分類', example: defaultCategoryNames.join('、') },
+      { col: '店家/品項/細項', rule: '必填。請填寫消費店家名稱、加油站、或開銷品項', example: '池上便當、台灣中油' },
+      { col: '金額', rule: '必填。大於 0 之正整數金額，勿填負數或符號', example: '950' },
+      { col: '請領同仁', rule: '選填。可由清單選擇同仁或直接輸入姓名', example: defaultClaimantNames.join('、') },
+      { col: '憑證類型', rule: '選填。Excel 已啟用清單功能，請點選「發票」、「收據」或「無」', example: '發票 / 收據 / 無' },
+      { col: '發票號碼', rule: '選填。發票 8 碼或字軌號碼', example: 'AB-12345678' },
+      { col: '用餐人數', rule: '選填。若為餐飲請款可填人數，以利人均餐費統計', example: '10' },
+      { col: '備註說明', rule: '選填。開銷事由、專案名稱或備註說明', example: '工地出勤中餐' },
+      { col: '資料識別碼(選填)', rule: '選填。系統比對用唯一碼，手動填寫留空即可', example: '系統自動產生' }
+    ];
+
+    guideData.forEach((g) => {
+      const r = guideSheet.addRow(g);
+      r.height = 22;
+      r.eachCell({ includeEmpty: true }, (c) => {
+        c.font = { name: 'Microsoft JhengHei', size: 10 };
+        c.border = {
+          top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+          right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+        };
+      });
+    });
+
+    // 瀏覽器觸發下載
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = '公司零用金記帳匯入空白範本.xlsx';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('使用 ExcelJS 產生範本失敗，啟用備用方案：', error);
+    // 備用方案：若環境不支援 ExcelJS 則退回 XLSX 產生基礎版本
+    fallbackGenerateBlankImportTemplate(categories, claimants);
+  }
+}
+
+/**
+ * 備用方案：使用 XLSX 產生基本結構範本
+ */
+function fallbackGenerateBlankImportTemplate(
+  categories?: CategoryConfig[],
+  claimants?: string[]
+): void {
+  const currentYear = new Date().getFullYear();
   const sampleRows = [
     {
-      '交易日期': '9/7',
+      '交易日期': `${currentYear}-09-07`,
       '收支屬性': '支出',
       '支出大類': '餐費',
       '店家/品項/細項': '池上便當 (工廠午餐)',
       '金額': 950,
-      '請領同仁': '陳小明',
+      '請領同仁': claimants?.[0] || '陳小明',
       '憑證類型': '發票',
       '發票號碼': 'AB-12345678',
       '用餐人數': 10,
@@ -659,42 +989,16 @@ export function generateBlankImportTemplate(): void {
       '資料識別碼(選填)': ''
     },
     {
-      '交易日期': '2026-09-08',
+      '交易日期': `${currentYear}-09-08`,
       '收支屬性': '支出',
       '支出大類': '油資/交通',
       '店家/品項/細項': '台灣中油加油站',
       '金額': 1200,
-      '請領同仁': '李大華',
+      '請領同仁': claimants?.[1] || '李大華',
       '憑證類型': '發票',
       '發票號碼': 'CD-87654321',
       '用餐人數': '',
       '備註說明': '公務車9座加油出勤',
-      '資料識別碼(選填)': ''
-    },
-    {
-      '交易日期': '9/9',
-      '收支屬性': '支出',
-      '支出大類': '其他雜支',
-      '店家/品項/細項': '日日新五金行',
-      '金額': 450,
-      '請領同仁': '王小美',
-      '憑證類型': '收據',
-      '發票號碼': '',
-      '用餐人數': '',
-      '備註說明': '廠務修繕水管零件材料',
-      '資料識別碼(選填)': ''
-    },
-    {
-      '交易日期': '2026-09-10',
-      '收支屬性': '撥補',
-      '支出大類': '零用金撥補',
-      '店家/品項/細項': '公司銀行帳戶提領',
-      '金額': 20000,
-      '請領同仁': '零用金管理員',
-      '憑證類型': '無',
-      '發票號碼': '',
-      '用餐人數': '',
-      '備註說明': '月中零用金常態撥補補足水位',
       '資料識別碼(選填)': ''
     }
   ];
@@ -714,42 +1018,8 @@ export function generateBlankImportTemplate(): void {
     { wch: 22 }
   ];
 
-  const guideRows = [
-    { '欄位名稱': '【人性化輸入最速技巧】', '必填與規範說明': '日期支援直接輸入「9/7」或「09/07」，匯入時系統會自動辨識為當年度 2026/09/07，絕不報錯！', '範例與快速指南': '填寫 9/7 秒通' },
-    { '欄位名稱': '【重要防重複機制說明】', '必填與規範說明': '本系統具備智慧防重複檢視！即使匯入過程曾經失敗或重複上傳，已存在資料庫的資料會自動略過，只會新增還沒登記的新資料。', '範例與快速指南': '安心重複上傳不重複記帳' },
-    { '欄位名稱': '交易日期', '必填與規範說明': '必填。支援西元年月日(2026-09-07、2026/09/07)或直接輸入月日簡寫(9/7、0907、9-7)', '範例與快速指南': '9/7 或 2026-09-07' },
-    { '欄位名稱': '收支屬性', '必填與規範說明': '必填。請填「支出」或「撥補」（僅此兩種選項，請參閱清單）', '範例與快速指南': '支出 或 撥補' },
-    { '欄位名稱': '支出大類', '必填與規範說明': '選填。如：餐費、油資/交通、同仁代墊款、文具耗材、其他雜支、零用金撥補', '範例與快速指南': '餐費' },
-    { '欄位名稱': '店家/品項/細項', '必填與規範說明': '必填。請填寫消費店家名稱、加油站、或開銷品項', '範例與快速指南': '池上便當、台灣中油' },
-    { '欄位名稱': '金額', '必填與規範說明': '必填。請填大於 0 的正整數金額，勿填負數或特殊符號', '範例與快速指南': '950' },
-    { '欄位名稱': '請領同仁', '必填與規範說明': '選填。請領款項或代辦採買的同仁姓名', '範例與快速指南': '陳小明、李大華' },
-    { '欄位名稱': '憑證類型', '必填與規範說明': '選填。請填「發票」、「收據」或「無」', '範例與快速指南': '發票' },
-    { '欄位名稱': '發票號碼', '必填與規範說明': '選填。若憑證為發票可填入8碼或英數字軌號碼', '範例與快速指南': 'AB-12345678' },
-    { '欄位名稱': '用餐人數', '必填與規範說明': '選填。若為餐飲用餐請款可填人數，以利人均均攤計算', '範例與快速指南': '10' },
-    { '欄位名稱': '備註說明', '必填與規範說明': '選填。開銷事由、專案名稱或特殊備註說明', '範例與快速指南': '工地出勤中餐' },
-    { '欄位名稱': '資料識別碼(選填)', '必填與規範說明': '選填。若是由系統「匯出」的 Excel 修改補登，保留此欄可進行 100% 精準唯一比對', '範例與快速指南': 'tx-1726500000' }
-  ];
-
-  const guideSheet = XLSX.utils.json_to_sheet(guideRows);
-  guideSheet['!cols'] = [{ wch: 22 }, { wch: 65 }, { wch: 30 }];
-
-  // 新增「選單清單對照表」頁籤，方便使用者在 Excel 複製貼上標準項目
-  const listRows = [
-    { '收支屬性選項(僅二選一)': '支出', '標準支出大類選項': '餐費', '憑證類型選項': '發票', '常用快速品項參考': '池上便當' },
-    { '收支屬性選項(僅二選一)': '撥補', '標準支出大類選項': '油資/交通', '憑證類型選項': '收據', '常用快速品項參考': '台灣中油' },
-    { '收支屬性選項(僅二選一)': '', '標準支出大類選項': '同仁代墊款', '憑證類型選項': '無', '常用快速品項參考': '全國加油站' },
-    { '收支屬性選項(僅二選一)': '', '標準支出大類選項': '文具耗材', '憑證類型選項': '', '常用快速品項參考': '五金零件修繕' },
-    { '收支屬性選項(僅二選一)': '', '標準支出大類選項': '其他雜支', '憑證類型選項': '', '常用快速品項參考': '影印紙/墨水' },
-    { '收支屬性選項(僅二選一)': '', '標準支出大類選項': '零用金撥補', '憑證類型選項': '', '常用快速品項參考': '公司銀行帳戶提領' }
-  ];
-  const listSheet = XLSX.utils.json_to_sheet(listRows);
-  listSheet['!cols'] = [{ wch: 24 }, { wch: 20 }, { wch: 16 }, { wch: 24 }];
-
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, templateSheet, '零用金記帳匯入表');
-  XLSX.utils.book_append_sheet(workbook, listSheet, '選單清單與選項對照');
-  XLSX.utils.book_append_sheet(workbook, guideSheet, '填寫規範與防重複說明');
-
   XLSX.writeFile(workbook, `公司零用金記帳匯入空白範本.xlsx`);
 }
 

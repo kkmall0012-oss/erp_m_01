@@ -62,6 +62,8 @@ import {
   saveDirectorWithdrawals,
   loadSubAccounts,
   saveSubAccounts,
+  saveCompanies,
+  saveCompanyProfile,
   getCurrentYearMonth 
 } from './utils/storage';
 import { exportTransactionsToExcel, formatSystemVoucherId, generateMyMoneyNativeVoucherId } from './utils/excel';
@@ -77,7 +79,8 @@ import {
   syncSubAccountsApi, 
   syncDirectorWithdrawalsApi, 
   migrateFromLocalApi,
-  saveCompanyProfileApi
+  saveCompanyProfileApi,
+  saveCompaniesApi
 } from './services/api';
 
 export default function App() {
@@ -444,9 +447,21 @@ export default function App() {
         setBudgets(data.budgets);
         saveBudgets(data.budgets);
       }
+      if (data.companies && data.companies.length > 0) {
+        setCompanies(data.companies);
+        saveCompanies(data.companies);
+        saveCompaniesApi(data.companies).catch(console.error);
+        const def = data.companies.find((c) => c.isDefault) || data.companies[0];
+        setCompanyProfile(def);
+        saveCompanyProfile(def);
+      } else if (data.companyProfile) {
+        setCompanyProfile(data.companyProfile);
+        saveCompanyProfile(data.companyProfile);
+        saveCompanyProfileApi(data.companyProfile).catch(console.error);
+      }
       setImportNotification({
         type: 'success',
-        message: `✓ 已成功救回自訂主題分類與常用請領人名冊！您現有的 ${transactions.length} 筆流水帳與專款明細完全保留、毫無遺失。`
+        message: `✓ 已成功救回自訂主題分類、常用請領人名冊與公司行號設定！您現有的 ${transactions.length} 筆流水帳與專款明細完全保留、毫無遺失。`
       });
       return;
     }
@@ -473,40 +488,54 @@ export default function App() {
     // 預設 full：全庫完整覆蓋鏡像還原
     setTransactions(data.transactions);
     saveTransactions(data.transactions);
+    syncAllTransactionsApi(data.transactions).catch(console.error);
 
     if (data.categories && data.categories.length > 0) {
       setCategories(data.categories);
       saveCategories(data.categories);
+      syncCategoriesApi(data.categories).catch(console.error);
     }
 
     if (data.claimants && data.claimants.length > 0) {
       setClaimants(data.claimants);
       saveClaimants(data.claimants);
+      syncClaimantsApi(data.claimants).catch(console.error);
     }
 
     if (data.directorWithdrawals) {
       setDirectorWithdrawals(data.directorWithdrawals);
       saveDirectorWithdrawals(data.directorWithdrawals);
+      syncDirectorWithdrawalsApi(data.directorWithdrawals).catch(console.error);
     }
 
     if (data.budgets) {
       setBudgets(data.budgets);
       saveBudgets(data.budgets);
+      syncBudgetsApi(data.budgets).catch(console.error);
     }
 
     if (data.subAccounts) {
       setSubAccounts(data.subAccounts);
       saveSubAccounts(data.subAccounts);
+      syncSubAccountsApi(data.subAccounts).catch(console.error);
     }
 
-    if (data.companyProfile) {
+    if (data.companies && data.companies.length > 0) {
+      setCompanies(data.companies);
+      saveCompanies(data.companies);
+      saveCompaniesApi(data.companies).catch(console.error);
+      const def = data.companies.find((c) => c.isDefault) || data.companies[0];
+      setCompanyProfile(def);
+      saveCompanyProfile(def);
+    } else if (data.companyProfile) {
       setCompanyProfile(data.companyProfile);
+      saveCompanyProfile(data.companyProfile);
       saveCompanyProfileApi(data.companyProfile).catch(console.error);
     }
 
     setImportNotification({
       type: 'success',
-      message: `✓ 已完成全資料庫完整還原！已恢復 ${data.transactions.length} 筆帳目與 ${data.categories?.length || 0} 個主題分類。`
+      message: `✓ 已完成全資料庫完整還原！已恢復 ${data.transactions.length} 筆帳目、${data.categories?.length || 0} 個主題分類與公司行號設定。`
     });
   };
 
@@ -1070,6 +1099,8 @@ export default function App() {
         claimants={claimants}
         directorWithdrawals={directorWithdrawals}
         subAccounts={subAccounts}
+        companies={companies}
+        companyProfile={companyProfile}
         onRestoreBackup={handleRestoreBackup}
         onClearAllData={handleClearAllData}
         onReloadAllData={reloadFromDb}

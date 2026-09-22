@@ -26,6 +26,7 @@ import {
   saveAllCompanyProfiles,
   deleteCompanyProfile,
   replaceWithDatabaseBinary,
+  generateSqlDump,
   persist
 } from './server/db';
 
@@ -364,18 +365,156 @@ async function startServer() {
     }
   });
 
-  // 上傳外部實體 petty_cash.sqlite 檔案 (從其他電腦直接搬移載入)
+  // 匯出純文字標準 SQL 語法備份檔 (.sql)，包含 7 大資料表結構 DDL 與全資料列 INSERT INTO
+  app.get('/api/database/dump-sql', async (req, res) => {
+    try {
+      persist();
+      const sqlDump = await generateSqlDump();
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      const filename = `petty_cash_database_dump_${dateStr}.sql`;
+
+      res.setHeader('Content-Type', 'application/sql; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(sqlDump);
+    } catch (err: any) {
+      console.error('Error generating SQL dump:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 上傳外部實體 petty_cash.sqlite 檔案、.sql 腳本檔 或 JSON 備份檔 (從其他電腦直接搬移載入或備份恢復)
   app.post('/api/database/upload-raw', async (req, res) => {
     try {
       const rawBuffer = req.body;
-      if (!rawBuffer || !(rawBuffer instanceof Buffer) || rawBuffer.length < 100) {
-        return res.status(400).json({ success: false, error: '請提供有效的 SQLite 資料庫檔案' });
+      if (!rawBuffer || !(rawBuffer instanceof Buffer) || rawBuffer.length < 16) {
+        return res.status(400).json({ success: false, error: '請提供有效的資料庫檔案 (大小異常或為空)' });
       }
-      await replaceWithDatabaseBinary(new Uint8Array(rawBuffer));
-      res.json({ success: true, message: 'SQLite 資料庫已成功載入並替換！' });
+
+      // 1. 檢查是否為標準 SQLite 3 資料庫二進位檔 (以 "SQLite format 3\0" 為開頭)
+      const isSqlite = rawBuffer.length >= 16 && rawBuffer.slice(0, 16).toString('ascii').startsWith('SQLite format 3');
+      if (isSqlite) {
+        await replaceWithDatabaseBinary(new Uint8Array(rawBuffer));
+        return res.json({ success: true, message: '🎉 SQLite 資料庫實體檔案已成功載入並替換！所有公司主檔與記帳明細已 100% 恢復！', type: 'sqlite' });
+      }
+
+      // 2. 檢查是否為 Excel 試算表 (.xlsx 是 ZIP 結構，以 PK\x03\x04 開頭)
+      if (rawBuffer.length >= 4 && rawBuffer[0] === 0x50 && rawBuffer[1] === 0x4b && rawBuffer[2] === 0x03 && rawBuffer[3] === 0x04) {
+        return res.status(400).json({
+          success: false,
+          error: '您上傳的是 Excel 試算表檔案 (.xlsx)。若要匯入多筆交易流水帳，請至主畫面點擊【快速匯入】功能；此處僅供載入 .sqlite 實體資料庫、.sql 語法腳本或 .json 備份檔。'
+        });
+      }
+
+      // 3. 檢查是否為文字型檔案 (如 SQL 腳本、JSON 備份檔、CSV 檔)
+      let textContent = '';
+      try {
+        textContent = rawBuffer.toString('utf-8').trim();
+      } catch (e) {
+        // Not valid text
+      }
+
+      console.log('upload-raw textContent start:', textContent.slice(0, 30), 'end:', textContent.slice(-10));
+
+      // 4. 智慧檢查是否為標準 SQL 語法備份檔 (.sql)
+      if (
+        (textContent.includes('CREATE TABLE') || textContent.includes('INSERT INTO')) &&
+        (textContent.includes('company_profile') || textContent.includes('transactions') || textContent.includes('categories'))
+      ) {
+        try {
+          const database = await getDb();
+          database.exec(textContent);
+          persist();
+          return res.json({
+            success: true,
+            message: '🎉 SQL 指令腳本已成功執行！全資料庫 100% 鏡像還原（包含全部公司主檔、收支流水與系統設定）！',
+            type: 'sql'
+          });
+        } catch (sqlErr: any) {
+          return res.status(400).json({
+            success: false,
+            error: `SQL 腳本還原執行失敗：${sqlErr.message}`
+          });
+        }
+      }
+
+      // 5. 智慧檢查是否為 JSON 備份檔 (包含 transactions / categories / claimants / subAccounts 等)
+      if (textContent.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(textContent);
+          const hasData =
+            Array.isArray(parsed.transactions) ||
+            Array.isArray(parsed.categories) ||
+            Array.isArray(parsed.claimants) ||
+            Array.isArray(parsed.companies) ||
+            Array.isArray(parsed.subAccounts);
+
+          if (hasData) {
+            // 自動無縫還原 JSON 資料進 SQLite 資料庫！
+            if (Array.isArray(parsed.transactions)) {
+              await replaceAllTransactions(parsed.transactions);
+            }
+            if (Array.isArray(parsed.categories) && parsed.categories.length > 0) {
+              await saveAllCategories(parsed.categories);
+            }
+            if (Array.isArray(parsed.claimants) && parsed.claimants.length > 0) {
+              await saveAllClaimants(parsed.claimants);
+            }
+            if (parsed.budgets && typeof parsed.budgets === 'object') {
+              await saveAllBudgets(parsed.budgets);
+            }
+            if (Array.isArray(parsed.subAccounts)) {
+              await saveAllSubAccounts(parsed.subAccounts);
+            }
+            if (Array.isArray(parsed.directorWithdrawals)) {
+              await saveAllDirectorWithdrawals(parsed.directorWithdrawals);
+            }
+            if (Array.isArray(parsed.companies) && parsed.companies.length > 0) {
+              await saveAllCompanyProfiles(parsed.companies);
+            } else if (parsed.companyProfile) {
+              await saveCompanyProfile(parsed.companyProfile);
+            }
+
+            persist();
+            return res.json({
+              success: true,
+              message: `🎉 系統已自動辨識為 JSON 備份檔，並成功將 ${parsed.transactions?.length || 0} 筆記帳與完整設定無縫還原至 SQLite 資料庫！`,
+              type: 'json',
+              stats: {
+                transactions: parsed.transactions?.length || 0,
+                categories: parsed.categories?.length || 0
+              }
+            });
+          } else {
+            return res.status(400).json({
+              success: false,
+              error: 'JSON 格式不符：找不到 transactions、categories 等必要備份節點。'
+            });
+          }
+        } catch (jsonErr: any) {
+          return res.status(400).json({
+            success: false,
+            error: `JSON 備份檔案解析或還原失敗：${jsonErr.message}`
+          });
+        }
+      }
+
+      // 5. 檢查是否為 CSV 格式文字檔
+      if (textContent.includes(',') || textContent.includes('\t') || textContent.includes('帳務小管家')) {
+        return res.status(400).json({
+          success: false,
+          error: '您上傳的是 CSV/文字試算表檔案。若要匯入多筆交易流水帳或帳務小管家資料，請至主畫面點擊【快速匯入】；此處僅供載入 .sqlite 實體資料庫或 .json 備份檔。'
+        });
+      }
+
+      // 6. 其他不符合規格的檔案
+      return res.status(400).json({
+        success: false,
+        error: '檔案格式不符：非標準 SQLite 3 資料庫（檔案缺少 SQLite format 3 格式標頭）或 JSON 備份檔。請確認是否選取正確的檔案。'
+      });
     } catch (err: any) {
-      console.error('Error replacing sqlite db:', err);
-      res.status(500).json({ success: false, error: err.message });
+      console.error('Error handling database upload:', err);
+      res.status(500).json({ success: false, error: err.message || '資料庫還原發生未預期錯誤' });
     }
   });
 

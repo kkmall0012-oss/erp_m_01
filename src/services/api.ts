@@ -207,8 +207,20 @@ export function triggerDownloadSqliteFile(): void {
   document.body.removeChild(link);
 }
 
-// 上傳替換 SQLite 實體檔案 (換機帶著走直接載入)
-export async function uploadSqliteFileApi(file: File): Promise<void> {
+// 一鍵下載純文字標準 SQL 語法備份檔 (.sql，包含 7 大資料表與所有資料列)
+export function triggerDownloadSqlDumpFile(): void {
+  const link = document.createElement('a');
+  link.href = '/api/database/dump-sql';
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  link.download = `petty_cash_database_dump_${dateStr}.sql`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// 上傳替換 SQLite 實體檔案、.sql 腳本或 JSON 備份檔 (換機帶著走直接載入)
+export async function uploadSqliteFileApi(file: File): Promise<{ success: boolean; message: string; type?: string }> {
   const arrayBuffer = await file.arrayBuffer();
   const res = await fetch('/api/database/upload-raw', {
     method: 'POST',
@@ -217,10 +229,11 @@ export async function uploadSqliteFileApi(file: File): Promise<void> {
     },
     body: arrayBuffer
   });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || '載入 SQLite 資料庫檔案失敗');
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.success) {
+    throw new Error(data.error || '載入 SQLite 資料庫檔案失敗');
   }
+  return data;
 }
 
 // 將瀏覽器舊版 localStorage 資料無縫轉移進 SQLite
