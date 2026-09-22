@@ -106,6 +106,50 @@ export interface CompanyProfileRow {
   updatedAt: number;
 }
 
+export interface CustomerContactPersonRow {
+  id: string;
+  name: string;
+  title?: string;
+  mobile?: string;
+  phone?: string;
+  email?: string;
+  lineId?: string;
+  note?: string;
+}
+
+export interface CustomerRow {
+  id: string;
+  name: string;
+  shortName?: string;
+  isIndividual: boolean;
+  taxId?: string;
+  representative?: string;
+  representativeMobile?: string;
+  secondaryRepresentative?: string;
+  phone1?: string;
+  phone2?: string;
+  fax?: string;
+  email?: string;
+  website?: string;
+  lineId?: string;
+  postalCode?: string;
+  address?: string;
+  shippingAddress?: string;
+  contacts: CustomerContactPersonRow[];
+  paymentTerm?: string;
+  bankName?: string;
+  bankBranch?: string;
+  bankAccount?: string;
+  accountName?: string;
+  businessItems?: string;
+  isCustomer: boolean;
+  isSupplier: boolean;
+  favoriteCompanyIds: string[];
+  note?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 // 預設 3 間關係企業/行號主檔種子
 export const DEFAULT_COMPANIES_SEED: CompanyProfileRow[] = [
   {
@@ -379,6 +423,39 @@ function initSchema(database: Database) {
       color TEXT,
       isDefault INTEGER DEFAULT 0,
       sortOrder INTEGER DEFAULT 0,
+      updatedAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS customers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      shortName TEXT,
+      isIndividual INTEGER DEFAULT 0,
+      taxId TEXT,
+      representative TEXT,
+      representativeMobile TEXT,
+      secondaryRepresentative TEXT,
+      phone1 TEXT,
+      phone2 TEXT,
+      fax TEXT,
+      email TEXT,
+      website TEXT,
+      lineId TEXT,
+      postalCode TEXT,
+      address TEXT,
+      shippingAddress TEXT,
+      contacts TEXT NOT NULL,
+      paymentTerm TEXT,
+      bankName TEXT,
+      bankBranch TEXT,
+      bankAccount TEXT,
+      accountName TEXT,
+      businessItems TEXT,
+      isCustomer INTEGER DEFAULT 1,
+      isSupplier INTEGER DEFAULT 0,
+      favoriteCompanyIds TEXT NOT NULL,
+      note TEXT,
+      createdAt INTEGER NOT NULL,
       updatedAt INTEGER NOT NULL
     );
   `);
@@ -934,6 +1011,187 @@ export async function deleteCompanyProfile(id: string): Promise<void> {
   persist();
 }
 
+// -------------------------------------------------------------
+// 客戶聯絡資訊 CRUD 模組 (資料庫操作)
+// -------------------------------------------------------------
+
+function mapRowToCustomer(row: any[], columns: string[]): CustomerRow {
+  const obj: any = {};
+  columns.forEach((col, idx) => {
+    obj[col] = row[idx];
+  });
+
+  let contacts: CustomerContactPersonRow[] = [];
+  try {
+    if (obj.contacts) {
+      contacts = JSON.parse(String(obj.contacts));
+    }
+  } catch (e) {
+    contacts = [];
+  }
+
+  let favoriteCompanyIds: string[] = [];
+  try {
+    if (obj.favoriteCompanyIds) {
+      favoriteCompanyIds = JSON.parse(String(obj.favoriteCompanyIds));
+    }
+  } catch (e) {
+    favoriteCompanyIds = [];
+  }
+
+  return {
+    id: String(obj.id),
+    name: String(obj.name || ''),
+    shortName: obj.shortName ? String(obj.shortName) : undefined,
+    isIndividual: Boolean(obj.isIndividual),
+    taxId: obj.taxId ? String(obj.taxId) : undefined,
+    representative: obj.representative ? String(obj.representative) : undefined,
+    representativeMobile: obj.representativeMobile ? String(obj.representativeMobile) : undefined,
+    secondaryRepresentative: obj.secondaryRepresentative ? String(obj.secondaryRepresentative) : undefined,
+    phone1: obj.phone1 ? String(obj.phone1) : undefined,
+    phone2: obj.phone2 ? String(obj.phone2) : undefined,
+    fax: obj.fax ? String(obj.fax) : undefined,
+    email: obj.email ? String(obj.email) : undefined,
+    website: obj.website ? String(obj.website) : undefined,
+    lineId: obj.lineId ? String(obj.lineId) : undefined,
+    postalCode: obj.postalCode ? String(obj.postalCode) : undefined,
+    address: obj.address ? String(obj.address) : undefined,
+    shippingAddress: obj.shippingAddress ? String(obj.shippingAddress) : undefined,
+    contacts,
+    paymentTerm: obj.paymentTerm ? String(obj.paymentTerm) : undefined,
+    bankName: obj.bankName ? String(obj.bankName) : undefined,
+    bankBranch: obj.bankBranch ? String(obj.bankBranch) : undefined,
+    bankAccount: obj.bankAccount ? String(obj.bankAccount) : undefined,
+    accountName: obj.accountName ? String(obj.accountName) : undefined,
+    businessItems: obj.businessItems ? String(obj.businessItems) : undefined,
+    isCustomer: obj.isCustomer !== undefined ? Boolean(obj.isCustomer) : true,
+    isSupplier: Boolean(obj.isSupplier),
+    favoriteCompanyIds,
+    note: obj.note ? String(obj.note) : undefined,
+    createdAt: Number(obj.createdAt || Date.now()),
+    updatedAt: Number(obj.updatedAt || Date.now())
+  };
+}
+
+export async function getAllCustomers(): Promise<CustomerRow[]> {
+  const database = await getDb();
+  const res = database.exec(`SELECT * FROM customers ORDER BY createdAt DESC`);
+  if (!res || res.length === 0 || !res[0].values.length) {
+    return [];
+  }
+  const columns = res[0].columns;
+  return res[0].values.map((row) => mapRowToCustomer(row, columns));
+}
+
+export async function addCustomer(c: CustomerRow): Promise<void> {
+  const database = await getDb();
+  const now = Date.now();
+  database.run(
+    `INSERT INTO customers (
+      id, name, shortName, isIndividual, taxId, representative, representativeMobile,
+      secondaryRepresentative, phone1, phone2, fax, email, website, lineId,
+      postalCode, address, shippingAddress, contacts, paymentTerm, bankName,
+      bankBranch, bankAccount, accountName, businessItems, isCustomer, isSupplier,
+      favoriteCompanyIds, note, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      c.id,
+      c.name,
+      c.shortName || null,
+      c.isIndividual ? 1 : 0,
+      c.taxId || null,
+      c.representative || null,
+      c.representativeMobile || null,
+      c.secondaryRepresentative || null,
+      c.phone1 || null,
+      c.phone2 || null,
+      c.fax || null,
+      c.email || null,
+      c.website || null,
+      c.lineId || null,
+      c.postalCode || null,
+      c.address || null,
+      c.shippingAddress || null,
+      JSON.stringify(c.contacts || []),
+      c.paymentTerm || null,
+      c.bankName || null,
+      c.bankBranch || null,
+      c.bankAccount || null,
+      c.accountName || null,
+      c.businessItems || null,
+      c.isCustomer ? 1 : 0,
+      c.isSupplier ? 1 : 0,
+      JSON.stringify(c.favoriteCompanyIds || []),
+      c.note || null,
+      c.createdAt || now,
+      c.updatedAt || now
+    ]
+  );
+  persist();
+}
+
+export async function updateCustomer(c: CustomerRow): Promise<void> {
+  const database = await getDb();
+  const now = Date.now();
+  database.run(
+    `UPDATE customers SET
+      name = ?, shortName = ?, isIndividual = ?, taxId = ?, representative = ?,
+      representativeMobile = ?, secondaryRepresentative = ?, phone1 = ?, phone2 = ?,
+      fax = ?, email = ?, website = ?, lineId = ?, postalCode = ?, address = ?,
+      shippingAddress = ?, contacts = ?, paymentTerm = ?, bankName = ?, bankBranch = ?,
+      bankAccount = ?, accountName = ?, businessItems = ?, isCustomer = ?, isSupplier = ?,
+      favoriteCompanyIds = ?, note = ?, updatedAt = ?
+    WHERE id = ?`,
+    [
+      c.name,
+      c.shortName || null,
+      c.isIndividual ? 1 : 0,
+      c.taxId || null,
+      c.representative || null,
+      c.representativeMobile || null,
+      c.secondaryRepresentative || null,
+      c.phone1 || null,
+      c.phone2 || null,
+      c.fax || null,
+      c.email || null,
+      c.website || null,
+      c.lineId || null,
+      c.postalCode || null,
+      c.address || null,
+      c.shippingAddress || null,
+      JSON.stringify(c.contacts || []),
+      c.paymentTerm || null,
+      c.bankName || null,
+      c.bankBranch || null,
+      c.bankAccount || null,
+      c.accountName || null,
+      c.businessItems || null,
+      c.isCustomer ? 1 : 0,
+      c.isSupplier ? 1 : 0,
+      JSON.stringify(c.favoriteCompanyIds || []),
+      c.note || null,
+      now,
+      c.id
+    ]
+  );
+  persist();
+}
+
+export async function deleteCustomer(id: string): Promise<void> {
+  const database = await getDb();
+  database.run(`DELETE FROM customers WHERE id = ?`, [id]);
+  persist();
+}
+
+export async function replaceAllCustomers(customers: CustomerRow[]): Promise<void> {
+  const database = await getDb();
+  database.run(`DELETE FROM customers`);
+  for (const c of customers) {
+    await addCustomer(c);
+  }
+  persist();
+}
+
 // 載入外部傳入的全新 SQLite 二進位檔案（用於使用者自備檔案還原或攜帶換機）
 export async function replaceWithDatabaseBinary(fileBuffer: Uint8Array): Promise<void> {
   if (!fileBuffer || fileBuffer.length < 16) {
@@ -953,13 +1211,14 @@ export async function replaceWithDatabaseBinary(fileBuffer: Uint8Array): Promise
   persist();
 }
 
-// 匯出包含完整 7 大資料表結構與所有資料列的標準 SQL 文字備份檔 (.sql)
+// 匯出包含完整 8 大資料表結構與所有資料列的標準 SQL 文字備份檔 (.sql)
 export async function generateSqlDump(): Promise<string> {
   const database = await getDb();
   persist();
 
   const tables = [
     'company_profile',
+    'customers',
     'categories',
     'claimants',
     'budgets',
@@ -969,16 +1228,17 @@ export async function generateSqlDump(): Promise<string> {
   ];
 
   let sql = `-- ==================================================================\n`;
-  sql += `-- 企業零用金與財務管理系統 - SQLite 完整資料庫 SQL 語法備份檔 (.sql)\n`;
+  sql += `-- 企業零用金與客戶財務管理系統 - SQLite 完整資料庫 SQL 語法備份檔 (.sql)\n`;
   sql += `-- 匯出時間: ${new Date().toISOString()} (${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })})\n`;
-  sql += `-- 備份內容: 100% 完整收錄 7 大核心資料表（含全部公司主檔設定、流水帳目與各項設定）\n`;
+  sql += `-- 備份內容: 100% 完整收錄 8 大核心資料表（含公司主檔、客戶聯絡人名冊、流水帳目與各項設定）\n`;
   sql += `--   1. company_profile (公司主檔設定、多行號關係企業、統編、負責人、電話地址、銀行帳戶、報表抬頭)\n`;
-  sql += `--   2. transactions (全歷史收支流水帳、發票號碼、單據憑證、傳票編號、公司關聯)\n`;
-  sql += `--   3. categories (主題科目與階層自訂選單、圖示、色碼、人數設定)\n`;
-  sql += `--   4. claimants (常用經辦請領人名冊)\n`;
-  sql += `--   5. budgets (各月預算額度與警戒百分比)\n`;
-  sql += `--   6. sub_accounts (專案採買專款子帳與明細)\n`;
-  sql += `--   7. director_withdrawals (主管/負責人大額提領紀錄)\n`;
+  sql += `--   2. customers (客戶聯絡資訊主檔、個人/法人、統編、多聯絡人、銀行匯款帳號、收款方式、廠商身分標籤)\n`;
+  sql += `--   3. transactions (全歷史收支流水帳、發票號碼、單據憑證、傳票編號、公司關聯)\n`;
+  sql += `--   4. categories (主題科目與階層自訂選單、圖示、色碼、人數設定)\n`;
+  sql += `--   5. claimants (常用經辦請領人名冊)\n`;
+  sql += `--   6. budgets (各月預算額度與警戒百分比)\n`;
+  sql += `--   7. sub_accounts (專案採買專款子帳與明細)\n`;
+  sql += `--   8. director_withdrawals (主管/負責人大額提領紀錄)\n`;
   sql += `-- 適用環境: 換機一鍵還原、本機離線保存、DBeaver / Navicat / SQLite Studio 工具直接檢視\n`;
   sql += `-- ==================================================================\n\n`;
   sql += `PRAGMA foreign_keys = OFF;\n`;

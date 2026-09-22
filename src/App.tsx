@@ -21,6 +21,7 @@ import { ErpDashboardView } from './components/erp/ErpDashboardView';
 import { ErpModulePlaceholder } from './components/erp/ErpModulePlaceholder';
 import { ErpDatabaseView } from './components/erp/ErpDatabaseView';
 import { CompanySettingsView } from './components/erp/CompanySettingsView';
+import { CustomerManagementView } from './components/erp/CustomerManagementView';
 import { StatCards } from './components/StatCards';
 import { QuickActionHub } from './components/QuickActionHub';
 import { TransactionCreateModal } from './components/TransactionCreateModal';
@@ -47,7 +48,8 @@ import {
   RestoreOptions,
   CompanyProfile,
   DEFAULT_COMPANY_PROFILE,
-  DEFAULT_COMPANIES
+  DEFAULT_COMPANIES,
+  Customer
 } from './types';
 import { 
   loadTransactions, 
@@ -80,7 +82,8 @@ import {
   syncDirectorWithdrawalsApi, 
   migrateFromLocalApi,
   saveCompanyProfileApi,
-  saveCompaniesApi
+  saveCompaniesApi,
+  fetchCustomers
 } from './services/api';
 
 export default function App() {
@@ -94,6 +97,7 @@ export default function App() {
   const [budgets, setBudgets] = useState<Record<string, MonthBudget>>({});
   const [companyProfile, setCompanyProfile] = useState<CompanyProfile>(DEFAULT_COMPANY_PROFILE);
   const [companies, setCompanies] = useState<CompanyProfile[]>(DEFAULT_COMPANIES);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [activeCompanyId, setActiveCompanyId] = useState<string>('all');
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 

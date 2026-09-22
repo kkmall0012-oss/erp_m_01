@@ -4,7 +4,8 @@ import {
   MonthBudget, 
   SubAccount, 
   DirectorWithdrawal,
-  CompanyProfile
+  CompanyProfile,
+  Customer
 } from '../types';
 
 export interface BootstrapResponse {
@@ -19,6 +20,7 @@ export interface BootstrapResponse {
   directorWithdrawals: DirectorWithdrawal[];
   companyProfile?: CompanyProfile;
   companies?: CompanyProfile[];
+  customers?: Customer[];
 }
 
 // 取得 SQLite 後端完整初始資料
@@ -192,6 +194,73 @@ export async function deleteCompanyApi(id: string): Promise<CompanyProfile[]> {
   });
   if (!res.ok) {
     throw new Error('刪除公司行號失敗');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+// ==========================================
+// 客戶聯絡資訊 API
+// ==========================================
+
+export async function fetchCustomers(): Promise<Customer[]> {
+  const res = await fetch('/api/customers');
+  if (!res.ok) {
+    throw new Error('讀取客戶資料失敗');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function createCustomerApi(customer: Customer): Promise<Customer[]> {
+  const res = await fetch('/api/customers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(customer)
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || '新增客戶資料失敗');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function updateCustomerApi(customer: Customer): Promise<Customer[]> {
+  const res = await fetch(`/api/customers/${encodeURIComponent(customer.id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(customer)
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || '更新客戶資料失敗');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function deleteCustomerApi(id: string): Promise<Customer[]> {
+  const res = await fetch(`/api/customers/${encodeURIComponent(id)}`, {
+    method: 'DELETE'
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || '刪除客戶資料失敗');
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function syncCustomersBatchApi(customers: Customer[]): Promise<Customer[]> {
+  const res = await fetch('/api/customers/batch', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ customers })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || '批次同步客戶資料失敗');
   }
   const json = await res.json();
   return json.data;

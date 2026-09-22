@@ -9,7 +9,8 @@ import {
   SubAccount,
   CompanyProfile,
   DEFAULT_COMPANIES,
-  DEFAULT_COMPANY_PROFILE
+  DEFAULT_COMPANY_PROFILE,
+  Customer
 } from '../types';
 
 const STORAGE_KEYS = {
@@ -21,6 +22,7 @@ const STORAGE_KEYS = {
   SUB_ACCOUNTS: 'expense_tracker_sub_accounts_v1',
   COMPANIES: 'expense_tracker_companies_v1',
   COMPANY_PROFILE: 'expense_tracker_company_profile_v1',
+  CUSTOMERS: 'expense_tracker_customers_v1',
   LAST_BACKUP: 'expense_tracker_last_backup_date'
 };
 
@@ -310,6 +312,26 @@ export function saveCompanyProfile(profile: CompanyProfile): void {
   }
 }
 
+export function loadCustomers(): Customer[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.CUSTOMERS);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    console.error('Failed to load customers from localStorage', e);
+    return [];
+  }
+}
+
+export function saveCustomers(customers: Customer[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.CUSTOMERS, JSON.stringify(customers));
+  } catch (e) {
+    console.error('Failed to save customers to localStorage', e);
+  }
+}
+
 // 產生初次使用的範例記帳（精準符合公司零用金收支：零用金撥補、餐飲、加油、同仁預支、雜支）
 function generateInitialSeedData(): Transaction[] {
   const currentYM = getCurrentYearMonth();
@@ -407,7 +429,7 @@ function generateInitialSeedData(): Transaction[] {
   ];
 }
 
-// 產生可存 10 年以上的全本機備份檔 (.json，100% 完整包含公司主檔與所有流水帳目)
+// 產生可存 10 年以上的全本機備份檔 (.json，100% 完整包含公司主檔、客戶資料與所有流水帳目)
 export function exportBackupJSON(
   transactions: Transaction[],
   categories: CategoryConfig[],
@@ -416,7 +438,8 @@ export function exportBackupJSON(
   directorWithdrawals?: DirectorWithdrawal[],
   subAccounts?: SubAccount[],
   companies?: CompanyProfile[],
-  companyProfile?: CompanyProfile
+  companyProfile?: CompanyProfile,
+  customers?: Customer[]
 ): void {
   const allCompanies = companies && companies.length > 0 ? companies : loadCompanies();
   const defCompany = companyProfile || allCompanies.find(c => c.isDefault) || allCompanies[0] || loadCompanyProfile();
@@ -431,7 +454,8 @@ export function exportBackupJSON(
     directorWithdrawals: directorWithdrawals || loadDirectorWithdrawals(),
     subAccounts: subAccounts || loadSubAccounts(),
     companies: allCompanies,
-    companyProfile: defCompany
+    companyProfile: defCompany,
+    customers: customers || []
   };
 
   const jsonStr = JSON.stringify(data, null, 2);
@@ -482,9 +506,10 @@ export function parseBackupJSON(jsonStr: string): BackupData | null {
     const hasTransactions = Array.isArray(data.transactions);
     const hasCategories = Array.isArray(data.categories);
     const hasClaimants = Array.isArray(data.claimants);
+    const hasCustomers = Array.isArray(data.customers);
 
-    if (!hasTransactions && !hasCategories && !hasClaimants) {
-      throw new Error('無效的備份檔案格式：缺少交易紀錄或分類資料');
+    if (!hasTransactions && !hasCategories && !hasClaimants && !hasCustomers) {
+      throw new Error('無效的備份檔案格式：缺少交易紀錄、分類資料或客戶資料');
     }
     return {
       version: data.version || '1.4.0',
@@ -494,7 +519,10 @@ export function parseBackupJSON(jsonStr: string): BackupData | null {
       budgets: typeof data.budgets === 'object' && data.budgets !== null ? data.budgets : {},
       claimants: hasClaimants ? data.claimants : DEFAULT_CLAIMANTS,
       directorWithdrawals: Array.isArray(data.directorWithdrawals) ? data.directorWithdrawals : [],
-      subAccounts: Array.isArray(data.subAccounts) ? data.subAccounts : []
+      subAccounts: Array.isArray(data.subAccounts) ? data.subAccounts : [],
+      companies: Array.isArray(data.companies) ? data.companies : undefined,
+      companyProfile: data.companyProfile,
+      customers: Array.isArray(data.customers) ? data.customers : []
     };
   } catch (e) {
     console.error('Failed to parse backup JSON', e);

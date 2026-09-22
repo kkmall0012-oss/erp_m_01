@@ -21,6 +21,7 @@ import {
   DirectorWithdrawal, 
   SubAccount, 
   CompanyProfile,
+  Customer,
   RestoreScope, 
   RestoreOptions 
 } from '../types';
@@ -39,6 +40,7 @@ interface BackupModalProps {
   subAccounts?: SubAccount[];
   companies?: CompanyProfile[];
   companyProfile?: CompanyProfile;
+  customers?: Customer[];
   onRestoreBackup: (data: BackupData, options?: RestoreOptions) => void;
   onClearAllData: () => void;
   onReloadAllData?: () => void;
@@ -55,6 +57,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   subAccounts,
   companies,
   companyProfile,
+  customers,
   onRestoreBackup,
   onClearAllData,
   onReloadAllData
@@ -125,9 +128,10 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       directorWithdrawals,
       subAccounts,
       companies,
-      companyProfile
+      companyProfile,
+      customers
     );
-    setRestoreStatus('已下載完整 JSON 備份檔！包含全部公司主檔、收支明細與系統設定。');
+    setRestoreStatus('已下載完整 JSON 備份檔！包含全部公司主檔、客戶資料、收支明細與系統設定。');
   };
 
   // 匯入 JSON 備份檔
@@ -212,7 +216,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
           </div>
 
           {/* 目前資料庫狀態 */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3.5 bg-stone-100/60 rounded-xl border border-stone-200">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 p-3.5 bg-stone-100/60 rounded-xl border border-stone-200">
             <div>
               <span className="text-[11px] text-stone-500 block">目前記帳筆數</span>
               <span className="text-sm font-bold text-stone-900 font-mono">
@@ -223,6 +227,12 @@ export const BackupModal: React.FC<BackupModalProps> = ({
               <span className="text-[11px] text-stone-500 block">公司設定主檔</span>
               <span className="text-sm font-bold text-emerald-800 font-mono">
                 {companies?.length || 1} 家行號
+              </span>
+            </div>
+            <div>
+              <span className="text-[11px] text-stone-500 block">客戶通訊錄</span>
+              <span className="text-sm font-bold text-indigo-700 font-mono">
+                {customers?.length || 0} 位/家
               </span>
             </div>
             <div>

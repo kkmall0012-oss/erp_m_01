@@ -25,6 +25,11 @@ import {
   saveCompanyProfile,
   saveAllCompanyProfiles,
   deleteCompanyProfile,
+  getAllCustomers,
+  addCustomer,
+  updateCustomer,
+  deleteCustomer,
+  replaceAllCustomers,
   replaceWithDatabaseBinary,
   generateSqlDump,
   persist
@@ -72,7 +77,8 @@ async function startServer() {
         subAccounts,
         directorWithdrawals,
         companyProfile,
-        companies
+        companies,
+        customers
       ] = await Promise.all([
         getAllTransactions(),
         getAllCategories(),
@@ -81,7 +87,8 @@ async function startServer() {
         getAllSubAccounts(),
         getAllDirectorWithdrawals(),
         getCompanyProfile(),
-        getAllCompanyProfiles()
+        getAllCompanyProfiles(),
+        getAllCustomers()
       ]);
 
       res.json({
@@ -95,7 +102,8 @@ async function startServer() {
         subAccounts,
         directorWithdrawals,
         companyProfile,
-        companies
+        companies,
+        customers
       });
     } catch (err: any) {
       console.error('Error fetching bootstrap data:', err);
@@ -345,6 +353,74 @@ async function startServer() {
   });
 
   // =================================================================
+  // 客戶聯絡資訊管理 API (支援新增/修改/刪除/整批匯入)
+  // =================================================================
+
+  app.get('/api/customers', async (req, res) => {
+    try {
+      const customers = await getAllCustomers();
+      res.json({ success: true, data: customers });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/customers', async (req, res) => {
+    try {
+      const customer = req.body;
+      if (!customer || !customer.id || !customer.name) {
+        return res.status(400).json({ success: false, error: '客戶姓名/名稱為必填項目' });
+      }
+      await addCustomer(customer);
+      const updated = await getAllCustomers();
+      res.json({ success: true, data: updated, message: '客戶聯絡資訊已成功新增！' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.put('/api/customers/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const customer = req.body;
+      if (!customer || !customer.name) {
+        return res.status(400).json({ success: false, error: '客戶姓名/名稱為必填項目' });
+      }
+      customer.id = id;
+      await updateCustomer(customer);
+      const updated = await getAllCustomers();
+      res.json({ success: true, data: updated, message: '客戶聯絡資訊已更新完成！' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.delete('/api/customers/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      await deleteCustomer(id);
+      const updated = await getAllCustomers();
+      res.json({ success: true, data: updated, message: '客戶資料已成功刪除！' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.post('/api/customers/batch', async (req, res) => {
+    try {
+      const { customers } = req.body;
+      if (!Array.isArray(customers)) {
+        return res.status(400).json({ success: false, error: '資料格式錯誤' });
+      }
+      await replaceAllCustomers(customers);
+      const updated = await getAllCustomers();
+      res.json({ success: true, data: updated, message: '客戶資料已全數同步！' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // =================================================================
   // 資料庫帶著走特權 API：實體 SQLite 檔案下載與還原
   // =================================================================
 
@@ -447,6 +523,7 @@ async function startServer() {
             Array.isArray(parsed.categories) ||
             Array.isArray(parsed.claimants) ||
             Array.isArray(parsed.companies) ||
+            Array.isArray(parsed.customers) ||
             Array.isArray(parsed.subAccounts);
 
           if (hasData) {
@@ -473,6 +550,9 @@ async function startServer() {
               await saveAllCompanyProfiles(parsed.companies);
             } else if (parsed.companyProfile) {
               await saveCompanyProfile(parsed.companyProfile);
+            }
+            if (Array.isArray(parsed.customers)) {
+              await replaceAllCustomers(parsed.customers);
             }
 
             persist();

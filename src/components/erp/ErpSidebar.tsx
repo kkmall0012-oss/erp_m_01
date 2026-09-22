@@ -3,6 +3,7 @@ import {
   Home, 
   Coins, 
   Building2,
+  Users2,
   Car, 
   Package, 
   FileCheck2, 
@@ -13,7 +14,7 @@ import {
   Settings
 } from 'lucide-react';
 
-export type ErpAppId = 'home' | 'company' | 'petty_cash' | 'fleet' | 'assets' | 'workflow' | 'database';
+export type ErpAppId = 'home' | 'company' | 'customers' | 'petty_cash' | 'fleet' | 'assets' | 'workflow' | 'database';
 
 export interface ErpAppItem {
   id: ErpAppId;
@@ -44,6 +45,16 @@ export const ERP_APPS: ErpAppItem[] = [
     badgeColor: 'bg-blue-100 text-blue-800 border border-blue-200',
     isReady: true,
     description: '公司全名、統編、電話地址與銀行匯款帳號，供套印表格或匯出報表自動帶入'
+  },
+  {
+    id: 'customers',
+    name: '客戶聯絡資訊管理',
+    shortName: '客戶通訊錄',
+    icon: Users2,
+    badge: '共用通訊錄',
+    badgeColor: 'bg-indigo-100 text-indigo-800 border border-indigo-200',
+    isReady: true,
+    description: '全關係企業共用客戶通訊錄，支援個人/公司、統編檢核、銀行收款方式與常用標記'
   },
   {
     id: 'petty_cash',

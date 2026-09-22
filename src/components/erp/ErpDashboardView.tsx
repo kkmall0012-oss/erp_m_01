@@ -2,6 +2,7 @@ import React from 'react';
 import { 
   Coins, 
   Building2,
+  Users2,
   Car, 
   Package, 
   FileCheck2, 
@@ -153,6 +154,39 @@ export const ErpDashboardView: React.FC<ErpDashboardViewProps> = ({
 
             <div className="mt-4 pt-2 flex items-center justify-between text-xs font-bold text-[#0066cc]">
               <span>進入公司設定編輯</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+
+          {/* 模組：客戶聯絡資訊管理 (共用通訊錄) */}
+          <div 
+            onClick={() => onSelectApp('customers')}
+            className="p-5 rounded-2xl border-2 border-indigo-200 bg-white hover:border-indigo-600 hover:shadow-md transition-all cursor-pointer relative group flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold">
+                  <Users2 className="w-5 h-5" />
+                </div>
+                <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                  ● 跨公司共用庫
+                </span>
+              </div>
+              <h4 className="font-bold text-stone-900 text-base group-hover:text-indigo-700 transition-colors">
+                客戶聯絡資訊管理
+              </h4>
+              <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                跨公司共用客戶通訊錄，支援個人/公司法人、台灣統編智慧檢核、銀行付款條件及未來廠商身分一鍵綁定。
+              </p>
+
+              <div className="mt-4 pt-3 border-t border-stone-100 text-xs text-stone-600 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
+                <span>支援各公司獨立常用標記與多窗口名單</span>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-2 flex items-center justify-between text-xs font-bold text-indigo-700">
+              <span>進入客戶通訊錄管理</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>

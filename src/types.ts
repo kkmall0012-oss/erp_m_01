@@ -222,6 +222,143 @@ export const DEFAULT_COMPANIES: CompanyProfile[] = [
   }
 ];
 
+// ==========================================
+// 客戶聯絡資訊模組 (與記帳解耦，但預留廠商雙重身分)
+// ==========================================
+
+export interface CustomerContactPerson {
+  id: string;
+  name: string; // 聯絡人姓名 (如李如榮、李金銘)
+  title?: string; // 職稱 (如業務主任、工地主任、專案工程師)
+  mobile?: string; // 行動電話
+  phone?: string; // 市話分機
+  email?: string; // 電子郵件
+  lineId?: string; // LINE ID
+  note?: string; // 備註 (如主要聯絡窗口、李太太專線)
+}
+
+export interface Customer {
+  id: string;
+  name: string; // 客戶/公司名稱 或 個人姓名 (必填)
+  shortName?: string; // 簡稱/代號
+  isIndividual: boolean; // 是否為個人客戶 (true: 個人, false: 公司法人行號)
+  taxId?: string; // 統一編號 (選填，8碼，需通過台灣加權邏輯檢查；個人可留空)
+  representative?: string; // 負責人 / 代表人
+  representativeMobile?: string; // 負責人行動電話
+  secondaryRepresentative?: string; // 副負責人 / 現場主管 (如舊資料之林主任、謝帝旺)
+  
+  // 聯絡電話與通訊
+  phone1?: string; // 電話 1 (代表號或市話)
+  phone2?: string; // 電話 2 (專線或備用)
+  fax?: string; // 傳真
+  email?: string; // 電子信箱
+  website?: string; // 官方網站
+  lineId?: string; // LINE ID
+
+  // 地址與郵遞
+  postalCode?: string; // 郵遞區號 (如 231, 640)
+  address?: string; // 通訊/營業/戶籍地址
+  shippingAddress?: string; // 送貨/施工地址 (選填)
+
+  // 多聯絡人彈性支援 (支援多位窗口)
+  contacts: CustomerContactPerson[];
+
+  // 收款條件與銀行帳戶資訊 (選單式選填)
+  paymentTerm?: string; // 主要配合收款方式 (例如：匯款(月結30天)、現金/貨到付款、支票次月15號、完工驗收付款)
+  bankName?: string; // 往來銀行代碼與名稱 (如：004 臺灣銀行、808 玉山銀行)
+  bankBranch?: string; // 分行名稱 (如：南港分行)
+  bankAccount?: string; // 匯款帳號
+  accountName?: string; // 匯款戶名
+
+  // 業務分類與廠商雙重身分預留
+  businessItems?: string; // 營業項目 / 專案備註 (如：電機/AC瀝青鋪路/冷氣維護、建築五金)
+  isCustomer: boolean; // 是否為客戶身分 (預設 true)
+  isSupplier: boolean; // 是否為合作廠商身分 (預設 false，可一鍵轉為或兼具廠商身分)
+  
+  // 常用公司標記 (跨行號全集團共用名冊，但可分哪一間公司的常用客戶)
+  favoriteCompanyIds: string[]; // 存放 comp_1, comp_2 等，便於切換各公司時一鍵篩選常用客戶
+  
+  note?: string; // 總體備註說明
+  createdAt: number;
+  updatedAt: number;
+}
+
+// 台灣常見銀行清單 (選單式選填)
+export const TAIWAN_BANKS = [
+  { code: '004', name: '臺灣銀行' },
+  { code: '005', name: '臺灣土地銀行' },
+  { code: '006', name: '合作金庫商業銀行' },
+  { code: '007', name: '第一商業銀行' },
+  { code: '008', name: '華南商業銀行' },
+  { code: '009', name: '彰化商業銀行' },
+  { code: '011', name: '上海商業儲蓄銀行' },
+  { code: '012', name: '台北富邦商業銀行' },
+  { code: '013', name: '國泰世華商業銀行' },
+  { code: '016', name: '高雄銀行' },
+  { code: '017', name: '兆豐國際商業銀行' },
+  { code: '050', name: '臺灣中小企業銀行' },
+  { code: '052', name: '渣打國際商業銀行' },
+  { code: '053', name: '台中商業銀行' },
+  { code: '054', name: '京城商業銀行' },
+  { code: '103', name: '新光商業銀行' },
+  { code: '108', name: '陽信商業銀行' },
+  { code: '147', name: '三信商業銀行' },
+  { code: '700', name: '中華郵政公司 (郵局)' },
+  { code: '803', name: '聯邦商業銀行' },
+  { code: '805', name: '遠東國際商業銀行' },
+  { code: '806', name: '元大商業銀行' },
+  { code: '807', name: '永豐商業銀行' },
+  { code: '808', name: '玉山商業銀行' },
+  { code: '812', name: '台新國際商業銀行' },
+  { code: '822', name: '中國信託商業銀行' }
+];
+
+// 常見收款與結算方式選項清單 (選單式選填)
+export const PAYMENT_TERMS_OPTIONS = [
+  '現金 / 貨到付款',
+  '銀行匯款 (月結 30 天)',
+  '銀行匯款 (月結 60 天)',
+  '銀行匯款 (次月 25 號電匯)',
+  '開立支票 (次月 15 號換票 / 票期 30 天)',
+  '開立支票 (次月 15 號換票 / 票期 60 天)',
+  '依工程完工進度驗收請款',
+  '預付訂金 30% / 驗收尾款 70%',
+  '其他協議方式'
+];
+
+/**
+ * 台灣財政部統一編號邏輯檢核演算法 (8 碼標準加權檢查)
+ * 回傳：{ isValid: boolean, error?: string }
+ */
+export function validateTaiwanTaxId(taxId?: string): { isValid: boolean; error?: string } {
+  if (!taxId || !taxId.trim()) {
+    return { isValid: true }; // 選填時若無輸入算通過
+  }
+  const clean = taxId.trim().replace(/[-\s]/g, '');
+  if (!/^\d{8}$/.test(clean)) {
+    return { isValid: false, error: '統一編號必須為剛好 8 碼半形數字' };
+  }
+
+  const weights = [1, 2, 1, 2, 1, 2, 4, 1];
+  let sum = 0;
+  for (let i = 0; i < 8; i++) {
+    const digit = parseInt(clean[i], 10);
+    const prod = digit * weights[i];
+    // 兩位數拆開相加 (或 Math.floor(prod/10) + prod%10)
+    sum += Math.floor(prod / 10) + (prod % 10);
+  }
+
+  // 若第 7 位是 7，除以 10 餘 9 亦可算有效
+  if (sum % 10 === 0) {
+    return { isValid: true };
+  }
+  if (clean[6] === '7' && (sum + 1) % 10 === 0) {
+    return { isValid: true };
+  }
+
+  return { isValid: false, error: '統一編號邏輯檢查碼不符（請確認是否有打錯數字）' };
+}
+
 export interface BackupData {
   version: string;
   exportedAt: string;
@@ -233,6 +370,7 @@ export interface BackupData {
   subAccounts?: SubAccount[];
   companyProfile?: CompanyProfile;
   companies?: CompanyProfile[];
+  customers?: Customer[];
 }
 
 export type RestoreScope = 'full' | 'settings_only' | 'transactions_only';
