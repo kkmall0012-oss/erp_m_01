@@ -66,6 +66,8 @@ import {
   saveSubAccounts,
   saveCompanies,
   saveCompanyProfile,
+  loadCustomers,
+  saveCustomers,
   getCurrentYearMonth 
 } from './utils/storage';
 import { exportTransactionsToExcel, formatSystemVoucherId, generateMyMoneyNativeVoucherId } from './utils/excel';
@@ -83,7 +85,8 @@ import {
   migrateFromLocalApi,
   saveCompanyProfileApi,
   saveCompaniesApi,
-  fetchCustomers
+  fetchCustomers,
+  syncCustomersBatchApi
 } from './services/api';
 
 export default function App() {
@@ -161,6 +164,10 @@ export default function App() {
           } else if (refreshed.companyProfile) {
             setCompanyProfile(refreshed.companyProfile);
           }
+          if (refreshed.customers) {
+            setCustomers(refreshed.customers);
+            saveCustomers(refreshed.customers);
+          }
         } else {
           setTransactions(bootstrap.transactions);
           setCategories(bootstrap.categories);
@@ -175,6 +182,10 @@ export default function App() {
           } else if (bootstrap.companyProfile) {
             setCompanyProfile(bootstrap.companyProfile);
           }
+          if (bootstrap.customers) {
+            setCustomers(bootstrap.customers);
+            saveCustomers(bootstrap.customers);
+          }
         }
       }
     } catch (err) {
@@ -185,6 +196,7 @@ export default function App() {
       setDirectorWithdrawals(loadDirectorWithdrawals());
       setSubAccounts(loadSubAccounts());
       setBudgets(loadBudgets());
+      setCustomers(loadCustomers());
     } finally {
       setIsLoaded(true);
     }
@@ -537,9 +549,15 @@ export default function App() {
       saveCompanyProfileApi(data.companyProfile).catch(console.error);
     }
 
+    if (data.customers && data.customers.length > 0) {
+      setCustomers(data.customers);
+      saveCustomers(data.customers);
+      syncCustomersBatchApi(data.customers).catch(console.error);
+    }
+
     setImportNotification({
       type: 'success',
-      message: `✓ 已完成全資料庫完整還原！已恢復 ${data.transactions.length} 筆帳目、${data.categories?.length || 0} 個主題分類與公司行號設定。`
+      message: `✓ 已完成全資料庫完整還原！已恢復 ${data.transactions.length} 筆帳目、${data.categories?.length || 0} 個主題分類、${data.customers?.length || 0} 筆客戶聯絡人與公司行號設定。`
     });
   };
 
@@ -719,6 +737,18 @@ export default function App() {
                     setActiveCompanyId(def ? def.id : 'all');
                   }
                 }}
+              />
+            </div>
+          )}
+
+          {/* 小程式 3：客戶與合作廠商聯絡資訊管理 */}
+          {activeApp === 'customers' && (
+            <div className="p-4 sm:p-6 lg:p-8">
+              <CustomerManagementView
+                customers={customers}
+                companies={companies}
+                activeCompanyId={activeCompanyId}
+                onRefreshCustomers={reloadFromDb}
               />
             </div>
           )}
@@ -1105,6 +1135,7 @@ export default function App() {
         subAccounts={subAccounts}
         companies={companies}
         companyProfile={companyProfile}
+        customers={customers}
         onRestoreBackup={handleRestoreBackup}
         onClearAllData={handleClearAllData}
         onReloadAllData={reloadFromDb}
