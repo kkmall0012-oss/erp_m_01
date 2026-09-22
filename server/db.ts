@@ -117,6 +117,25 @@ export interface CustomerContactPersonRow {
   note?: string;
 }
 
+export interface CustomerEventRecordRow {
+  id: string;
+  date: string;
+  category: 'wedding_funeral' | 'business_gift' | 'important_matter' | 'other';
+  categoryLabel?: string;
+  title: string;
+  eventType?: string;
+  hasAmount: boolean;
+  amount?: number;
+  direction?: 'outgoing' | 'incoming';
+  targetPerson?: string;
+  ourRepresentative?: string;
+  isPettyCashLinked?: boolean;
+  voucherNo?: string;
+  proofNote?: string;
+  note?: string;
+  createdAt: number;
+}
+
 export interface CustomerRow {
   id: string;
   name: string;
@@ -145,6 +164,7 @@ export interface CustomerRow {
   isCustomer: boolean;
   isSupplier: boolean;
   favoriteCompanyIds: string[];
+  events?: CustomerEventRecordRow[];
   note?: string;
   createdAt: number;
   updatedAt: number;
@@ -231,6 +251,171 @@ export const DEFAULT_COMPANIES_SEED: CompanyProfileRow[] = [
     color: '#d97706',
     isDefault: false,
     sortOrder: 3,
+    updatedAt: Date.now()
+  }
+];
+
+// 預設客戶與廠商種子名冊（含婚喪喜慶、商務交際與重要事項歷史紀錄）
+export const DEFAULT_CUSTOMERS_SEED: CustomerRow[] = [
+  {
+    id: 'cust_seed_1',
+    name: '台塑精密工程股份有限公司',
+    shortName: '台塑精密',
+    isIndividual: false,
+    taxId: '23456789',
+    representative: '陳志明',
+    representativeMobile: '0912-345-678',
+    phone1: '02-2789-0123',
+    postalCode: '115',
+    address: '台北市南港區重陽路120號',
+    contacts: [
+      { id: 'cnt_1_1', name: '李如榮', title: '業務專案經理', mobile: '0922-111-222', phone: '分機 301', note: '主要採購窗口' },
+      { id: 'cnt_1_2', name: '林玉秀', title: '財務會計', phone: '02-2789-0123 分機 105', note: '請款核銷窗口' }
+    ],
+    paymentTerm: '銀行匯款 (月結 30 天)',
+    bankName: '臺灣銀行 南港分行',
+    bankBranch: '南港分行',
+    bankAccount: '004-123-4567890',
+    accountName: '台塑精密工程股份有限公司',
+    businessItems: 'AC瀝青鋪面、鋼構廠房、冷卻管路機電維護',
+    isCustomer: true,
+    isSupplier: true,
+    favoriteCompanyIds: ['comp_1', 'comp_3'],
+    note: '雙向合作夥伴：我方承接其瀝青工程，其亦為我方機電協力廠商',
+    events: [
+      {
+        id: 'evt_1_1',
+        date: '2026-08-18',
+        category: 'wedding_funeral',
+        categoryLabel: '婚喪喜慶',
+        title: '陳董令嬡文定喜宴 (紅包禮金)',
+        eventType: '結婚紅包',
+        hasAmount: true,
+        amount: 3600,
+        direction: 'outgoing',
+        targetPerson: '陳志明 董事長',
+        ourRepresentative: '陳廠長 (出席大直典華喜宴)',
+        isPettyCashLinked: true,
+        voucherNo: 'P2026081801-0002',
+        proofNote: '喜帖存查、已附喜餅謝卡',
+        note: '董事長親切致意，安排主桌貴賓席',
+        createdAt: 1787040000000
+      },
+      {
+        id: 'evt_1_2',
+        date: '2026-05-12',
+        category: 'wedding_funeral',
+        categoryLabel: '婚喪喜慶',
+        title: '工務部黃協理尊翁仙逝 (白包奠儀)',
+        eventType: '公祭白包',
+        hasAmount: true,
+        amount: 2100,
+        direction: 'outgoing',
+        targetPerson: '工務部 黃協理',
+        ourRepresentative: '李業務代表',
+        isPettyCashLinked: true,
+        voucherNo: 'P2026051201-0004',
+        proofNote: '已附訃聞與謝卡存查',
+        note: '市立第一殯儀館公祭致哀',
+        createdAt: 1778572800000
+      },
+      {
+        id: 'evt_1_3',
+        date: '2026-01-20',
+        category: 'business_gift',
+        categoryLabel: '商務交際',
+        title: '竹科二廠落成誌慶 (高架花籃一對)',
+        eventType: '花籃盆栽',
+        hasAmount: true,
+        amount: 3000,
+        direction: 'outgoing',
+        targetPerson: '台塑精密全體同仁',
+        ourRepresentative: '廠長暨全體業務部',
+        isPettyCashLinked: false,
+        proofNote: '花苑請款發票',
+        note: '高架羅馬柱鮮花一對，賀詞：駿業崇隆',
+        createdAt: 1768896000000
+      },
+      {
+        id: 'evt_1_4',
+        date: '2026-09-02',
+        category: 'important_matter',
+        categoryLabel: '重大記事',
+        title: '續簽 2026~2027 年度產線高壓配電與空調設備聯合維護合約',
+        eventType: '合約協議',
+        hasAmount: false,
+        targetPerson: '陳志明 董事長 / 李如榮 經理',
+        ourRepresentative: '陳負責人、林會計',
+        proofNote: '合約編號 HY-2026-ENG08 正本雙方用印歸檔',
+        note: '合約條件維持原合約單價，附工安保險切結書',
+        createdAt: 1788336000000
+      }
+    ],
+    createdAt: Date.now() - 3600000 * 24 * 30,
+    updatedAt: Date.now()
+  },
+  {
+    id: 'cust_seed_2',
+    name: '宏泰工業五金建材行',
+    shortName: '宏泰建材',
+    isIndividual: false,
+    taxId: '34567890',
+    representative: '林國華',
+    representativeMobile: '0933-456-789',
+    phone1: '02-2641-5588',
+    postalCode: '221',
+    address: '新北市汐止區大同路一段280號',
+    contacts: [
+      { id: 'cnt_2_1', name: '林國華', title: '負責人/老闆', mobile: '0933-456-789', note: '五金急料叫貨直接找林老闆' }
+    ],
+    paymentTerm: '開立支票 (次月 15 號換票 / 票期 30 天)',
+    bankName: '第一商業銀行 汐止分行',
+    bankBranch: '汐止分行',
+    bankAccount: '007-654-3210987',
+    accountName: '宏泰工業五金建材行',
+    businessItems: '工廠維修五金、高張力螺絲、AC補路瀝青包、油漆塗料',
+    isCustomer: false,
+    isSupplier: true,
+    favoriteCompanyIds: ['comp_1', 'comp_2', 'comp_3'],
+    note: '汐止在地五金急件供應商，配合度高，可簽單月結',
+    events: [
+      {
+        id: 'evt_2_1',
+        date: '2026-09-10',
+        category: 'business_gift',
+        categoryLabel: '商務交際',
+        title: '致送 2026 中秋節頂級高山茶伴手禮盒',
+        eventType: '中秋禮盒',
+        hasAmount: true,
+        amount: 2400,
+        direction: 'outgoing',
+        targetPerson: '林國華 老闆',
+        ourRepresentative: '李業務',
+        isPettyCashLinked: true,
+        voucherNo: 'P2026091001-0001',
+        proofNote: '採買發票已入帳',
+        note: '感謝林老闆工期緊急時假日配合調料',
+        createdAt: 1789027200000
+      },
+      {
+        id: 'evt_2_2',
+        date: '2026-06-06',
+        category: 'wedding_funeral',
+        categoryLabel: '婚喪喜慶',
+        title: '林老闆長孫誕生 (彌月添喜紅包)',
+        eventType: '彌月紅包',
+        hasAmount: true,
+        amount: 2000,
+        direction: 'outgoing',
+        targetPerson: '林國華 老闆',
+        ourRepresentative: '廠長',
+        isPettyCashLinked: true,
+        proofNote: '已收到彌月蛋糕油飯與賀卡',
+        note: '林家添丁弄璋之喜',
+        createdAt: 1780732800000
+      }
+    ],
+    createdAt: Date.now() - 3600000 * 24 * 60,
     updatedAt: Date.now()
   }
 ];
@@ -454,6 +639,7 @@ function initSchema(database: Database) {
       isCustomer INTEGER DEFAULT 1,
       isSupplier INTEGER DEFAULT 0,
       favoriteCompanyIds TEXT NOT NULL,
+      events TEXT,
       note TEXT,
       createdAt INTEGER NOT NULL,
       updatedAt INTEGER NOT NULL
@@ -465,6 +651,7 @@ function initSchema(database: Database) {
   try { database.run(`ALTER TABLE company_profile ADD COLUMN color TEXT`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN isDefault INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN sortOrder INTEGER DEFAULT 0`); } catch (e) {}
+  try { database.run(`ALTER TABLE customers ADD COLUMN events TEXT`); } catch (e) {}
 
   // 檢查既有行號主檔，並初始化 3 間關係企業
   const cpCountRes = database.exec('SELECT COUNT(*) AS cnt FROM company_profile');
@@ -577,6 +764,57 @@ function initSchema(database: Database) {
   if (claimantCount === 0) {
     INITIAL_CLAIMANTS.forEach((name, idx) => {
       database.run(`INSERT INTO claimants (name, sortOrder) VALUES (?, ?)`, [name, idx]);
+    });
+  }
+
+  // Seed default customers with realistic event/courtesy records if empty
+  const customerCountRes = database.exec('SELECT COUNT(*) AS cnt FROM customers');
+  const customerCount = (customerCountRes[0]?.values[0]?.[0] as number) || 0;
+  if (customerCount === 0) {
+    DEFAULT_CUSTOMERS_SEED.forEach((c) => {
+      const now = Date.now();
+      database.run(
+        `INSERT INTO customers (
+          id, name, shortName, isIndividual, taxId, representative, representativeMobile,
+          secondaryRepresentative, phone1, phone2, fax, email, website, lineId,
+          postalCode, address, shippingAddress, contacts, paymentTerm, bankName,
+          bankBranch, bankAccount, accountName, businessItems, isCustomer, isSupplier,
+          favoriteCompanyIds, events, note, createdAt, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          c.id,
+          c.name,
+          c.shortName || null,
+          c.isIndividual ? 1 : 0,
+          c.taxId || null,
+          c.representative || null,
+          c.representativeMobile || null,
+          c.secondaryRepresentative || null,
+          c.phone1 || null,
+          c.phone2 || null,
+          c.fax || null,
+          c.email || null,
+          c.website || null,
+          c.lineId || null,
+          c.postalCode || null,
+          c.address || null,
+          c.shippingAddress || null,
+          JSON.stringify(c.contacts || []),
+          c.paymentTerm || null,
+          c.bankName || null,
+          c.bankBranch || null,
+          c.bankAccount || null,
+          c.accountName || null,
+          c.businessItems || null,
+          c.isCustomer ? 1 : 0,
+          c.isSupplier ? 1 : 0,
+          JSON.stringify(c.favoriteCompanyIds || []),
+          JSON.stringify(c.events || []),
+          c.note || null,
+          c.createdAt || now,
+          c.updatedAt || now
+        ]
+      );
     });
   }
 }
@@ -1039,6 +1277,15 @@ function mapRowToCustomer(row: any[], columns: string[]): CustomerRow {
     favoriteCompanyIds = [];
   }
 
+  let events: CustomerEventRecordRow[] = [];
+  try {
+    if (obj.events) {
+      events = JSON.parse(String(obj.events));
+    }
+  } catch (e) {
+    events = [];
+  }
+
   return {
     id: String(obj.id),
     name: String(obj.name || ''),
@@ -1067,6 +1314,7 @@ function mapRowToCustomer(row: any[], columns: string[]): CustomerRow {
     isCustomer: obj.isCustomer !== undefined ? Boolean(obj.isCustomer) : true,
     isSupplier: Boolean(obj.isSupplier),
     favoriteCompanyIds,
+    events,
     note: obj.note ? String(obj.note) : undefined,
     createdAt: Number(obj.createdAt || Date.now()),
     updatedAt: Number(obj.updatedAt || Date.now())
@@ -1092,8 +1340,8 @@ export async function addCustomer(c: CustomerRow): Promise<void> {
       secondaryRepresentative, phone1, phone2, fax, email, website, lineId,
       postalCode, address, shippingAddress, contacts, paymentTerm, bankName,
       bankBranch, bankAccount, accountName, businessItems, isCustomer, isSupplier,
-      favoriteCompanyIds, note, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      favoriteCompanyIds, events, note, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       c.id,
       c.name,
@@ -1122,6 +1370,7 @@ export async function addCustomer(c: CustomerRow): Promise<void> {
       c.isCustomer ? 1 : 0,
       c.isSupplier ? 1 : 0,
       JSON.stringify(c.favoriteCompanyIds || []),
+      JSON.stringify(c.events || []),
       c.note || null,
       c.createdAt || now,
       c.updatedAt || now
@@ -1140,7 +1389,7 @@ export async function updateCustomer(c: CustomerRow): Promise<void> {
       fax = ?, email = ?, website = ?, lineId = ?, postalCode = ?, address = ?,
       shippingAddress = ?, contacts = ?, paymentTerm = ?, bankName = ?, bankBranch = ?,
       bankAccount = ?, accountName = ?, businessItems = ?, isCustomer = ?, isSupplier = ?,
-      favoriteCompanyIds = ?, note = ?, updatedAt = ?
+      favoriteCompanyIds = ?, events = ?, note = ?, updatedAt = ?
     WHERE id = ?`,
     [
       c.name,
@@ -1169,6 +1418,7 @@ export async function updateCustomer(c: CustomerRow): Promise<void> {
       c.isCustomer ? 1 : 0,
       c.isSupplier ? 1 : 0,
       JSON.stringify(c.favoriteCompanyIds || []),
+      JSON.stringify(c.events || []),
       c.note || null,
       now,
       c.id

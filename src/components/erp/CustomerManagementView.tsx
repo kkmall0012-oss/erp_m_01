@@ -25,11 +25,21 @@ import {
   Layers,
   Sparkles,
   Link2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  HeartHandshake,
+  Gift,
+  FileText,
+  StickyNote,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Receipt
 } from 'lucide-react';
 import { 
   Customer, 
   CustomerContactPerson, 
+  CustomerEventRecord,
+  CustomerEventCategory,
+  EVENT_CATEGORY_CONFIG,
   CompanyProfile, 
   TAIWAN_BANKS, 
   PAYMENT_TERMS_OPTIONS, 
@@ -41,6 +51,8 @@ import {
   deleteCustomerApi 
 } from '../../services/api';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { CustomerEventModal } from './CustomerEventModal';
+import { CustomerEventsSummaryModal } from './CustomerEventsSummaryModal';
 
 interface CustomerManagementViewProps {
   customers: Customer[];
@@ -75,6 +87,20 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
   const [customerToDelete, setCustomerToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // 禮金與重要事項加總分析總表彈窗
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+
+  // 個別重要事項/禮金新增與編輯彈窗
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
+  const [editingEvent, setEditingEvent] = useState<CustomerEventRecord | null>(null);
+  const [eventTargetCustomer, setEventTargetCustomer] = useState<{ id?: string; name: string; isInsideMainForm: boolean }>({
+    name: '',
+    isInsideMainForm: true
+  });
+
+  // 卡片上的快速重要大事對話框
+  const [quickEventsCustomer, setQuickEventsCustomer] = useState<Customer | null>(null);
+
   // 表單資料初始預設值
   const initialFormData: Customer = {
     id: '',
@@ -104,6 +130,7 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
     isCustomer: true,
     isSupplier: false,
     favoriteCompanyIds: activeCompanyId !== 'all' ? [activeCompanyId] : [],
+    events: [],
     note: '',
     createdAt: Date.now(),
     updatedAt: Date.now()
@@ -118,7 +145,8 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
     setFormData({
       ...initialFormData,
       id: newId,
-      favoriteCompanyIds: activeCompanyId !== 'all' ? [activeCompanyId] : []
+      favoriteCompanyIds: activeCompanyId !== 'all' ? [activeCompanyId] : [],
+      events: []
     });
     setFormError(null);
     setTaxIdError(null);
@@ -131,7 +159,8 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
     setFormData({
       ...c,
       contacts: c.contacts ? [...c.contacts] : [],
-      favoriteCompanyIds: c.favoriteCompanyIds ? [...c.favoriteCompanyIds] : []
+      favoriteCompanyIds: c.favoriteCompanyIds ? [...c.favoriteCompanyIds] : [],
+      events: c.events ? [...c.events] : []
     });
     setFormError(null);
     setTaxIdError(null);
@@ -290,6 +319,120 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
     }
   };
 
+  // 表單內新增與編輯重要事項/禮金
+  const handleOpenAddEventInForm = () => {
+    setEditingEvent(null);
+    setEventTargetCustomer({
+      name: formData.name || '此公司/客戶',
+      isInsideMainForm: true
+    });
+    setIsEventModalOpen(true);
+  };
+
+  const handleOpenEditEventInForm = (evt: CustomerEventRecord) => {
+    setEditingEvent(evt);
+    setEventTargetCustomer({
+      name: formData.name || '此公司/客戶',
+      isInsideMainForm: true
+    });
+    setIsEventModalOpen(true);
+  };
+
+  const handleDeleteEventInForm = (eventId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      events: (prev.events || []).filter(e => e.id !== eventId)
+    }));
+  };
+
+  // 卡片快捷大事紀
+  const handleOpenQuickEvents = (c: Customer) => {
+    setQuickEventsCustomer(c);
+  };
+
+  const handleOpenAddEventForCustomer = (cust: Customer) => {
+    setEditingEvent(null);
+    setEventTargetCustomer({
+      id: cust.id,
+      name: cust.name,
+      isInsideMainForm: false
+    });
+    setIsEventModalOpen(true);
+  };
+
+  const handleOpenEditEventForCustomer = (cust: Customer, evt: CustomerEventRecord) => {
+    setEditingEvent(evt);
+    setEventTargetCustomer({
+      id: cust.id,
+      name: cust.name,
+      isInsideMainForm: false
+    });
+    setIsEventModalOpen(true);
+  };
+
+  const handleDeleteEventForCustomer = async (cust: Customer, eventId: string) => {
+    const updatedEvents = (cust.events || []).filter(e => e.id !== eventId);
+    const updatedCust: Customer = {
+      ...cust,
+      events: updatedEvents,
+      updatedAt: Date.now()
+    };
+    try {
+      await updateCustomerApi(updatedCust);
+      onRefreshCustomers();
+      setQuickEventsCustomer(updatedCust);
+      showTemporaryFeedback(`已刪除「${cust.name}」的該筆重要事項紀錄`);
+    } catch (err: any) {
+      console.error('刪除失敗', err);
+    }
+  };
+
+  // 儲存大事紀 (由 CustomerEventModal 回傳)
+  const handleSaveEvent = async (savedEvent: CustomerEventRecord) => {
+    if (eventTargetCustomer.isInsideMainForm) {
+      setFormData(prev => {
+        const currentEvents = prev.events || [];
+        const idx = currentEvents.findIndex(e => e.id === savedEvent.id);
+        let updatedEvents: CustomerEventRecord[];
+        if (idx >= 0) {
+          updatedEvents = [...currentEvents];
+          updatedEvents[idx] = savedEvent;
+        } else {
+          updatedEvents = [savedEvent, ...currentEvents];
+        }
+        updatedEvents.sort((a, b) => b.date.localeCompare(a.date));
+        return { ...prev, events: updatedEvents };
+      });
+    } else if (eventTargetCustomer.id) {
+      const targetCust = customers.find(c => c.id === eventTargetCustomer.id) || quickEventsCustomer;
+      if (targetCust) {
+        const currentEvents = targetCust.events || [];
+        const idx = currentEvents.findIndex(e => e.id === savedEvent.id);
+        let updatedEvents: CustomerEventRecord[];
+        if (idx >= 0) {
+          updatedEvents = [...currentEvents];
+          updatedEvents[idx] = savedEvent;
+        } else {
+          updatedEvents = [savedEvent, ...currentEvents];
+        }
+        updatedEvents.sort((a, b) => b.date.localeCompare(a.date));
+        const updatedCust: Customer = {
+          ...targetCust,
+          events: updatedEvents,
+          updatedAt: Date.now()
+        };
+        try {
+          await updateCustomerApi(updatedCust);
+          onRefreshCustomers();
+          setQuickEventsCustomer(updatedCust);
+          showTemporaryFeedback(`已儲存「${targetCust.name}」的重要事項紀錄！`);
+        } catch (err: any) {
+          console.error('儲存失敗', err);
+        }
+      }
+    }
+  };
+
   // 篩選客戶列表
   const filteredCustomers = useMemo(() => {
     return customers.filter(c => {
@@ -357,6 +500,16 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
           <div className="flex items-center gap-2">
             <button
               type="button"
+              onClick={() => setIsSummaryModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-rose-50 text-rose-700 border border-rose-200 font-bold text-xs hover:bg-rose-100 transition-colors shadow-2xs cursor-pointer active:scale-95"
+              title="檢視全集團所有客戶與廠商之紅白包、交際禮金與重大事項加總分析總表"
+            >
+              <HeartHandshake className="w-4 h-4 text-rose-600" />
+              <span>紅白包與大事紀總表</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleOpenCreateForm}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0066cc] text-white font-semibold text-xs hover:bg-blue-700 transition-colors shadow-2xs cursor-pointer active:scale-95"
             >
@@ -375,7 +528,7 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
         )}
 
         {/* 統計與現況看板 */}
-        <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-stone-100">
+        <div className="mt-5 grid grid-cols-2 sm:grid-cols-5 gap-3 pt-4 border-t border-stone-100">
           <div className="p-3 bg-stone-50 rounded-lg border border-stone-200/70">
             <span className="text-xs text-stone-500 block">總客戶數</span>
             <span className="text-xl font-bold font-mono text-stone-800 mt-0.5 block">
@@ -398,6 +551,19 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
             <span className="text-xs text-stone-500 block">具廠商雙重身分</span>
             <span className="text-xl font-bold font-mono text-emerald-700 mt-0.5 block">
               {customers.filter(c => c.isSupplier).length} <span className="text-xs font-normal text-stone-500">家</span>
+            </span>
+          </div>
+          <div 
+            onClick={() => setIsSummaryModalOpen(true)}
+            className="p-3 bg-rose-50/70 rounded-lg border border-rose-200/70 hover:bg-rose-100/70 transition-colors cursor-pointer"
+            title="點擊查看全名冊交際禮金與重大事項加總分析總表"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-rose-700 font-medium block">交際禮金往來</span>
+              <HeartHandshake className="w-3.5 h-3.5 text-rose-500" />
+            </div>
+            <span className="text-xl font-bold font-mono text-rose-700 mt-0.5 block">
+              ${customers.reduce((acc, c) => acc + (c.events || []).reduce((s, e) => s + (e.hasAmount && e.amount && e.direction !== 'incoming' ? e.amount : 0), 0), 0).toLocaleString()}
             </span>
           </div>
         </div>
@@ -703,6 +869,41 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                       <span>{customer.businessItems}</span>
                     </div>
                   )}
+
+                  {/* 關於該公司之重要事項與禮金往來摘要 */}
+                  {customer.events && customer.events.length > 0 && (() => {
+                    const evts = customer.events;
+                    const moneyTotal = evts.reduce((sum, e) => (e.hasAmount && e.amount ? sum + (e.direction === 'incoming' ? -e.amount : e.amount) : sum), 0);
+                    return (
+                      <div className="mt-2 pt-2 border-t border-stone-100">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-bold text-rose-700 flex items-center gap-1">
+                            <HeartHandshake className="w-3 h-3 text-rose-500" />
+                            <span>大事紀與禮金 ({evts.length}筆)</span>
+                          </span>
+                          {moneyTotal !== 0 && (
+                            <span className="text-[11px] font-mono font-bold text-rose-600">
+                              累計 NT$ {moneyTotal.toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {evts.slice(0, 2).map((ev, i) => (
+                            <span key={ev.id || i} className="text-[10px] px-1.5 py-0.5 rounded bg-rose-50/70 border border-rose-100 text-stone-700 flex items-center gap-1">
+                              <span className="text-stone-400 font-mono">{ev.date.substring(5)}</span>
+                              <span className="font-medium text-stone-800 truncate max-w-[120px]">{ev.title}</span>
+                              {ev.amount ? <span className="font-mono text-rose-600 font-bold">${ev.amount}</span> : null}
+                            </span>
+                          ))}
+                          {evts.length > 2 && (
+                            <span className="text-[10px] text-stone-400 self-center">
+                              +{evts.length - 2} 筆
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* 卡片底端操作按鈕列 */}
@@ -711,6 +912,15 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                     ID: {customer.id.replace('cust_', '')}
                   </div>
                   <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenQuickEvents(customer)}
+                      className="px-2 py-1 text-xs font-semibold text-rose-700 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 rounded-md transition-colors cursor-pointer flex items-center gap-1"
+                      title="檢視/登記此客戶之婚喪喜慶或重大事項"
+                    >
+                      <HeartHandshake className="w-3.5 h-3.5" />
+                      <span>大事紀 ({customer.events?.length || 0})</span>
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleOpenEditForm(customer)}
@@ -1243,6 +1453,166 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                     className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                   />
                 </div>
+
+                {/* 6. 關於該公司之重要事項與交際禮金紀錄 (婚喪喜慶 / 紅白包 / 重大協議) */}
+                <div className="space-y-3 pt-4 border-t border-stone-200">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-stone-200">
+                    <div className="flex items-center gap-2">
+                      <span className="p-1.5 rounded-lg bg-rose-100 text-rose-700">
+                        <HeartHandshake className="w-4 h-4" />
+                      </span>
+                      <div>
+                        <h4 className="font-bold text-stone-900 text-xs">
+                          6. 關於該公司之重要事項與交際禮金紀錄 (婚喪喜慶 / 紅白包 / 重大協議)
+                        </h4>
+                        <p className="text-[11px] text-stone-500">
+                          登記紅包白包禮金、三節禮盒與重大簽約記事，支援金額收支加總分析
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleOpenAddEventInForm}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200 font-bold text-xs transition-colors cursor-pointer self-start sm:self-auto"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>新增相關資訊</span>
+                    </button>
+                  </div>
+
+                  {/* 統計數值摘要 */}
+                  {formData.events && formData.events.length > 0 && (() => {
+                    const evts = formData.events;
+                    const totalOut = evts.reduce((sum, e) => (e.hasAmount && e.amount && e.direction !== 'incoming' ? sum + e.amount : sum), 0);
+                    const totalIn = evts.reduce((sum, e) => (e.hasAmount && e.amount && e.direction === 'incoming' ? sum + e.amount : sum), 0);
+                    const weddingCount = evts.filter(e => e.category === 'wedding_funeral').length;
+                    const giftCount = evts.filter(e => e.category === 'business_gift').length;
+                    const matterCount = evts.filter(e => e.category === 'important_matter').length;
+
+                    return (
+                      <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-4">
+                          <div>
+                            <span className="text-[10px] text-stone-400 block">累計禮金支出</span>
+                            <span className="font-mono font-bold text-rose-600 text-sm">
+                              NT$ {totalOut.toLocaleString()}
+                            </span>
+                          </div>
+                          {totalIn > 0 && (
+                            <div>
+                              <span className="text-[10px] text-stone-400 block">收受禮金/回禮</span>
+                              <span className="font-mono font-bold text-emerald-600 text-sm">
+                                +NT$ {totalIn.toLocaleString()}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-stone-600 flex-wrap">
+                          <span className="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 font-medium">
+                            婚喪喜慶 {weddingCount} 筆
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 font-medium">
+                            商務交際 {giftCount} 筆
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-700 font-medium">
+                            重大協議 {matterCount} 件
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* 列表清單 */}
+                  {formData.events && formData.events.length > 0 ? (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                      {formData.events.map((evt, idx) => {
+                        const conf = EVENT_CATEGORY_CONFIG[evt.category];
+                        return (
+                          <div
+                            key={evt.id || idx}
+                            className="p-3 bg-stone-50 hover:bg-stone-100/70 rounded-xl border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors text-xs"
+                          >
+                            <div className="space-y-1 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-mono text-[11px] font-semibold text-stone-500">
+                                  {evt.date}
+                                </span>
+                                <span className={`px-2 py-0.2 rounded-full border text-[10px] font-bold ${conf.badgeBg} ${conf.badgeText}`}>
+                                  {evt.eventType || conf.shortLabel}
+                                </span>
+                                <span className="font-bold text-stone-900 text-xs">
+                                  {evt.title}
+                                </span>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-stone-500">
+                                {evt.targetPerson && (
+                                  <span>對象: <strong className="text-stone-700">{evt.targetPerson}</strong></span>
+                                )}
+                                {evt.ourRepresentative && (
+                                  <span>我方出席: <strong className="text-stone-700">{evt.ourRepresentative}</strong></span>
+                                )}
+                                {evt.proofNote && (
+                                  <span className="text-stone-600 bg-white px-1.5 py-0.2 rounded border border-stone-200 text-[10px]">
+                                    {evt.proofNote}
+                                  </span>
+                                )}
+                                {evt.note && (
+                                  <span className="italic text-stone-500">「{evt.note}」</span>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-stone-200/50">
+                              {evt.hasAmount && evt.amount !== undefined ? (
+                                <div className="text-left sm:text-right">
+                                  <span className={`font-mono font-bold text-xs ${
+                                    evt.direction === 'incoming' ? 'text-emerald-600' : 'text-rose-600'
+                                  }`}>
+                                    {evt.direction === 'incoming' ? '+NT$ ' : 'NT$ '}
+                                    {evt.amount.toLocaleString()}
+                                  </span>
+                                  {evt.isPettyCashLinked && (
+                                    <span className="block text-[9px] text-blue-700 font-medium bg-blue-50 px-1 rounded border border-blue-200 mt-0.5">
+                                      {evt.voucherNo ? `零用金 ${evt.voucherNo}` : '零用金已列支'}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-[10px] text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
+                                  純記事
+                                </span>
+                              )}
+
+                              <div className="flex items-center gap-1 border-l border-stone-200 pl-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditEventInForm(evt)}
+                                  className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-white rounded transition-colors cursor-pointer"
+                                  title="編輯此筆紀錄"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteEventInForm(evt.id)}
+                                  className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-white rounded transition-colors cursor-pointer"
+                                  title="刪除此筆紀錄"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-xl bg-stone-50 border border-dashed border-stone-200 text-center text-stone-400 text-xs">
+                      尚無重要事項或禮金紀錄。如該公司有婚喪喜慶（紅包/白包）、年節禮盒送禮、或重大協議合約，可點擊上方按鈕建立紀錄與金錢統計。
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Modal Footer / 儲存按鈕 */}
@@ -1267,6 +1637,176 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* 獨立快速大事紀檢視/新增彈窗 (從卡片一鍵開啟) */}
+      {quickEventsCustomer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/40 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-2xl w-full border border-stone-200 shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="px-6 py-4 border-b border-stone-200 bg-stone-50/70 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-rose-100 text-rose-700">
+                  <HeartHandshake className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="text-base font-bold text-stone-900">
+                    {quickEventsCustomer.name} - 大事紀與禮金往來
+                  </h3>
+                  <p className="text-xs text-stone-500">
+                    {quickEventsCustomer.taxId ? `統編: ${quickEventsCustomer.taxId} | ` : ''}
+                    負責人: {quickEventsCustomer.representative || '未填'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickEventsCustomer(null)}
+                className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-200/60 rounded-full transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-stone-700">紀錄清單</span>
+                <button
+                  type="button"
+                  onClick={() => handleOpenAddEventForCustomer(quickEventsCustomer)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs transition-colors shadow-2xs cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>新增相關資訊</span>
+                </button>
+              </div>
+
+              {/* 列表 */}
+              {quickEventsCustomer.events && quickEventsCustomer.events.length > 0 ? (
+                <div className="space-y-2.5">
+                  {quickEventsCustomer.events.map((evt) => {
+                    const conf = EVENT_CATEGORY_CONFIG[evt.category];
+                    return (
+                      <div
+                        key={evt.id}
+                        className="p-3 bg-stone-50 hover:bg-stone-100/80 rounded-xl border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                      >
+                        <div className="space-y-1 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-[11px] font-semibold text-stone-500">
+                              {evt.date}
+                            </span>
+                            <span className={`px-2 py-0.2 rounded-full border text-[10px] font-bold ${conf.badgeBg} ${conf.badgeText}`}>
+                              {evt.eventType || conf.shortLabel}
+                            </span>
+                            <span className="font-bold text-stone-900 text-xs">
+                              {evt.title}
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-stone-500">
+                            {evt.targetPerson && (
+                              <span>對象: <strong className="text-stone-700">{evt.targetPerson}</strong></span>
+                            )}
+                            {evt.ourRepresentative && (
+                              <span>我方出席: <strong className="text-stone-700">{evt.ourRepresentative}</strong></span>
+                            )}
+                            {evt.proofNote && (
+                              <span className="text-stone-600 bg-white px-1.5 py-0.2 rounded border border-stone-200 text-[10px]">
+                                {evt.proofNote}
+                              </span>
+                            )}
+                            {evt.note && (
+                              <span className="italic text-stone-500">「{evt.note}」</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-stone-200/50">
+                          {evt.hasAmount && evt.amount !== undefined ? (
+                            <div className="text-left sm:text-right">
+                              <span className={`font-mono font-bold text-xs ${
+                                evt.direction === 'incoming' ? 'text-emerald-600' : 'text-rose-600'
+                              }`}>
+                                {evt.direction === 'incoming' ? '+NT$ ' : 'NT$ '}
+                                {evt.amount.toLocaleString()}
+                              </span>
+                              {evt.isPettyCashLinked && (
+                                <span className="block text-[9px] text-blue-700 font-medium bg-blue-50 px-1 rounded border border-blue-200 mt-0.5">
+                                  {evt.voucherNo ? `零用金 ${evt.voucherNo}` : '零用金已列支'}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-stone-400 bg-stone-100 px-1.5 py-0.5 rounded">
+                              純記事
+                            </span>
+                          )}
+
+                          <div className="flex items-center gap-1 border-l border-stone-200 pl-2">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditEventForCustomer(quickEventsCustomer, evt)}
+                              className="p-1.5 text-stone-400 hover:text-blue-600 hover:bg-white rounded transition-colors cursor-pointer"
+                              title="編輯此筆紀錄"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteEventForCustomer(quickEventsCustomer, evt.id)}
+                              className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-white rounded transition-colors cursor-pointer"
+                              title="刪除此筆紀錄"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="p-8 text-center text-stone-400 text-xs">
+                  目前尚無登記的重要事項或禮金紀錄，點擊上方「新增相關資訊」建立。
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 bg-stone-50 border-t border-stone-200 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setQuickEventsCustomer(null)}
+                className="px-4 py-1.5 rounded-lg bg-stone-200 hover:bg-stone-300 text-stone-800 font-bold text-xs transition-colors cursor-pointer"
+              >
+                關閉
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 新增/編輯個別大事紀/禮金彈窗 */}
+      <CustomerEventModal
+        isOpen={isEventModalOpen}
+        onClose={() => setIsEventModalOpen(false)}
+        onSave={handleSaveEvent}
+        editingEvent={editingEvent}
+        customerName={eventTargetCustomer.name}
+      />
+
+      {/* 全集團紅白包與大事紀加總分析總表 */}
+      <CustomerEventsSummaryModal
+        isOpen={isSummaryModalOpen}
+        onClose={() => setIsSummaryModalOpen(false)}
+        customers={customers}
+        activeCompanyName={currentCompany?.shortName || currentCompany?.name}
+        onSelectCustomer={(cId) => {
+          const target = customers.find(c => c.id === cId);
+          if (target) {
+            setIsSummaryModalOpen(false);
+            handleOpenEditForm(target);
+          }
+        }}
+      />
 
       {/* 刪除確認對話框 (安全不使用 window.confirm 避免 iframe 阻擋) */}
       <ConfirmDialog

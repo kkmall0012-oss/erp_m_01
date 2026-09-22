@@ -278,10 +278,121 @@ export interface Customer {
   // 常用公司標記 (跨行號全集團共用名冊，但可分哪一間公司的常用客戶)
   favoriteCompanyIds: string[]; // 存放 comp_1, comp_2 等，便於切換各公司時一鍵篩選常用客戶
   
+  // 關於該公司之重要事項與交際禮金紀錄 (婚喪喜慶/紅包白包/商務送禮/重大合約)
+  events?: CustomerEventRecord[];
+
   note?: string; // 總體備註說明
   createdAt: number;
   updatedAt: number;
 }
+
+// ==========================================
+// 客戶/廠商重要事項與交際禮金紀錄 (婚喪喜慶/紅包白包/商務送禮/重大記事)
+// ==========================================
+
+export type CustomerEventCategory = 'wedding_funeral' | 'business_gift' | 'important_matter' | 'other';
+
+export interface CustomerEventRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  category: CustomerEventCategory; // 大分類: 婚喪喜慶 | 商務交際 | 重要事項 | 其他備忘
+  categoryLabel?: string;
+  title: string; // 事由 / 事件名稱 (例如：陳董令嬡喜宴紅包、新廠落成高架花籃、林總公祭奠儀、年度維護合約簽署)
+  eventType?: string; // 細分標籤 (如：結婚紅包、公祭白包、花籃盆栽、中秋禮盒、合約簽署、拜訪紀要)
+  hasAmount: boolean; // 是否與金錢相關 (true: 有金額, false: 純事項)
+  amount?: number; // 金額 (NT$)，若與金錢相關；純事項為 0 或 undefined
+  direction?: 'outgoing' | 'incoming'; // 往來方向：'outgoing' (我方送出禮金/支出) | 'incoming' (對方送入禮金/回禮)
+  targetPerson?: string; // 對象 / 收受人 (例如：陳董事長、林總監、李經理)
+  ourRepresentative?: string; // 我方經手人 / 出席代表 (例如：廠長、李業務、總經理)
+  isPettyCashLinked?: boolean; // 是否已由公司零用金出款核銷
+  voucherNo?: string; // 零用金傳票號碼 (選填)
+  proofNote?: string; // 憑證與附件 (如：謝卡已收、喜帖存查、已附訃聞、合約正本存檔)
+  note?: string; // 補充備註說明
+  createdAt: number;
+}
+
+// 大分類設定與快捷標籤配置
+export const EVENT_CATEGORY_CONFIG: Record<CustomerEventCategory, {
+  label: string;
+  shortLabel: string;
+  color: string;
+  badgeBg: string;
+  badgeText: string;
+  defaultHasAmount: boolean;
+  quickPresets: Array<{
+    title: string;
+    eventType: string;
+    suggestedAmount?: number;
+    proofPlaceholder?: string;
+  }>;
+}> = {
+  wedding_funeral: {
+    label: '婚喪喜慶 (紅包/白包/花籃)',
+    shortLabel: '婚喪喜慶',
+    color: '#e11d48',
+    badgeBg: 'bg-rose-50 border-rose-200',
+    badgeText: 'text-rose-700',
+    defaultHasAmount: true,
+    quickPresets: [
+      { title: '結婚賀禮 (紅包禮金)', eventType: '結婚紅包', suggestedAmount: 3600, proofPlaceholder: '已留喜帖存查' },
+      { title: '公祭奠儀 (白包禮金)', eventType: '公祭白包', suggestedAmount: 2100, proofPlaceholder: '謝卡已收存' },
+      { title: '新廠開幕/喬遷誌慶高架花籃', eventType: '花籃盆栽', suggestedAmount: 3000, proofPlaceholder: '花店簽單' },
+      { title: '彌月賀喜/弄璋弄瓦紅包', eventType: '彌月紅包', suggestedAmount: 2000, proofPlaceholder: '彌月卡' },
+      { title: '長輩壽誕祝賀禮金', eventType: '壽誕禮金', suggestedAmount: 3600, proofPlaceholder: '賀卡' },
+      { title: '榮陞祝賀花牌/盆景', eventType: '祝賀盆景', suggestedAmount: 2600, proofPlaceholder: '發票收據' },
+    ]
+  },
+  business_gift: {
+    label: '商務交際 (禮盒/公關/餐敘)',
+    shortLabel: '商務交際',
+    color: '#d97706',
+    badgeBg: 'bg-amber-50 border-amber-200',
+    badgeText: 'text-amber-800',
+    defaultHasAmount: true,
+    quickPresets: [
+      { title: '中秋年節頂級禮盒', eventType: '中秋禮盒', suggestedAmount: 2400, proofPlaceholder: '採買發票' },
+      { title: '春節伴手年禮致意', eventType: '春節年禮', suggestedAmount: 2600, proofPlaceholder: '採買發票' },
+      { title: '端午佳節香粽禮盒', eventType: '端午禮盒', suggestedAmount: 2000, proofPlaceholder: '採買發票' },
+      { title: '合作廠商尾牙摸彩贊助', eventType: '尾牙贊助', suggestedAmount: 6000, proofPlaceholder: '贊助收據/感謝狀' },
+      { title: '專案拜訪商務公關餐敘', eventType: '公關餐敘', suggestedAmount: 3200, proofPlaceholder: '餐飲收據/發票' },
+      { title: '同業公會/協進會活動贊助', eventType: '活動贊助', suggestedAmount: 5000, proofPlaceholder: '公會收據' },
+    ]
+  },
+  important_matter: {
+    label: '重大協議與公司記事 (簽約/異動)',
+    shortLabel: '重大記事',
+    color: '#2563eb',
+    badgeBg: 'bg-blue-50 border-blue-200',
+    badgeText: 'text-blue-700',
+    defaultHasAmount: false,
+    quickPresets: [
+      { title: '簽訂長期年度維護合約', eventType: '合約協議', suggestedAmount: 0, proofPlaceholder: '合約編號存檔' },
+      { title: '重大工程發包議定備忘', eventType: '工程備忘', suggestedAmount: 0, proofPlaceholder: '會議紀錄副本' },
+      { title: '主要負責人/財務窗口變更', eventType: '人事窗口', suggestedAmount: 0, proofPlaceholder: '正式函文/名片' },
+      { title: '付款條件特別約定特批', eventType: '付款協議', suggestedAmount: 0, proofPlaceholder: '主管簽核單' },
+      { title: '重大客訴與現場維修完工確認', eventType: '客訴維護', suggestedAmount: 0, proofPlaceholder: '工程驗收單' },
+      { title: '信用票信或抵押約定備查', eventType: '信用備忘', suggestedAmount: 0, proofPlaceholder: '票據影本/徵信報告' },
+    ]
+  },
+  other: {
+    label: '其他事項與往來備忘',
+    shortLabel: '其他備忘',
+    color: '#475569',
+    badgeBg: 'bg-stone-100 border-stone-200',
+    badgeText: 'text-stone-700',
+    defaultHasAmount: false,
+    quickPresets: [
+      { title: '例行事務聯繫紀要', eventType: '聯繫備忘' },
+      { title: '臨時交代特殊事項', eventType: '特殊備忘' },
+    ]
+  }
+};
+
+// 台灣傳統常見禮金金額 (吉利雙數紅包與單數奠儀)
+export const TAIWAN_COURTESY_AMOUNTS = {
+  redLucky: [1200, 1600, 2000, 2200, 2600, 3200, 3600, 6000, 6600, 12000],
+  whiteCondolence: [1100, 1500, 2100, 3100, 5100, 7100, 11000]
+};
 
 // 台灣常見銀行清單 (選單式選填)
 export const TAIWAN_BANKS = [
