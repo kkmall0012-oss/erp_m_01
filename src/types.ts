@@ -249,11 +249,36 @@ export interface CustomerContactPerson {
   note?: string; // 備註 (如主要聯絡窗口、李太太專線)
 }
 
+// 客戶屬性分類選項 (區分個人客戶、店家行號、企業法人)
+export const CUSTOMER_CATEGORY_OPTIONS = [
+  '個人客戶',
+  '店家 / 門市行號',
+  '公司企業法人',
+  '政府機關 / 學校公營',
+  '其他經銷通路'
+] as const;
+
+// 合作廠商業務所屬分類選項 (依所屬業務分類)
+export const SUPPLIER_CATEGORY_OPTIONS = [
+  '瀝青砂石 / 建材原料',
+  '工程發包 / 現場工班',
+  '機具車輛 / 租賃保養',
+  '五金材料 / 水電設備',
+  '運輸物流 / 吊卡車隊',
+  '環保安全 / 現場工安',
+  '資訊事務 / 辦公設備',
+  '專業委外 / 顧問檢驗',
+  '餐飲便當 / 雜項補給',
+  '其他協力業務'
+] as const;
+
 export interface Customer {
   id: string;
   name: string; // 客戶/公司名稱 或 個人姓名 (必填)
   shortName?: string; // 簡稱/代號
   isIndividual: boolean; // 是否為個人客戶 (true: 個人, false: 公司法人行號)
+  customerCategory?: string; // 客戶類別屬性 (例如：個人客戶、店家/門市行號、公司企業法人)
+  supplierCategory?: string; // 廠商所屬業務分類 (例如：瀝青建材原料、工程工班、機具租賃、五金水電等)
   taxId?: string; // 統一編號 (選填，8碼，需通過台灣加權邏輯檢查；個人可留空)
   representative?: string; // 負責人 / 代表人
   representativeMobile?: string; // 負責人行動電話
@@ -436,7 +461,26 @@ export const TAIWAN_BANKS = [
   { code: '822', name: '中國信託商業銀行' }
 ];
 
-// 常見收款與結算方式選項清單 (選單式選填)
+// 常見付款/收款途徑方式 (核心三大方式：電匯、現金、支票)
+export const PAYMENT_METHOD_OPTIONS = [
+  '銀行匯款',
+  '現金支付',
+  '開立支票',
+  '其他 / 依合約'
+] as const;
+
+// 常用結算週期與放款票期快捷選項
+export const SETTLEMENT_CYCLE_OPTIONS = [
+  '次月 25 號電匯',
+  '次月 15 號放款',
+  '月結 30 天期票',
+  '月結 60 天期票',
+  '貨到現結 / 現場付現',
+  '驗收合格付款',
+  '依工程合約進度'
+] as const;
+
+// 常見收款與結算方式選項清單 (選單式選填相容)
 export const PAYMENT_TERMS_OPTIONS = [
   '現金 / 貨到付款',
   '銀行匯款 (月結 30 天)',

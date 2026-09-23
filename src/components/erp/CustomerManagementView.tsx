@@ -34,7 +34,11 @@ import {
   ArrowDownLeft,
   Receipt,
   LayoutGrid,
-  List
+  List,
+  Printer,
+  Truck,
+  Store,
+  Tag
 } from 'lucide-react';
 import { 
   Customer, 
@@ -45,6 +49,8 @@ import {
   CompanyProfile, 
   TAIWAN_BANKS, 
   PAYMENT_TERMS_OPTIONS, 
+  CUSTOMER_CATEGORY_OPTIONS,
+  SUPPLIER_CATEGORY_OPTIONS,
   validateTaiwanTaxId 
 } from '../../types';
 import { 
@@ -55,6 +61,7 @@ import {
 import { ConfirmDialog } from '../ConfirmDialog';
 import { CustomerEventModal } from './CustomerEventModal';
 import { CustomerEventsSummaryModal } from './CustomerEventsSummaryModal';
+import { SupplierDirectoryModal } from './SupplierDirectoryModal';
 
 interface CustomerManagementViewProps {
   customers: Customer[];
@@ -62,17 +69,24 @@ interface CustomerManagementViewProps {
   activeCompanyId: string;
   onRefreshCustomers: () => void;
   onSelectCustomer?: (customer: Customer) => void;
+  onSwitchToSuppliers?: () => void;
 }
 
 export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
   customers,
   companies,
   activeCompanyId,
-  onRefreshCustomers
+  onRefreshCustomers,
+  onSwitchToSuppliers
 }) => {
-  // 篩選與搜尋狀態
+  // 僅取得客戶身分之資料（若被設為純廠商 isCustomer === false 則由廠商管理模組專責）
+  const customerList = useMemo(() => {
+    return customers.filter(c => c.isCustomer !== false);
+  }, [customers]);
+
+  // 篩選與搜尋狀態 - 區分個人客戶、店家行號、公司企業法人
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'company' | 'individual' | 'supplier' | 'favorite'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'individual' | 'store' | 'corporate' | 'supplier' | 'favorite'>('all');
   const [favoriteFilterCompanyId, setFavoriteFilterCompanyId] = useState<string>(
     activeCompanyId !== 'all' ? activeCompanyId : 'all'
   );
@@ -107,6 +121,9 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
   // 禮金與重要事項加總分析總表彈窗
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
 
+  // 合作廠商通訊錄產出與預覽彈窗
+  const [isSupplierDirectoryModalOpen, setIsSupplierDirectoryModalOpen] = useState(false);
+
   // 個別重要事項/禮金新增與編輯彈窗
   const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<CustomerEventRecord | null>(null);
@@ -124,6 +141,8 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
     name: '',
     shortName: '',
     isIndividual: false,
+    customerCategory: '公司企業法人',
+    supplierCategory: '瀝青砂石 / 建材原料',
     taxId: '',
     representative: '',
     representativeMobile: '',
@@ -175,6 +194,8 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
     setEditingCustomer(c);
     setFormData({
       ...c,
+      customerCategory: c.customerCategory || (c.isIndividual ? '個人客戶' : '公司企業法人'),
+      supplierCategory: c.supplierCategory || '瀝青砂石 / 建材原料',
       contacts: c.contacts ? [...c.contacts] : [],
       favoriteCompanyIds: c.favoriteCompanyIds ? [...c.favoriteCompanyIds] : [],
       events: c.events ? [...c.events] : []
@@ -256,9 +277,11 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
 
   // 一鍵切換/綁定合作廠商身分
   const handleToggleSupplierStatus = async (customer: Customer) => {
+    const willBeSupplier = !customer.isSupplier;
     const updatedCustomer: Customer = {
       ...customer,
-      isSupplier: !customer.isSupplier,
+      isSupplier: willBeSupplier,
+      supplierCategory: willBeSupplier ? (customer.supplierCategory || '瀝青砂石 / 建材原料') : customer.supplierCategory,
       updatedAt: Date.now()
     };
 
@@ -266,8 +289,8 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
       await updateCustomerApi(updatedCustomer);
       onRefreshCustomers();
       showTemporaryFeedback(
-        !customer.isSupplier
-          ? `已將「${customer.name}」一鍵同時綁定為【合作廠商】身分！`
+        willBeSupplier
+          ? `已將「${customer.name}」一鍵同時綁定為【合作廠商】身分（可在合作廠商管理查看與分類）！`
           : `已取消「${customer.name}」的合作廠商身分標籤。`
       );
     } catch (err: any) {
@@ -450,14 +473,15 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
     }
   };
 
-  // 篩選客戶列表
+  // 篩選客戶列表 (專注於客戶名冊，純廠商身分於合作廠商模組專責管理)
   const filteredCustomers = useMemo(() => {
-    return customers.filter(c => {
+    return customerList.filter(c => {
       // 搜尋關鍵字匹配 (名稱、統編、負責人、電話、聯絡人、地址)
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchName = c.name?.toLowerCase().includes(q);
         const matchShort = c.shortName?.toLowerCase().includes(q);
+        const matchCategory = c.customerCategory?.toLowerCase().includes(q);
         const matchTax = c.taxId?.includes(q);
         const matchRep = c.representative?.toLowerCase().includes(q) || c.secondaryRepresentative?.toLowerCase().includes(q);
         const matchPhone = c.phone1?.includes(q) || c.phone2?.includes(q) || c.representativeMobile?.includes(q);
@@ -466,14 +490,24 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
         const matchContacts = c.contacts?.some(p => p.name?.toLowerCase().includes(q) || p.mobile?.includes(q) || p.title?.toLowerCase().includes(q));
         const matchItems = c.businessItems?.toLowerCase().includes(q);
 
-        if (!matchName && !matchShort && !matchTax && !matchRep && !matchPhone && !matchAddr && !matchBank && !matchContacts && !matchItems) {
+        if (!matchName && !matchShort && !matchCategory && !matchTax && !matchRep && !matchPhone && !matchAddr && !matchBank && !matchContacts && !matchItems) {
           return false;
         }
       }
 
-      // 身分與型態篩選
-      if (filterType === 'company' && c.isIndividual) return false;
-      if (filterType === 'individual' && !c.isIndividual) return false;
+      // 客戶屬性篩選 (個人客戶、店家行號、公司企業法人)
+      if (filterType === 'individual') {
+        const isInd = c.customerCategory === '個人客戶' || c.isIndividual;
+        if (!isInd) return false;
+      }
+      if (filterType === 'store') {
+        const isStore = c.customerCategory === '店家 / 門市行號';
+        if (!isStore) return false;
+      }
+      if (filterType === 'corporate') {
+        const isCorp = c.customerCategory === '公司企業法人' || (!c.isIndividual && !c.customerCategory);
+        if (!isCorp) return false;
+      }
       if (filterType === 'supplier' && !c.isSupplier) return false;
       if (filterType === 'favorite') {
         if (favoriteFilterCompanyId !== 'all') {
@@ -485,10 +519,16 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
 
       return true;
     });
-  }, [customers, searchQuery, filterType, favoriteFilterCompanyId]);
+  }, [customerList, searchQuery, filterType, favoriteFilterCompanyId]);
 
   // 當前作帳公司的名稱
   const currentCompany = companies.find(c => c.id === activeCompanyId);
+
+  // 屬性數量統計
+  const individualCount = useMemo(() => customerList.filter(c => c.customerCategory === '個人客戶' || c.isIndividual).length, [customerList]);
+  const storeCount = useMemo(() => customerList.filter(c => c.customerCategory === '店家 / 門市行號').length, [customerList]);
+  const corporateCount = useMemo(() => customerList.filter(c => c.customerCategory === '公司企業法人' || (!c.isIndividual && !c.customerCategory)).length, [customerList]);
+  const dualSupplierCount = useMemo(() => customerList.filter(c => c.isSupplier).length, [customerList]);
 
   return (
     <div className="space-y-6">
@@ -502,19 +542,31 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
               </span>
               <div>
                 <h2 className="text-lg font-bold text-stone-900 tracking-tight flex items-center gap-2">
-                  客戶聯絡資訊管理
-                  <span className="text-xs font-normal px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-mono">
-                    全集團跨公司共用庫
+                  客戶名冊管理
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-mono">
+                    區分個人與店家/企業
                   </span>
                 </h2>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  所有客戶通訊名錄共用，支援個人/公司法人、統一編號檢核、銀行付款帳號及未來廠商身分一鍵綁定
+                  專屬客戶聯絡資訊主檔，分類管理「個人自用業主」、「店家/門市行號」與「公司企業法人」，掌握客戶屬性與商務往來
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {onSwitchToSuppliers && (
+              <button
+                type="button"
+                onClick={onSwitchToSuppliers}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-xs hover:bg-emerald-100 transition-colors shadow-2xs cursor-pointer active:scale-95"
+                title="切換至專屬合作廠商管理 (業務分類、銀行匯款帳號)"
+              >
+                <Truck className="w-4 h-4 text-emerald-700" />
+                <span>切換至合作廠商管理</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setIsSummaryModalOpen(true)}
@@ -544,43 +596,69 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
           </div>
         )}
 
-        {/* 統計與現況看板 */}
+        {/* 統計與現況看板 (依照客戶屬性分類呈現) */}
         <div className="mt-5 grid grid-cols-2 sm:grid-cols-5 gap-3 pt-4 border-t border-stone-100">
-          <div className="p-3 bg-stone-50 rounded-lg border border-stone-200/70">
-            <span className="text-xs text-stone-500 block">總客戶數</span>
-            <span className="text-xl font-bold font-mono text-stone-800 mt-0.5 block">
-              {customers.length} <span className="text-xs font-normal text-stone-500">家/位</span>
-            </span>
-          </div>
-          <div className="p-3 bg-stone-50 rounded-lg border border-stone-200/70">
-            <span className="text-xs text-stone-500 block">公司行號 / 法人</span>
-            <span className="text-xl font-bold font-mono text-blue-700 mt-0.5 block">
-              {customers.filter(c => !c.isIndividual).length} <span className="text-xs font-normal text-stone-500">家</span>
-            </span>
-          </div>
-          <div className="p-3 bg-stone-50 rounded-lg border border-stone-200/70">
-            <span className="text-xs text-stone-500 block">個人客戶</span>
-            <span className="text-xl font-bold font-mono text-amber-700 mt-0.5 block">
-              {customers.filter(c => c.isIndividual).length} <span className="text-xs font-normal text-stone-500">位</span>
-            </span>
-          </div>
-          <div className="p-3 bg-stone-50 rounded-lg border border-stone-200/70">
-            <span className="text-xs text-stone-500 block">具廠商雙重身分</span>
-            <span className="text-xl font-bold font-mono text-emerald-700 mt-0.5 block">
-              {customers.filter(c => c.isSupplier).length} <span className="text-xs font-normal text-stone-500">家</span>
-            </span>
-          </div>
           <div 
-            onClick={() => setIsSummaryModalOpen(true)}
-            className="p-3 bg-rose-50/70 rounded-lg border border-rose-200/70 hover:bg-rose-100/70 transition-colors cursor-pointer"
-            title="點擊查看全名冊交際禮金與重大事項加總分析總表"
+            onClick={() => setFilterType('all')}
+            className={`p-3 rounded-lg border transition-all cursor-pointer ${
+              filterType === 'all' ? 'bg-indigo-50/70 border-indigo-300 ring-2 ring-indigo-500/20' : 'bg-stone-50 border-stone-200/70 hover:bg-stone-100/70'
+            }`}
+          >
+            <span className="text-xs text-stone-500 block font-medium">總客戶數</span>
+            <span className="text-xl font-bold font-mono text-stone-800 mt-0.5 block">
+              {customerList.length} <span className="text-xs font-normal text-stone-500">家/位</span>
+            </span>
+          </div>
+
+          <div 
+            onClick={() => setFilterType('individual')}
+            className={`p-3 rounded-lg border transition-all cursor-pointer ${
+              filterType === 'individual' ? 'bg-amber-50 border-amber-300 ring-2 ring-amber-500/20' : 'bg-stone-50 border-stone-200/70 hover:bg-stone-100/70'
+            }`}
+          >
+            <span className="text-xs text-amber-800 block font-medium">個人客戶</span>
+            <span className="text-xl font-bold font-mono text-amber-700 mt-0.5 block">
+              {individualCount} <span className="text-xs font-normal text-stone-500">位 (自用/業主)</span>
+            </span>
+          </div>
+
+          <div 
+            onClick={() => setFilterType('store')}
+            className={`p-3 rounded-lg border transition-all cursor-pointer ${
+              filterType === 'store' ? 'bg-sky-50 border-sky-300 ring-2 ring-sky-500/20' : 'bg-stone-50 border-stone-200/70 hover:bg-stone-100/70'
+            }`}
+          >
+            <span className="text-xs text-sky-800 block font-medium">店家 / 門市行號</span>
+            <span className="text-xl font-bold font-mono text-sky-700 mt-0.5 block">
+              {storeCount} <span className="text-xs font-normal text-stone-500">家 (實體/門市)</span>
+            </span>
+          </div>
+
+          <div 
+            onClick={() => setFilterType('corporate')}
+            className={`p-3 rounded-lg border transition-all cursor-pointer ${
+              filterType === 'corporate' ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-500/20' : 'bg-stone-50 border-stone-200/70 hover:bg-stone-100/70'
+            }`}
+          >
+            <span className="text-xs text-blue-800 block font-medium">公司企業法人</span>
+            <span className="text-xl font-bold font-mono text-blue-700 mt-0.5 block">
+              {corporateCount} <span className="text-xs font-normal text-stone-500">家 (營造/工廠)</span>
+            </span>
+          </div>
+
+          <div 
+            onClick={() => setFilterType('supplier')}
+            className={`p-3 rounded-lg border transition-all cursor-pointer ${
+              filterType === 'supplier' ? 'bg-emerald-50 border-emerald-300 ring-2 ring-emerald-500/20' : 'bg-stone-50 border-stone-200/70 hover:bg-stone-100/70'
+            }`}
+            title="兼具廠商身分的客戶"
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs text-rose-700 font-medium block">交際禮金往來</span>
-              <HeartHandshake className="w-3.5 h-3.5 text-rose-500" />
+              <span className="text-xs text-emerald-800 font-semibold block">兼合作廠商</span>
+              <Truck className="w-3.5 h-3.5 text-emerald-600" />
             </div>
-            <span className="text-xl font-bold font-mono text-rose-700 mt-0.5 block">
-              ${customers.reduce((acc, c) => acc + (c.events || []).reduce((s, e) => s + (e.hasAmount && e.amount && e.direction !== 'incoming' ? e.amount : 0), 0), 0).toLocaleString()}
+            <span className="text-xl font-bold font-mono text-emerald-700 mt-0.5 block">
+              {dualSupplierCount} <span className="text-xs font-normal text-emerald-600">家</span>
             </span>
           </div>
         </div>
@@ -595,7 +673,7 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜尋客戶名稱、簡稱、統編、電話、負責人、聯絡人..."
+            placeholder="搜尋客戶名稱、簡稱、客戶屬性、統編、電話、負責人..."
             className="w-full pl-9 pr-8 py-2 text-xs bg-stone-50 border border-stone-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white"
           />
           {searchQuery && (
@@ -609,9 +687,9 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
           )}
         </div>
 
-        {/* 篩選標籤群 */}
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <div className="flex items-center rounded-lg border border-stone-200 p-0.5 bg-stone-50">
+        {/* 篩選標籤群 (區分個人客戶及店家/企業) */}
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <div className="flex flex-wrap items-center rounded-lg border border-stone-200 p-0.5 bg-stone-50 gap-0.5">
             <button
               type="button"
               onClick={() => setFilterType('all')}
@@ -621,18 +699,7 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                   : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              全部 ({customers.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterType('company')}
-              className={`px-3 py-1 rounded-md font-medium transition-all ${
-                filterType === 'company'
-                  ? 'bg-white text-blue-700 shadow-2xs font-bold'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              公司法人
+              全部 ({customerList.length})
             </button>
             <button
               type="button"
@@ -643,7 +710,29 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                   : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              個人客戶
+              個人客戶 ({individualCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType('store')}
+              className={`px-3 py-1 rounded-md font-medium transition-all ${
+                filterType === 'store'
+                  ? 'bg-white text-sky-700 shadow-2xs font-bold'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              店家 / 門市 ({storeCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType('corporate')}
+              className={`px-3 py-1 rounded-md font-medium transition-all ${
+                filterType === 'corporate'
+                  ? 'bg-white text-blue-700 shadow-2xs font-bold'
+                  : 'text-stone-600 hover:text-stone-900'
+              }`}
+            >
+              公司企業 ({corporateCount})
             </button>
             <button
               type="button"
@@ -654,7 +743,7 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                   : 'text-stone-600 hover:text-stone-900'
               }`}
             >
-              兼廠商身分
+              兼廠商 ({dualSupplierCount})
             </button>
             <button
               type="button"
@@ -720,6 +809,26 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 合作廠商篩選模式提示與即時產出橫幅 */}
+      {filterType === 'supplier' && (
+        <div className="bg-emerald-50 border border-emerald-200/90 rounded-xl p-3 px-4 flex flex-wrap items-center justify-between gap-3 text-xs text-emerald-900 animate-fade-in shadow-2xs">
+          <div className="flex items-center gap-2">
+            <Building2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              目前正以【合作廠商】身分檢視，全庫共有 <strong>{filteredCustomers.length}</strong> 家合作廠商資料。
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsSupplierDirectoryModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs transition-colors cursor-pointer shadow-2xs"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5" />
+            <span>一鍵產出通訊錄 (Excel / 列印)</span>
+          </button>
+        </div>
+      )}
 
       {/* 客戶卡片 / 列表展示區 */}
       {filteredCustomers.length === 0 ? (
@@ -813,14 +922,19 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                               )}
                             </div>
                             <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                              <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-medium ${
-                                customer.isIndividual ? 'bg-amber-100/70 text-amber-800' : 'bg-blue-100/70 text-blue-800'
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded-md font-semibold ${
+                                (customer.customerCategory === '個人客戶' || customer.isIndividual)
+                                  ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                                  : customer.customerCategory === '店家 / 門市行號' 
+                                  ? 'bg-sky-100 text-sky-800 border border-sky-200' 
+                                  : 'bg-blue-100 text-blue-800 border border-blue-200'
                               }`}>
-                                {customer.isIndividual ? '個人' : '法人'}
+                                {customer.customerCategory || (customer.isIndividual ? '個人客戶' : '公司法人')}
                               </span>
                               {customer.isSupplier && (
-                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-semibold border border-emerald-200">
-                                  兼廠商
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-md bg-emerald-100 text-emerald-800 font-semibold border border-emerald-200 flex items-center gap-0.5" title={customer.supplierCategory ? `兼廠商 (${customer.supplierCategory})` : '兼廠商身分'}>
+                                  <Truck className="w-2.5 h-2.5" />
+                                  <span>兼廠商</span>
                                 </span>
                               )}
                               {customer.address && (
@@ -1013,12 +1127,14 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
 
                         {/* 身分標籤 */}
                         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                            customer.isIndividual 
-                              ? 'bg-amber-100/70 text-amber-800' 
-                              : 'bg-blue-100/70 text-blue-800'
+                          <span className={`text-[10px] px-2 py-0.5 rounded-md font-semibold ${
+                            (customer.customerCategory === '個人客戶' || customer.isIndividual)
+                              ? 'bg-amber-100 text-amber-800 border border-amber-200' 
+                              : customer.customerCategory === '店家 / 門市行號' 
+                              ? 'bg-sky-100 text-sky-800 border border-sky-200' 
+                              : 'bg-blue-100 text-blue-800 border border-blue-200'
                           }`}>
-                            {customer.isIndividual ? '個人客戶' : '公司法人'}
+                            {customer.customerCategory || (customer.isIndividual ? '個人客戶' : '公司企業法人')}
                           </span>
 
                           {customer.taxId && (
@@ -1029,8 +1145,9 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                           )}
 
                           {customer.isSupplier ? (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-semibold border border-emerald-200">
-                              兼廠商身分
+                            <span className="text-[10px] px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-semibold border border-emerald-200 flex items-center gap-1">
+                              <Truck className="w-3 h-3" />
+                              <span>兼合作廠商</span>
                             </span>
                           ) : (
                             <button
@@ -1271,29 +1388,46 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* 是否為個人客戶 */}
-                  <div className="sm:col-span-2 flex items-center gap-6 p-3 bg-stone-50 rounded-xl border border-stone-200">
-                    <span className="font-bold text-stone-700">客戶型態：</span>
-                    <label className="flex items-center gap-2 cursor-pointer font-medium text-stone-800">
-                      <input
-                        type="radio"
-                        name="isIndividual"
-                        checked={!formData.isIndividual}
-                        onChange={() => setFormData(prev => ({ ...prev, isIndividual: false }))}
-                        className="text-[#0066cc] focus:ring-blue-500"
-                      />
-                      <span>公司法人 / 行號 (預設)</span>
-                    </label>
-                    <label className="flex items-center gap-2 cursor-pointer font-medium text-stone-800">
-                      <input
-                        type="radio"
-                        name="isIndividual"
-                        checked={formData.isIndividual}
-                        onChange={() => setFormData(prev => ({ ...prev, isIndividual: true }))}
-                        className="text-amber-600 focus:ring-amber-500"
-                      />
-                      <span>個人客戶 / 自然人 (免填統編)</span>
-                    </label>
+                  {/* 客戶屬性類別分類 (區分個人客戶、店家行號或公司法人) */}
+                  <div className="sm:col-span-2 p-3.5 bg-stone-50 rounded-xl border border-stone-200 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-stone-800 text-xs flex items-center gap-1.5">
+                        <Tag className="w-4 h-4 text-blue-600" />
+                        <span>客戶屬性分類 (區分個人客戶、店家門市或公司企業) *</span>
+                      </span>
+                      <span className="text-[11px] text-stone-500">掌握客戶屬性，便於精準維護與報價</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {CUSTOMER_CATEGORY_OPTIONS.map(opt => {
+                        const currentCat = formData.customerCategory || (formData.isIndividual ? '個人客戶' : '公司企業法人');
+                        const isSelected = currentCat === opt;
+                        const isInd = opt === '個人客戶';
+                        return (
+                          <button
+                            key={opt}
+                            type="button"
+                            onClick={() => {
+                              setFormData(prev => ({
+                                ...prev,
+                                customerCategory: opt,
+                                isIndividual: isInd
+                              }));
+                            }}
+                            className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                              isSelected
+                                ? 'bg-blue-50 border-blue-400 text-blue-900 font-bold shadow-2xs ring-1 ring-blue-500/20'
+                                : 'bg-white border-stone-200 text-stone-700 hover:bg-stone-100/70'
+                            }`}
+                          >
+                            <span className="text-xs">{opt}</span>
+                            <span className="text-[10px] text-stone-400 font-normal mt-0.5">
+                              {opt === '個人客戶' ? '自用住宅、業主本人、散客' : opt.includes('店家') ? '實體店鋪、地區五金門市行號' : opt.includes('企業') ? '營造公司、工廠、實業企業' : '政府學校公營通路'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   {/* 客戶名稱 (必填) */}
@@ -1486,26 +1620,110 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* 主要配合收款方式 (選單) */}
-                  <div className="sm:col-span-2">
-                    <label className="block text-stone-700 font-medium mb-1">主要配合收款方式 (選單)</label>
-                    <div className="flex gap-2">
-                      <select
-                        value={formData.paymentTerm || ''}
-                        onChange={(e) => setFormData(prev => ({ ...prev, paymentTerm: e.target.value }))}
-                        className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-xs font-medium"
-                      >
-                        <option value="">-- 請選擇收款方式 (或直接手動自訂) --</option>
-                        {PAYMENT_TERMS_OPTIONS.map(term => (
-                          <option key={term} value={term}>{term}</option>
+                  {/* 主要配合收款途徑方式與票期週期 */}
+                  <div className="sm:col-span-2 space-y-2">
+                    <label className="block text-stone-700 font-medium mb-1">
+                      主要配合收款途徑 (點擊快速切換)：
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { key: '銀行匯款', label: '銀行電匯', icon: '🏦' },
+                        { key: '現金支付', label: '現金結清', icon: '💵' },
+                        { key: '開立支票', label: '開立支票', icon: '📝' },
+                        { key: '其他 / 依合約', label: '其他 / 依合約', icon: '📋' }
+                      ].map(method => {
+                        const currentTerm = formData.paymentTerm || '';
+                        const isSelected = method.key === '其他 / 依合約'
+                          ? (!currentTerm.includes('匯款') && !currentTerm.includes('現金') && !currentTerm.includes('支票') && !currentTerm.includes('票') && currentTerm.length > 0)
+                          : currentTerm.includes(method.key.substring(0, 2));
+                        return (
+                          <button
+                            key={method.key}
+                            type="button"
+                            onClick={() => {
+                              const match = currentTerm.match(/\((.+)\)/);
+                              const existingCycle = match ? match[1] : '';
+                              if (method.key === '現金支付') {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  paymentTerm: existingCycle ? `現金支付 (${existingCycle})` : '現金支付 (現場付現)'
+                                }));
+                              } else if (method.key === '開立支票') {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  paymentTerm: existingCycle ? `開立支票 (${existingCycle})` : '開立支票 (月結 60 天期票)'
+                                }));
+                              } else if (method.key === '銀行匯款') {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  paymentTerm: existingCycle ? `銀行匯款 (${existingCycle})` : '銀行匯款 (次月 25 號電匯)'
+                                }));
+                              } else {
+                                setFormData(prev => ({
+                                  ...prev,
+                                  paymentTerm: existingCycle ? `其他 (${existingCycle})` : '其他 / 依合約進度'
+                                }));
+                              }
+                            }}
+                            className={`p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-100'
+                            }`}
+                          >
+                            <span>{method.icon}</span>
+                            <span>{method.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* 快捷結算週期標籤 */}
+                    <div className="pt-1">
+                      <span className="text-[11px] text-stone-500 font-medium mr-1.5">快捷結算週期：</span>
+                      <div className="inline-flex flex-wrap gap-1.5 mt-1">
+                        {[
+                          '次月 25 號電匯',
+                          '次月 15 號放款',
+                          '月結 30 天期票',
+                          '月結 60 天期票',
+                          '貨到現結 / 現場付現',
+                          '驗收合格付款',
+                          '依工程合約'
+                        ].map(cycle => (
+                          <button
+                            key={cycle}
+                            type="button"
+                            onClick={() => {
+                              let prefix = '銀行匯款';
+                              const current = formData.paymentTerm || '';
+                              if (current.includes('現金')) prefix = '現金支付';
+                              else if (current.includes('支票') || current.includes('票')) prefix = '開立支票';
+                              else if (current.includes('其他')) prefix = '其他';
+                              setFormData(prev => ({
+                                ...prev,
+                                paymentTerm: `${prefix} (${cycle})`
+                              }));
+                            }}
+                            className="px-2 py-0.5 rounded text-[11px] bg-white border border-stone-200 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 text-stone-600 transition-colors cursor-pointer"
+                          >
+                            {cycle}
+                          </button>
                         ))}
-                      </select>
+                      </div>
+                    </div>
+
+                    {/* 自訂/確認的付款條件說明 */}
+                    <div className="pt-1">
+                      <label className="block text-[11px] font-medium text-stone-700 mb-1">
+                        配合收款條件說明 (可自由修改或填寫特殊約定)：
+                      </label>
                       <input
                         type="text"
                         value={formData.paymentTerm || ''}
                         onChange={(e) => setFormData(prev => ({ ...prev, paymentTerm: e.target.value }))}
-                        placeholder="或自訂特殊請款約定"
-                        className="w-1/2 px-3 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+                        placeholder="例如：銀行匯款 (次月 25 號電匯) 或 開立支票 (月結 60 天期票)"
+                        className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs font-medium"
                       />
                     </div>
                   </div>
@@ -1664,24 +1882,48 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                 </div>
 
                 {/* 廠商身分雙重綁定 */}
-                <div className="p-3 bg-emerald-50/60 rounded-xl border border-emerald-200 flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-emerald-900 block text-xs">
-                      合作廠商 (Supplier) 雙重身分預留
-                    </span>
-                    <span className="text-[11px] text-emerald-700 block mt-0.5">
-                      勾選後此客戶未來可直接於「廠商模組」一鍵相互引用，無須重複建立基本資料
-                    </span>
+                <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-emerald-900 block text-xs">
+                        合作廠商 (Supplier) 雙重身分預留
+                      </span>
+                      <span className="text-[11px] text-emerald-700 block mt-0.5">
+                        勾選後此客戶亦會同步顯示於【合作廠商管理】模組，無須重複建立基本資料
+                      </span>
+                    </div>
+                    <label className="flex items-center gap-2 cursor-pointer font-bold text-emerald-800">
+                      <input
+                        type="checkbox"
+                        checked={formData.isSupplier}
+                        onChange={(e) => setFormData(prev => ({ 
+                          ...prev, 
+                          isSupplier: e.target.checked,
+                          supplierCategory: e.target.checked ? (prev.supplierCategory || '瀝青砂石 / 建材原料') : prev.supplierCategory
+                        }))}
+                        className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
+                      />
+                      <span>同時具備合作廠商身分</span>
+                    </label>
                   </div>
-                  <label className="flex items-center gap-2 cursor-pointer font-bold text-emerald-800">
-                    <input
-                      type="checkbox"
-                      checked={formData.isSupplier}
-                      onChange={(e) => setFormData(prev => ({ ...prev, isSupplier: e.target.checked }))}
-                      className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
-                    />
-                    <span>同時具備合作廠商身分</span>
-                  </label>
+
+                  {formData.isSupplier && (
+                    <div className="pt-2.5 border-t border-emerald-200/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <label className="text-xs font-bold text-emerald-900 shrink-0 flex items-center gap-1.5">
+                        <Truck className="w-3.5 h-3.5 text-emerald-700" />
+                        <span>廠商業務所屬分類：</span>
+                      </label>
+                      <select
+                        value={formData.supplierCategory || '瀝青砂石 / 建材原料'}
+                        onChange={(e) => setFormData(prev => ({ ...prev, supplierCategory: e.target.value }))}
+                        className="flex-1 px-3 py-1.5 rounded-lg border border-emerald-300 bg-white text-xs text-stone-800 focus:ring-2 focus:ring-emerald-500"
+                      >
+                        {SUPPLIER_CATEGORY_OPTIONS.map(opt => (
+                          <option key={opt} value={opt}>{opt}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 {/* 哪一間公司的常用客戶 (勾選) */}
@@ -2087,6 +2329,16 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
             handleOpenEditForm(target);
           }
         }}
+      />
+
+      {/* 合作廠商通訊錄產出與列印預覽彈窗 */}
+      <SupplierDirectoryModal
+        isOpen={isSupplierDirectoryModalOpen}
+        onClose={() => setIsSupplierDirectoryModalOpen(false)}
+        customers={customers}
+        companies={companies}
+        activeCompanyId={activeCompanyId}
+        onToggleSupplierStatus={handleToggleSupplierStatus}
       />
 
       {/* 刪除確認對話框 (修復取消與按X完全正常動作) */}

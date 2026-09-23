@@ -3,6 +3,7 @@ import {
   Coins, 
   Building2,
   Users2,
+  Truck,
   Car, 
   Package, 
   FileCheck2, 
@@ -158,7 +159,7 @@ export const ErpDashboardView: React.FC<ErpDashboardViewProps> = ({
             </div>
           </div>
 
-          {/* 模組：客戶聯絡資訊管理 (共用通訊錄) */}
+          {/* 模組：客戶名冊管理 (區分個人客戶與店家/企業) */}
           <div 
             onClick={() => onSelectApp('customers')}
             className="p-5 rounded-2xl border-2 border-indigo-200 bg-white hover:border-indigo-600 hover:shadow-md transition-all cursor-pointer relative group flex flex-col justify-between"
@@ -169,24 +170,57 @@ export const ErpDashboardView: React.FC<ErpDashboardViewProps> = ({
                   <Users2 className="w-5 h-5" />
                 </div>
                 <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
-                  ● 跨公司共用庫
+                  ● 個人與店家/企業
                 </span>
               </div>
               <h4 className="font-bold text-stone-900 text-base group-hover:text-indigo-700 transition-colors">
-                客戶聯絡資訊管理
+                客戶名冊管理
               </h4>
               <p className="text-xs text-stone-500 mt-1 leading-relaxed">
-                跨公司共用客戶通訊錄，支援個人/公司法人、台灣統編智慧檢核、銀行付款條件及未來廠商身分一鍵綁定。
+                專屬客戶管理，區分「個人客戶」與「店家 / 企業法人 / 經銷門市」，掌握客戶屬性、統編、窗口及禮金往來。
               </p>
 
               <div className="mt-4 pt-3 border-t border-stone-100 text-xs text-stone-600 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-indigo-500"></span>
-                <span>支援各公司獨立常用標記與多窗口名單</span>
+                <span>清晰區隔客戶屬性，支援常用標記與多窗口</span>
               </div>
             </div>
 
             <div className="mt-4 pt-2 flex items-center justify-between text-xs font-bold text-indigo-700">
-              <span>進入客戶通訊錄管理</span>
+              <span>進入客戶名冊管理</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </div>
+          </div>
+
+          {/* 模組：合作廠商管理 (業務分類、銀行匯款帳號、名冊產出) */}
+          <div 
+            onClick={() => onSelectApp('suppliers')}
+            className="p-5 rounded-2xl border-2 border-emerald-200 bg-white hover:border-emerald-600 hover:shadow-md transition-all cursor-pointer relative group flex flex-col justify-between"
+          >
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold">
+                  <Truck className="w-5 h-5" />
+                </div>
+                <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  ● 業務分類與付款
+                </span>
+              </div>
+              <h4 className="font-bold text-stone-900 text-base group-hover:text-emerald-700 transition-colors">
+                合作廠商管理
+              </h4>
+              <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+                協力廠商與供料商管理，依「瀝青建材、工程外包、機具租賃、五金水電」等業務分類，維護銀行付款帳號並一鍵產出通訊錄。
+              </p>
+
+              <div className="mt-4 pt-3 border-t border-stone-100 text-xs text-stone-600 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span>支援業務分類篩選、付款條款與 Excel/PDF 產出</span>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-2 flex items-center justify-between text-xs font-bold text-emerald-700">
+              <span>進入合作廠商管理</span>
               <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </div>
           </div>

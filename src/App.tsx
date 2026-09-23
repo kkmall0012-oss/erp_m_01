@@ -22,6 +22,7 @@ import { ErpModulePlaceholder } from './components/erp/ErpModulePlaceholder';
 import { ErpDatabaseView } from './components/erp/ErpDatabaseView';
 import { CompanySettingsView } from './components/erp/CompanySettingsView';
 import { CustomerManagementView } from './components/erp/CustomerManagementView';
+import { SupplierManagementView } from './components/erp/SupplierManagementView';
 import { StatCards } from './components/StatCards';
 import { QuickActionHub } from './components/QuickActionHub';
 import { TransactionCreateModal } from './components/TransactionCreateModal';
@@ -751,7 +752,7 @@ export default function App() {
             </div>
           )}
 
-          {/* 小程式 3：客戶與合作廠商聯絡資訊管理 */}
+          {/* 小程式 3：客戶名冊管理 (區分個人客戶及店家/企業) */}
           {activeApp === 'customers' && (
             <div className="p-4 sm:p-6 lg:p-8">
               <CustomerManagementView
@@ -759,6 +760,20 @@ export default function App() {
                 companies={companies}
                 activeCompanyId={activeCompanyId}
                 onRefreshCustomers={reloadFromDb}
+                onSwitchToSuppliers={() => setActiveApp('suppliers')}
+              />
+            </div>
+          )}
+
+          {/* 小程式 4：合作廠商管理 (業務所屬分類、付款帳號與一鍵產出通訊名冊) */}
+          {activeApp === 'suppliers' && (
+            <div className="p-4 sm:p-6 lg:p-8">
+              <SupplierManagementView
+                customers={customers}
+                companies={companies}
+                activeCompanyId={activeCompanyId}
+                onRefreshCustomers={reloadFromDb}
+                onSwitchToCustomers={() => setActiveApp('customers')}
               />
             </div>
           )}

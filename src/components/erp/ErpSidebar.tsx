@@ -4,6 +4,7 @@ import {
   Coins, 
   Building2,
   Users2,
+  Truck,
   Car, 
   Package, 
   FileCheck2, 
@@ -14,7 +15,7 @@ import {
   Settings
 } from 'lucide-react';
 
-export type ErpAppId = 'home' | 'company' | 'customers' | 'petty_cash' | 'fleet' | 'assets' | 'workflow' | 'database';
+export type ErpAppId = 'home' | 'company' | 'customers' | 'suppliers' | 'petty_cash' | 'fleet' | 'assets' | 'workflow' | 'database';
 
 export interface ErpAppItem {
   id: ErpAppId;
@@ -48,13 +49,23 @@ export const ERP_APPS: ErpAppItem[] = [
   },
   {
     id: 'customers',
-    name: '客戶聯絡資訊管理',
-    shortName: '客戶通訊錄',
+    name: '客戶名冊管理',
+    shortName: '客戶管理',
     icon: Users2,
-    badge: '共用通訊錄',
+    badge: '個人/店家',
     badgeColor: 'bg-indigo-100 text-indigo-800 border border-indigo-200',
     isReady: true,
-    description: '全關係企業共用客戶通訊錄，支援個人/公司、統編檢核、銀行收款方式與常用標記'
+    description: '客戶聯絡名冊，分類管理個人客戶、實體店家/門市與公司法人，掌握客戶屬性'
+  },
+  {
+    id: 'suppliers',
+    name: '合作廠商管理',
+    shortName: '廠商管理',
+    icon: Truck,
+    badge: '業務分類',
+    badgeColor: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+    isReady: true,
+    description: '協力廠商與供料商，依業務屬性分類、維護銀行付款帳號及一鍵產出通訊名冊'
   },
   {
     id: 'petty_cash',

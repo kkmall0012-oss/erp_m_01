@@ -148,6 +148,8 @@ export interface CustomerRow {
   name: string;
   shortName?: string;
   isIndividual: boolean;
+  customerCategory?: string; // 客戶分類屬性 (如：個人客戶、店家/門市行號、公司企業法人、政府機關)
+  supplierCategory?: string; // 廠商業務分類 (如：瀝青建材、工程工班、機具租賃、五金水電、運輸物流等)
   taxId?: string;
   representative?: string;
   representativeMobile?: string;
@@ -288,6 +290,8 @@ export const DEFAULT_CUSTOMERS_SEED: CustomerRow[] = [
     bankAccount: '004-123-4567890',
     accountName: '台塑精密工程股份有限公司',
     businessItems: 'AC瀝青鋪面、鋼構廠房、冷卻管路機電維護',
+    customerCategory: '公司企業法人',
+    supplierCategory: '工程發包 / 現場工班',
     isCustomer: true,
     isSupplier: true,
     favoriteCompanyIds: ['comp_1', 'comp_3'],
@@ -384,6 +388,8 @@ export const DEFAULT_CUSTOMERS_SEED: CustomerRow[] = [
     bankAccount: '007-654-3210987',
     accountName: '宏泰工業五金建材行',
     businessItems: '工廠維修五金、高張力螺絲、AC補路瀝青包、油漆塗料',
+    customerCategory: '店家 / 門市行號',
+    supplierCategory: '五金材料 / 水電設備',
     isCustomer: false,
     isSupplier: true,
     favoriteCompanyIds: ['comp_1', 'comp_2', 'comp_3'],
@@ -426,6 +432,59 @@ export const DEFAULT_CUSTOMERS_SEED: CustomerRow[] = [
       }
     ],
     createdAt: Date.now() - 3600000 * 24 * 60,
+    updatedAt: Date.now()
+  },
+  {
+    id: 'cust_seed_3',
+    name: '張美惠 (自用住宅庭院改造案)',
+    shortName: '張美惠小姐',
+    isIndividual: true,
+    customerCategory: '個人客戶',
+    representative: '張美惠',
+    representativeMobile: '0918-765-432',
+    phone1: '02-8660-1234',
+    postalCode: '234',
+    address: '新北市永和區環河西路一段88號',
+    contacts: [
+      { id: 'cnt_3_1', name: '張美惠', title: '屋主本人', mobile: '0918-765-432', note: '平日白天上班，傍晚聯繫' }
+    ],
+    paymentTerm: '現金 / 貨到付款',
+    businessItems: '自用別墅車庫與庭院AC瀝青鋪面、排水側溝整地',
+    isCustomer: true,
+    isSupplier: false,
+    favoriteCompanyIds: ['comp_1'],
+    note: '優質個人客戶，款項驗收即付現，轉介多位社區鄰居',
+    createdAt: Date.now() - 3600000 * 24 * 15,
+    updatedAt: Date.now()
+  },
+  {
+    id: 'cust_seed_4',
+    name: '三興瀝青柏油實業股份有限公司',
+    shortName: '三興瀝青',
+    isIndividual: false,
+    taxId: '84561234',
+    representative: '王興發',
+    representativeMobile: '0932-888-999',
+    phone1: '03-386-7788',
+    postalCode: '337',
+    address: '桃園市大園區中正東路三段500號',
+    contacts: [
+      { id: 'cnt_4_1', name: '陳調度', title: '出料總調度', mobile: '0935-123-789', note: '叫熱料、壓實度配比叫料專線' },
+      { id: 'cnt_4_2', name: '王興發', title: '總經理', mobile: '0932-888-999' }
+    ],
+    paymentTerm: '銀行匯款 (次月 25 號電匯)',
+    bankName: '臺灣土地銀行 大園分行',
+    bankBranch: '大園分行',
+    bankAccount: '005-098-7654321',
+    accountName: '三興瀝青柏油實業股份有限公司',
+    businessItems: '熱拌瀝青混凝土、再生瀝青、乳化瀝青、粗細骨材',
+    customerCategory: '公司企業法人',
+    supplierCategory: '瀝青砂石 / 建材原料',
+    isCustomer: false,
+    isSupplier: true,
+    favoriteCompanyIds: ['comp_1', 'comp_2', 'comp_3'],
+    note: '大型熱料拌合廠，全天候供應，附出廠檢驗合格品質報告',
+    createdAt: Date.now() - 3600000 * 24 * 45,
     updatedAt: Date.now()
   }
 ];
@@ -666,6 +725,8 @@ function initSchema(database: Database) {
       bankAccount TEXT,
       accountName TEXT,
       businessItems TEXT,
+      customerCategory TEXT,
+      supplierCategory TEXT,
       isCustomer INTEGER DEFAULT 1,
       isSupplier INTEGER DEFAULT 0,
       favoriteCompanyIds TEXT NOT NULL,
@@ -689,6 +750,8 @@ function initSchema(database: Database) {
   try { database.run(`ALTER TABLE company_profile ADD COLUMN isNominalPettyCashHolder INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN sortOrder INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE customers ADD COLUMN events TEXT`); } catch (e) {}
+  try { database.run(`ALTER TABLE customers ADD COLUMN customerCategory TEXT`); } catch (e) {}
+  try { database.run(`ALTER TABLE customers ADD COLUMN supplierCategory TEXT`); } catch (e) {}
 
   // 既有交易自動補齊營業稅計算 (發票自動推算未稅與5%稅額，收據標為免稅/0稅額)
   try {
@@ -1396,6 +1459,8 @@ function mapRowToCustomer(row: any[], columns: string[]): CustomerRow {
     bankAccount: obj.bankAccount ? String(obj.bankAccount) : undefined,
     accountName: obj.accountName ? String(obj.accountName) : undefined,
     businessItems: obj.businessItems ? String(obj.businessItems) : undefined,
+    customerCategory: obj.customerCategory ? String(obj.customerCategory) : undefined,
+    supplierCategory: obj.supplierCategory ? String(obj.supplierCategory) : undefined,
     isCustomer: obj.isCustomer !== undefined ? Boolean(obj.isCustomer) : true,
     isSupplier: Boolean(obj.isSupplier),
     favoriteCompanyIds,
@@ -1424,9 +1489,9 @@ export async function addCustomer(c: CustomerRow): Promise<void> {
       id, name, shortName, isIndividual, taxId, representative, representativeMobile,
       secondaryRepresentative, phone1, phone2, fax, email, website, lineId,
       postalCode, address, shippingAddress, contacts, paymentTerm, bankName,
-      bankBranch, bankAccount, accountName, businessItems, isCustomer, isSupplier,
-      favoriteCompanyIds, events, note, createdAt, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      bankBranch, bankAccount, accountName, businessItems, customerCategory, supplierCategory,
+      isCustomer, isSupplier, favoriteCompanyIds, events, note, createdAt, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       c.id,
       c.name,
@@ -1452,6 +1517,8 @@ export async function addCustomer(c: CustomerRow): Promise<void> {
       c.bankAccount || null,
       c.accountName || null,
       c.businessItems || null,
+      c.customerCategory || null,
+      c.supplierCategory || null,
       c.isCustomer ? 1 : 0,
       c.isSupplier ? 1 : 0,
       JSON.stringify(c.favoriteCompanyIds || []),
@@ -1473,8 +1540,8 @@ export async function updateCustomer(c: CustomerRow): Promise<void> {
       representativeMobile = ?, secondaryRepresentative = ?, phone1 = ?, phone2 = ?,
       fax = ?, email = ?, website = ?, lineId = ?, postalCode = ?, address = ?,
       shippingAddress = ?, contacts = ?, paymentTerm = ?, bankName = ?, bankBranch = ?,
-      bankAccount = ?, accountName = ?, businessItems = ?, isCustomer = ?, isSupplier = ?,
-      favoriteCompanyIds = ?, events = ?, note = ?, updatedAt = ?
+      bankAccount = ?, accountName = ?, businessItems = ?, customerCategory = ?, supplierCategory = ?,
+      isCustomer = ?, isSupplier = ?, favoriteCompanyIds = ?, events = ?, note = ?, updatedAt = ?
     WHERE id = ?`,
     [
       c.name,
@@ -1500,6 +1567,8 @@ export async function updateCustomer(c: CustomerRow): Promise<void> {
       c.bankAccount || null,
       c.accountName || null,
       c.businessItems || null,
+      c.customerCategory || null,
+      c.supplierCategory || null,
       c.isCustomer ? 1 : 0,
       c.isSupplier ? 1 : 0,
       JSON.stringify(c.favoriteCompanyIds || []),

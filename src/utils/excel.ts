@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
-import { Transaction, MonthBudget, CategoryConfig, ReceiptType, TransactionType } from '../types';
+import { Transaction, MonthBudget, CategoryConfig, ReceiptType, TransactionType, Customer } from '../types';
 
 /**
  * 匯出完整財務報表至 Excel：
@@ -1967,3 +1967,239 @@ export async function parseAndValidateImportFile(
     reader.readAsArrayBuffer(file);
   });
 }
+
+/**
+ * 匯出合作廠商通訊錄與銀行付款資料表至 Excel (.xlsx)：
+ * 支援多工作表：
+ * 1. 廠商通訊錄與付款帳號總表 (含統編、負責人、電話、付款條件、銀行帳戶、供應品項)
+ * 2. 廠商聯絡人通訊明細清單 (各家廠商之主要與次要聯絡窗口、手機、職稱、Email)
+ */
+export function exportSupplierDirectoryToExcel(
+  customers: Customer[],
+  options?: {
+    isSupplierOnly?: boolean;
+    companyTitle?: string;
+    fileNamePrefix?: string;
+  }
+): void {
+  const isSupplierOnly = options?.isSupplierOnly ?? true;
+  const list = isSupplierOnly ? customers.filter((c) => c.isSupplier) : customers;
+  const printDateStr = new Date().toLocaleString('zh-TW', { hour12: false });
+  const printDateOnly = new Date().toISOString().slice(0, 10);
+  const title = options?.companyTitle ? `${options.companyTitle} - ` : '';
+
+  // 1. 廠商通訊錄主工作表
+  const mainRows: any[] = list.map((c, index) => {
+    // 彙整聯絡人字串
+    const contactsSummary = (c.contacts || [])
+      .map((p) => `${p.name}${p.title ? `(${p.title})` : ''} ${p.mobile || p.phone || ''}`.trim())
+      .filter(Boolean)
+      .join('； ');
+
+    // 禮金往來加總
+    const evts = c.events || [];
+    const giftTotal = evts.reduce((sum, e) => (e.hasAmount && e.amount ? sum + (e.direction === 'incoming' ? -e.amount : e.amount) : sum), 0);
+
+    return {
+      '編號': index + 1,
+      '廠商全名': c.name,
+      '所屬業務分類': c.supplierCategory || '未分類',
+      '簡稱/別名': c.shortName || '',
+      '身分類別': c.isIndividual ? '個人工班/師傅' : '公司法人/行號',
+      '統一編號': c.taxId ? String(c.taxId) : '',
+      '負責人/代表人': c.representative || '',
+      '負責人手機': c.representativeMobile || '',
+      '現場主管/副主管': c.secondaryRepresentative || '',
+      '公司代表電話': c.phone1 || '',
+      '備用電話/專線': c.phone2 || '',
+      '傳真號碼': c.fax || '',
+      '電子信箱': c.email || '',
+      'LINE ID': c.lineId || '',
+      '郵遞區號': c.postalCode || '',
+      '通訊/營業地址': c.address || '',
+      '送貨/工程地址': c.shippingAddress || '',
+      '配合收款方式/票期': c.paymentTerm || '',
+      '往來銀行': c.bankName || '',
+      '分行名稱': c.bankBranch || '',
+      '匯款帳號': c.bankAccount ? `'${c.bankAccount}` : '', // 加單引號避免 Excel 遺失前導零
+      '匯款戶名': c.accountName || '',
+      '營業項目/供應內容': c.businessItems || '',
+      '主要聯絡人總覽': contactsSummary || '無個別窗口紀錄',
+      '交際禮金往來筆數': evts.length > 0 ? `${evts.length} 筆` : '無',
+      '禮金累計結算 (NT$)': giftTotal !== 0 ? giftTotal : 0,
+      '兼具客戶身分': c.isCustomer ? '是' : '否',
+      '備註說明': c.note || '',
+      '資料產出日期': printDateOnly
+    };
+  });
+
+  const mainSheet = XLSX.utils.json_to_sheet(mainRows);
+  mainSheet['!cols'] = [
+    { wch: 8 },  // 編號
+    { wch: 24 }, // 廠商全名
+    { wch: 14 }, // 簡稱
+    { wch: 16 }, // 身分類別
+    { wch: 14 }, // 統一編號
+    { wch: 14 }, // 負責人
+    { wch: 15 }, // 負責人手機
+    { wch: 16 }, // 現場主管
+    { wch: 16 }, // 公司電話
+    { wch: 16 }, // 備用電話
+    { wch: 14 }, // 傳真
+    { wch: 22 }, // Email
+    { wch: 14 }, // LINE
+    { wch: 10 }, // 郵遞區號
+    { wch: 32 }, // 地址
+    { wch: 30 }, // 送貨地址
+    { wch: 24 }, // 付款方式
+    { wch: 18 }, // 往來銀行
+    { wch: 14 }, // 分行名稱
+    { wch: 22 }, // 匯款帳號
+    { wch: 20 }, // 匯款戶名
+    { wch: 26 }, // 營業項目
+    { wch: 35 }, // 聯絡人
+    { wch: 16 }, // 禮金筆數
+    { wch: 18 }, // 禮金累計
+    { wch: 14 }, // 兼客戶
+    { wch: 28 }, // 備註
+    { wch: 14 }  // 產出日期
+  ];
+
+  // 2. 聯絡人詳細窗口工作表
+  const contactRows: any[] = [];
+  list.forEach((c) => {
+    if (c.contacts && c.contacts.length > 0) {
+      c.contacts.forEach((p, idx) => {
+        contactRows.push({
+          '廠商/公司名稱': c.name,
+          '統一編號': c.taxId || '',
+          '窗口順序': idx + 1,
+          '聯絡人姓名': p.name,
+          '職稱': p.title || '',
+          '行動電話': p.mobile || '',
+          '市話/分機': p.phone || '',
+          '電子郵件': p.email || '',
+          'LINE ID': p.lineId || '',
+          '窗口備註': p.note || ''
+        });
+      });
+    }
+  });
+
+  const contactSheet = XLSX.utils.json_to_sheet(contactRows);
+  contactSheet['!cols'] = [
+    { wch: 24 },
+    { wch: 14 },
+    { wch: 10 },
+    { wch: 14 },
+    { wch: 14 },
+    { wch: 16 },
+    { wch: 16 },
+    { wch: 24 },
+    { wch: 16 },
+    { wch: 24 }
+  ];
+
+  // 組合工作表
+  const workbook = XLSX.utils.book_new();
+  const mainTabName = isSupplierOnly ? '合作廠商通訊錄與銀行帳號' : '全客戶與廠商通訊名錄';
+  XLSX.utils.book_append_sheet(workbook, mainSheet, mainTabName);
+  if (contactRows.length > 0) {
+    XLSX.utils.book_append_sheet(workbook, contactSheet, '聯絡人窗口名單');
+  }
+
+  // 檔名設定
+  const dateStr = printDateOnly.replace(/-/g, '');
+  const prefix = options?.fileNamePrefix || (isSupplierOnly ? '合作廠商通訊錄與付款資料表' : '全客戶與廠商通訊名冊');
+  const fileName = `${title}${dateStr}_${prefix}.xlsx`;
+
+  XLSX.writeFile(workbook, fileName);
+}
+
+/**
+ * 匯出合作廠商通訊錄為標準 CSV 格式 (附 UTF-8 BOM，Excel 直接點擊開啟不亂碼)
+ */
+export function exportSupplierDirectoryToCsv(
+  customers: Customer[],
+  options?: {
+    isSupplierOnly?: boolean;
+    companyTitle?: string;
+  }
+): void {
+  const isSupplierOnly = options?.isSupplierOnly ?? true;
+  const list = isSupplierOnly ? customers.filter((c) => c.isSupplier) : customers;
+  const printDateOnly = new Date().toISOString().slice(0, 10);
+  const title = options?.companyTitle ? `${options.companyTitle}_` : '';
+
+  const headers = [
+    '編號',
+    '廠商全名',
+    '所屬業務分類',
+    '簡稱',
+    '身分類別',
+    '統一編號',
+    '負責人',
+    '負責人手機',
+    '主要電話',
+    '傳真號碼',
+    '電子信箱',
+    '營業地址',
+    '收款方式與票期',
+    '往來銀行',
+    '分行名稱',
+    '匯款帳號',
+    '匯款戶名',
+    '營業項目與供應物料',
+    '聯絡窗口名單',
+    '備註'
+  ];
+
+  const escapeCsv = (val: any) => {
+    if (val === null || val === undefined) return '""';
+    const str = String(val).replace(/"/g, '""');
+    return `"${str}"`;
+  };
+
+  const rows = list.map((c, index) => {
+    const contactsSummary = (c.contacts || [])
+      .map((p) => `${p.name}${p.title ? `(${p.title})` : ''} ${p.mobile || ''}`.trim())
+      .filter(Boolean)
+      .join('; ');
+
+    return [
+      escapeCsv(index + 1),
+      escapeCsv(c.name),
+      escapeCsv(c.supplierCategory || '未分類'),
+      escapeCsv(c.shortName || ''),
+      escapeCsv(c.isIndividual ? '個人工班' : '公司法人'),
+      escapeCsv(c.taxId || ''),
+      escapeCsv(c.representative || ''),
+      escapeCsv(c.representativeMobile || ''),
+      escapeCsv(c.phone1 || c.phone2 || ''),
+      escapeCsv(c.fax || ''),
+      escapeCsv(c.email || ''),
+      escapeCsv(c.address || ''),
+      escapeCsv(c.paymentTerm || ''),
+      escapeCsv(c.bankName || ''),
+      escapeCsv(c.bankBranch || ''),
+      escapeCsv(c.bankAccount ? `\t${c.bankAccount}` : ''), // 帶 tab 防止 excel 轉科學符號
+      escapeCsv(c.accountName || ''),
+      escapeCsv(c.businessItems || ''),
+      escapeCsv(contactsSummary),
+      escapeCsv(c.note || '')
+    ].join(',');
+  });
+
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  const dateStr = printDateOnly.replace(/-/g, '');
+  link.download = `${title}${dateStr}_${isSupplierOnly ? '合作廠商通訊錄' : '通訊名冊'}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
