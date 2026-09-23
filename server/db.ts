@@ -1527,6 +1527,68 @@ export async function replaceAllCustomers(customers: CustomerRow[]): Promise<voi
   persist();
 }
 
+// 匯出完整全庫 JSON 格式物件（包含全歷史流水帳、公司主檔、客戶通訊、專款子帳與所有自訂項目，並動態抓取未來新增的自訂資料表）
+export async function getFullDatabaseJsonExport(): Promise<Record<string, any>> {
+  const database = await getDb();
+  persist();
+
+  // 1. 取得標準核心結構
+  const transactions = await getAllTransactions();
+  const categories = await getAllCategories();
+  const claimants = await getAllClaimants();
+  const budgets = await getAllBudgets();
+  const subAccounts = await getAllSubAccounts();
+  const directorWithdrawals = await getAllDirectorWithdrawals();
+  const companies = await getAllCompanyProfiles();
+  const defaultCompany = await getCompanyProfile();
+  const customers = await getAllCustomers();
+
+  // 2. 動態檢視 sqlite_master 抓取未來新模組動到的所有資料表內容
+  const allTablesRes = database.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`);
+  const extraTables: Record<string, any[]> = {};
+  const coreTableSet = new Set([
+    'transactions', 'categories', 'claimants', 'budgets',
+    'sub_accounts', 'director_withdrawals', 'company_profile', 'customers'
+  ]);
+
+  if (allTablesRes && allTablesRes.length > 0 && allTablesRes[0].values.length > 0) {
+    for (const [tName] of allTablesRes[0].values) {
+      const tableName = String(tName);
+      if (!coreTableSet.has(tableName)) {
+        const rowsRes = database.exec(`SELECT * FROM "${tableName}"`);
+        if (rowsRes && rowsRes.length > 0) {
+          const cols = rowsRes[0].columns;
+          extraTables[tableName] = rowsRes[0].values.map((row) => {
+            const obj: Record<string, any> = {};
+            cols.forEach((col, idx) => {
+              obj[col] = row[idx];
+            });
+            return obj;
+          });
+        } else {
+          extraTables[tableName] = [];
+        }
+      }
+    }
+  }
+
+  return {
+    version: '2.0.0',
+    exportedAt: new Date().toISOString(),
+    system: '企業零用金與客戶財務管理系統',
+    transactions,
+    categories,
+    claimants,
+    budgets,
+    subAccounts,
+    directorWithdrawals,
+    companies,
+    companyProfile: defaultCompany,
+    customers,
+    extraTables
+  };
+}
+
 // 載入外部傳入的全新 SQLite 二進位檔案（用於使用者自備檔案還原或攜帶換機）
 export async function replaceWithDatabaseBinary(fileBuffer: Uint8Array): Promise<void> {
   if (!fileBuffer || fileBuffer.length < 16) {
@@ -1546,12 +1608,13 @@ export async function replaceWithDatabaseBinary(fileBuffer: Uint8Array): Promise
   persist();
 }
 
-// 匯出包含完整 8 大資料表結構與所有資料列的標準 SQL 文字備份檔 (.sql)
+// 匯出包含完整資料庫結構與所有資料列的標準 SQL 文字備份檔 (.sql) - 動態涵蓋目前與未來所有新增資料表
 export async function generateSqlDump(): Promise<string> {
   const database = await getDb();
   persist();
 
-  const tables = [
+  // 優先依外鍵關聯順序排列核心資料表，並動態抓取資料庫中所有現存資料表
+  const preferredOrder = [
     'company_profile',
     'customers',
     'categories',
@@ -1562,18 +1625,31 @@ export async function generateSqlDump(): Promise<string> {
     'transactions'
   ];
 
+  const allTablesRes = database.exec(`SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'`);
+  const existingTables = new Set<string>();
+  if (allTablesRes && allTablesRes.length > 0 && allTablesRes[0].values.length > 0) {
+    for (const [tName] of allTablesRes[0].values) {
+      existingTables.add(String(tName));
+    }
+  }
+
+  const tables: string[] = [];
+  for (const t of preferredOrder) {
+    if (existingTables.has(t)) {
+      tables.push(t);
+      existingTables.delete(t);
+    }
+  }
+  // 未來新模組新增的任何資料表亦全數納入備份
+  for (const remainingTable of existingTables) {
+    tables.push(remainingTable);
+  }
+
   let sql = `-- ==================================================================\n`;
   sql += `-- 企業零用金與客戶財務管理系統 - SQLite 完整資料庫 SQL 語法備份檔 (.sql)\n`;
   sql += `-- 匯出時間: ${new Date().toISOString()} (${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })})\n`;
-  sql += `-- 備份內容: 100% 完整收錄 8 大核心資料表（含公司主檔、客戶聯絡人名冊、流水帳目與各項設定）\n`;
-  sql += `--   1. company_profile (公司主檔設定、多行號關係企業、統編、負責人、電話地址、銀行帳戶、報表抬頭)\n`;
-  sql += `--   2. customers (客戶聯絡資訊主檔、個人/法人、統編、多聯絡人、銀行匯款帳號、收款方式、廠商身分標籤)\n`;
-  sql += `--   3. transactions (全歷史收支流水帳、發票號碼、單據憑證、傳票編號、公司關聯)\n`;
-  sql += `--   4. categories (主題科目與階層自訂選單、圖示、色碼、人數設定)\n`;
-  sql += `--   5. claimants (常用經辦請領人名冊)\n`;
-  sql += `--   6. budgets (各月預算額度與警戒百分比)\n`;
-  sql += `--   7. sub_accounts (專案採買專款子帳與明細)\n`;
-  sql += `--   8. director_withdrawals (主管/負責人大額提領紀錄)\n`;
+  sql += `-- 備份內容: 100% 完整收錄全資料庫（包含客戶通訊、零用金流水帳、公司設定及所有未來新增模組）\n`;
+  sql += `-- 包含資料表 (${tables.length} 個): ${tables.join(', ')}\n`;
   sql += `-- 適用環境: 換機一鍵還原、本機離線保存、DBeaver / Navicat / SQLite Studio 工具直接檢視\n`;
   sql += `-- ==================================================================\n\n`;
   sql += `PRAGMA foreign_keys = OFF;\n`;
@@ -1587,10 +1663,10 @@ export async function generateSqlDump(): Promise<string> {
     sql += `-- ------------------------------------------------------------------\n`;
     sql += `-- 資料表結構: ${tableName}\n`;
     sql += `-- ------------------------------------------------------------------\n`;
-    sql += `DROP TABLE IF EXISTS ${tableName};\n`;
+    sql += `DROP TABLE IF EXISTS "${tableName}";\n`;
     sql += `${createTableSql};\n\n`;
 
-    const rowsRes = database.exec(`SELECT * FROM ${tableName};`);
+    const rowsRes = database.exec(`SELECT * FROM "${tableName}";`);
     if (rowsRes && rowsRes.length && rowsRes[0].values.length) {
       const columns = rowsRes[0].columns;
       const colList = columns.map(c => `"${c}"`).join(', ');
@@ -1603,7 +1679,7 @@ export async function generateSqlDump(): Promise<string> {
           const str = String(val).replace(/'/g, "''");
           return `'${str}'`;
         }).join(', ');
-        sql += `INSERT INTO ${tableName} (${colList}) VALUES (${valList});\n`;
+        sql += `INSERT INTO "${tableName}" (${colList}) VALUES (${valList});\n`;
       }
       sql += `\n`;
     }

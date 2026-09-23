@@ -26,7 +26,7 @@ import {
   RestoreOptions 
 } from '../types';
 import { exportBackupJSON, parseBackupJSON } from '../utils/storage';
-import { triggerDownloadSqliteFile, triggerDownloadSqlDumpFile, uploadSqliteFileApi } from '../services/api';
+import { triggerDownloadSqliteFile, triggerDownloadSqlDumpFile, triggerDownloadFullJsonBackupFile, uploadSqliteFileApi } from '../services/api';
 import { ConfirmDialog } from './ConfirmDialog';
 
 interface BackupModalProps {
@@ -82,7 +82,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
   // 下載純文字標準 SQL 語法備份檔 (.sql)
   const handleDownloadSqlDump = () => {
     triggerDownloadSqlDumpFile();
-    setRestoreStatus('已開始下載標準 SQL 語法備份檔 (.sql)！包含全部 7 大資料表與所有公司設定主檔。');
+    setRestoreStatus('已開始下載標準 SQL 語法備份檔 (.sql)！包含全部資料表結構、客戶通訊、零用金流水帳與公司設定主檔。');
   };
 
   // 匯入實體 SQLite 資料庫檔案、.sql 腳本或備份 (換機直接置換)
@@ -106,7 +106,7 @@ export const BackupModal: React.FC<BackupModalProps> = ({
       }
 
       const res = await uploadSqliteFileApi(file);
-      setRestoreStatus(res.message || '🎉 資料庫已成功載入並替換！所有公司設定與帳目已 100% 恢復！');
+      setRestoreStatus(res.message || '🎉 資料庫已成功載入並替換！所有公司設定、客戶通訊與帳目已 100% 恢復！');
       if (onReloadAllData) {
         await onReloadAllData();
       }
@@ -118,20 +118,10 @@ export const BackupModal: React.FC<BackupModalProps> = ({
     }
   };
 
-  // 下載 JSON 備份檔
+  // 下載完整全庫 JSON 備份檔 (包含全資料庫：客戶通訊、流水帳、公司設定及自訂項目)
   const handleDownloadBackup = () => {
-    exportBackupJSON(
-      transactions,
-      categories,
-      budgets,
-      claimants,
-      directorWithdrawals,
-      subAccounts,
-      companies,
-      companyProfile,
-      customers
-    );
-    setRestoreStatus('已下載完整 JSON 備份檔！包含全部公司主檔、客戶資料、收支明細與系統設定。');
+    triggerDownloadFullJsonBackupFile();
+    setRestoreStatus('已開始下載完整全庫 JSON 備份檔！100% 包含客戶通訊、公司主檔設定、零用金收支流水帳與所有資料表。');
   };
 
   // 匯入 JSON 備份檔
@@ -259,10 +249,10 @@ export const BackupModal: React.FC<BackupModalProps> = ({
                 </div>
                 <div>
                   <h4 className="font-bold text-stone-900 text-xs">
-                    資料庫匯出備份專區（100% 完整收錄 7 大核心資料表與公司設定）
+                    完整資料庫匯出備份（100% 完整收錄客戶通訊、流水帳、公司設定與所有資料表）
                   </h4>
                   <p className="text-[11px] text-emerald-900 mt-0.5">
-                    實體存於伺服器檔案 <code className="px-1 py-0.5 rounded-sm bg-emerald-100 font-mono font-bold text-emerald-800">data/petty_cash.sqlite</code>。提供 SQLite 原生實體庫、標準 SQL 語法指令檔與 JSON 備份檔任選。
+                    實體存於伺服器檔案 <code className="px-1 py-0.5 rounded-sm bg-emerald-100 font-mono font-bold text-emerald-800">data/petty_cash.sqlite</code>。支援 SQLite 原生實體庫、標準 SQL 語法指令檔與全庫 JSON 備份檔任選。
                   </p>
                 </div>
               </div>

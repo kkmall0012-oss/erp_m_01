@@ -32,7 +32,9 @@ import {
   StickyNote,
   ArrowUpRight,
   ArrowDownLeft,
-  Receipt
+  Receipt,
+  LayoutGrid,
+  List
 } from 'lucide-react';
 import { 
   Customer, 
@@ -74,6 +76,21 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
   const [favoriteFilterCompanyId, setFavoriteFilterCompanyId] = useState<string>(
     activeCompanyId !== 'all' ? activeCompanyId : 'all'
   );
+  // 檢視模式切換：卡片 (grid) 或 列表 (list)，預設記住使用者偏好
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
+    try {
+      return (localStorage.getItem('customer_view_mode') as 'grid' | 'list') || 'list';
+    } catch {
+      return 'list';
+    }
+  });
+
+  const handleToggleViewMode = (mode: 'grid' | 'list') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('customer_view_mode', mode);
+    } catch {}
+  };
 
   // 編輯/新增表單狀態
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -671,6 +688,36 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
               </select>
             </div>
           )}
+
+          {/* 檢視模式切換：列表清單 / 卡片方格 */}
+          <div className="ml-auto flex items-center gap-1 bg-stone-100/90 p-0.5 rounded-lg border border-stone-200">
+            <button
+              type="button"
+              onClick={() => handleToggleViewMode('list')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                viewMode === 'list'
+                  ? 'bg-white text-stone-900 shadow-2xs font-bold'
+                  : 'text-stone-500 hover:text-stone-800'
+              }`}
+              title="以精簡列表表格檢視，快速掃描比對與編輯"
+            >
+              <List className="w-3.5 h-3.5" />
+              <span>列表檢視</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleToggleViewMode('grid')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                viewMode === 'grid'
+                  ? 'bg-white text-stone-900 shadow-2xs font-bold'
+                  : 'text-stone-500 hover:text-stone-800'
+              }`}
+              title="以詳細卡片檢視"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>卡片檢視</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -695,7 +742,241 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
             <span>立即新增客戶</span>
           </button>
         </div>
+      ) : viewMode === 'list' ? (
+        /* 列表表格檢視模式 (List View)：高資訊密度、易比對、快速編輯與刪除 */
+        <div className="bg-white rounded-xl border border-stone-200 shadow-2xs overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="bg-stone-50/80 border-b border-stone-200 text-stone-600 font-semibold">
+                  <th className="py-3 px-3.5 w-10 text-center">常用</th>
+                  <th className="py-3 px-3 min-w-[180px]">客戶 / 公司名稱</th>
+                  <th className="py-3 px-3 w-28">統一編號</th>
+                  <th className="py-3 px-3 min-w-[120px]">負責人 / 主管</th>
+                  <th className="py-3 px-3 min-w-[140px]">電話 / 手機</th>
+                  <th className="py-3 px-3 min-w-[150px]">聯絡窗口</th>
+                  <th className="py-3 px-3 min-w-[140px]">往來收款 / 帳號</th>
+                  <th className="py-3 px-3 min-w-[100px]">大事紀/禮金</th>
+                  <th className="py-3 px-3.5 w-28 text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {filteredCustomers.map((customer) => {
+                  const isFavForCurrentCompany = activeCompanyId !== 'all' 
+                    ? customer.favoriteCompanyIds?.includes(activeCompanyId)
+                    : (customer.favoriteCompanyIds && customer.favoriteCompanyIds.length > 0);
+
+                  const evts = customer.events || [];
+                  const moneyTotal = evts.reduce((sum, e) => (e.hasAmount && e.amount ? sum + (e.direction === 'incoming' ? -e.amount : e.amount) : sum), 0);
+
+                  return (
+                    <tr 
+                      key={customer.id}
+                      className="hover:bg-blue-50/40 transition-colors group"
+                    >
+                      {/* 常用星號 */}
+                      <td className="py-2.5 px-3 text-center align-middle">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const targetCompId = activeCompanyId !== 'all' ? activeCompanyId : (companies[0]?.id || 'comp_1');
+                            handleToggleFavoriteCompany(customer, targetCompId);
+                          }}
+                          title={isFavForCurrentCompany ? '點擊取消常用客戶' : '點擊設為常用客戶'}
+                          className={`p-1 rounded transition-colors cursor-pointer inline-flex items-center justify-center ${
+                            isFavForCurrentCompany 
+                              ? 'text-amber-500 hover:bg-amber-50' 
+                              : 'text-stone-300 hover:text-amber-400 hover:bg-stone-100'
+                          }`}
+                        >
+                          <Star className={`w-3.5 h-3.5 ${isFavForCurrentCompany ? 'fill-amber-400' : ''}`} />
+                        </button>
+                      </td>
+
+                      {/* 客戶名稱與屬性標籤 */}
+                      <td className="py-2.5 px-3 align-middle">
+                        <div className="flex items-center gap-2">
+                          <div className={`p-1.5 rounded shrink-0 ${
+                            customer.isIndividual ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'
+                          }`}>
+                            {customer.isIndividual ? <User className="w-3.5 h-3.5" /> : <Building2 className="w-3.5 h-3.5" />}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-stone-900 text-xs truncate" title={customer.name}>
+                                {customer.name}
+                              </span>
+                              {customer.shortName && (
+                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-stone-100 text-stone-600 font-mono">
+                                  {customer.shortName}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-medium ${
+                                customer.isIndividual ? 'bg-amber-100/70 text-amber-800' : 'bg-blue-100/70 text-blue-800'
+                              }`}>
+                                {customer.isIndividual ? '個人' : '法人'}
+                              </span>
+                              {customer.isSupplier && (
+                                <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-emerald-100 text-emerald-800 font-semibold border border-emerald-200">
+                                  兼廠商
+                                </span>
+                              )}
+                              {customer.address && (
+                                <span className="text-[10px] text-stone-400 truncate max-w-[180px]" title={customer.address}>
+                                  · {customer.address}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* 統一編號 */}
+                      <td className="py-2.5 px-3 align-middle font-mono text-stone-700">
+                        {customer.taxId ? (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-stone-800 bg-stone-100 px-1.5 py-0.5 rounded">
+                            {customer.taxId}
+                          </span>
+                        ) : (
+                          <span className="text-stone-300 text-[11px]">—</span>
+                        )}
+                      </td>
+
+                      {/* 負責人 / 主管 */}
+                      <td className="py-2.5 px-3 align-middle text-stone-700">
+                        {customer.representative ? (
+                          <div>
+                            <span className="font-semibold text-stone-800">{customer.representative}</span>
+                            {customer.representativeMobile && (
+                              <span className="block font-mono text-[10px] text-stone-500">
+                                {customer.representativeMobile}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-stone-300">—</span>
+                        )}
+                      </td>
+
+                      {/* 主要電話 / 手機 */}
+                      <td className="py-2.5 px-3 align-middle font-mono text-stone-700">
+                        {customer.phone1 || customer.phone2 ? (
+                          <div>
+                            <span>{customer.phone1 || customer.phone2}</span>
+                            {customer.phone1 && customer.phone2 && (
+                              <span className="block text-[10px] text-stone-400">{customer.phone2}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-stone-300">—</span>
+                        )}
+                      </td>
+
+                      {/* 聯絡窗口名冊 */}
+                      <td className="py-2.5 px-3 align-middle text-stone-600">
+                        {customer.contacts && customer.contacts.length > 0 ? (
+                          <div className="flex flex-col gap-0.5">
+                            {customer.contacts.slice(0, 2).map((c, i) => (
+                              <span key={c.id || i} className="text-[11px] truncate max-w-[160px]" title={`${c.name} ${c.title || ''} ${c.mobile || ''}`}>
+                                <span className="font-medium text-stone-800">{c.name}</span>
+                                {c.title && <span className="text-stone-400"> ({c.title})</span>}
+                                {c.mobile && <span className="font-mono text-stone-500 ml-1">{c.mobile}</span>}
+                              </span>
+                            ))}
+                            {customer.contacts.length > 2 && (
+                              <span className="text-[10px] text-stone-400">
+                                +{customer.contacts.length - 2} 位窗口
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-stone-300">—</span>
+                        )}
+                      </td>
+
+                      {/* 收款方式與銀行帳號 */}
+                      <td className="py-2.5 px-3 align-middle text-stone-600">
+                        {customer.paymentTerm || customer.bankAccount ? (
+                          <div className="text-[11px]">
+                            {customer.paymentTerm && (
+                              <span className="font-medium text-stone-800 block truncate max-w-[140px]" title={customer.paymentTerm}>
+                                {customer.paymentTerm}
+                              </span>
+                            )}
+                            {customer.bankAccount && (
+                              <span className="font-mono text-[10px] text-stone-500 block truncate max-w-[140px]" title={`${customer.bankName || ''} ${customer.bankAccount}`}>
+                                {customer.bankName ? `${customer.bankName} ` : ''}{customer.bankAccount}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-stone-300">—</span>
+                        )}
+                      </td>
+
+                      {/* 大事紀與禮金 */}
+                      <td className="py-2.5 px-3 align-middle">
+                        {evts.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenQuickEvents(customer)}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-[10px] font-semibold transition-colors cursor-pointer"
+                            title="查看大事紀與禮金明細"
+                          >
+                            <HeartHandshake className="w-3 h-3 text-rose-500" />
+                            <span>{evts.length} 筆</span>
+                            {moneyTotal !== 0 && (
+                              <span className="font-mono font-bold">${moneyTotal.toLocaleString()}</span>
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenQuickEvents(customer)}
+                            className="text-stone-300 hover:text-stone-500 text-[11px] transition-colors cursor-pointer"
+                            title="登記婚喪喜慶或重大事項"
+                          >
+                            +大事紀
+                          </button>
+                        )}
+                      </td>
+
+                      {/* 動作操作按鈕 */}
+                      <td className="py-2.5 px-3.5 text-right align-middle">
+                        <div className="inline-flex items-center gap-1 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditForm(customer)}
+                            className="p-1.5 text-stone-500 hover:text-blue-700 hover:bg-white rounded transition-colors cursor-pointer"
+                            title="編輯客戶資料"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setCustomerToDelete({ id: customer.id, name: customer.name })}
+                            className="p-1.5 text-stone-500 hover:text-rose-700 hover:bg-white rounded transition-colors cursor-pointer"
+                            title="刪除客戶"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="py-2.5 px-4 bg-stone-50/80 border-t border-stone-200 text-stone-500 text-[11px] flex items-center justify-between">
+            <span>共顯示 {filteredCustomers.length} 筆客戶聯絡紀錄</span>
+            <span>點擊右側鉛筆圖示即可修改或擴充欄位</span>
+          </div>
+        </div>
       ) : (
+        /* 卡片方格檢視模式 (Grid View) */
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {filteredCustomers.map((customer) => {
             const isFavForCurrentCompany = activeCompanyId !== 'all' 
@@ -1808,16 +2089,16 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
         }}
       />
 
-      {/* 刪除確認對話框 (安全不使用 window.confirm 避免 iframe 阻擋) */}
+      {/* 刪除確認對話框 (修復取消與按X完全正常動作) */}
       <ConfirmDialog
         isOpen={!!customerToDelete}
         title="確認刪除客戶資料"
-        message={`您確定要刪除「${customerToDelete?.name}」的聯絡資料嗎？此動作將同步從 SQLite 資料庫中移除。`}
+        description={`您確定要刪除「${customerToDelete?.name}」的聯絡資料嗎？此動作將同步從 SQLite 資料庫中移除。`}
         confirmText={isDeleting ? '刪除中...' : '確認刪除'}
         cancelText="取消"
-        danger
+        variant="danger"
         onConfirm={handleConfirmDelete}
-        onCancel={() => setCustomerToDelete(null)}
+        onClose={() => setCustomerToDelete(null)}
       />
     </div>
   );

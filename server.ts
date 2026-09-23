@@ -32,6 +32,7 @@ import {
   replaceAllCustomers,
   replaceWithDatabaseBinary,
   generateSqlDump,
+  getFullDatabaseJsonExport,
   persist
 } from './server/db';
 
@@ -441,7 +442,7 @@ async function startServer() {
     }
   });
 
-  // 匯出純文字標準 SQL 語法備份檔 (.sql)，包含 7 大資料表結構 DDL 與全資料列 INSERT INTO
+  // 匯出純文字標準 SQL 語法備份檔 (.sql)，包含全資料表結構 DDL 與全資料列 INSERT INTO
   app.get('/api/database/dump-sql', async (req, res) => {
     try {
       persist();
@@ -455,6 +456,24 @@ async function startServer() {
       res.send(sqlDump);
     } catch (err: any) {
       console.error('Error generating SQL dump:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 匯出完整全庫 JSON 備份檔 (.json)，包含客戶通訊、零用金流水帳、公司主檔與所有附加資料表
+  app.get('/api/database/dump-json', async (req, res) => {
+    try {
+      persist();
+      const fullJson = await getFullDatabaseJsonExport();
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      const filename = `petty_cash_full_backup_${dateStr}.json`;
+
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.send(JSON.stringify(fullJson, null, 2));
+    } catch (err: any) {
+      console.error('Error generating JSON backup:', err);
       res.status(500).json({ success: false, error: err.message });
     }
   });

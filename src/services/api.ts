@@ -276,13 +276,25 @@ export function triggerDownloadSqliteFile(): void {
   document.body.removeChild(link);
 }
 
-// 一鍵下載純文字標準 SQL 語法備份檔 (.sql，包含 7 大資料表與所有資料列)
+// 一鍵下載純文字標準 SQL 語法備份檔 (.sql，包含全資料表與所有資料列)
 export function triggerDownloadSqlDumpFile(): void {
   const link = document.createElement('a');
   link.href = '/api/database/dump-sql';
   const now = new Date();
   const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
   link.download = `petty_cash_database_dump_${dateStr}.sql`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// 一鍵下載 SQLite 完整全庫 JSON 格式備份檔 (.json，包含公司設定、客戶通訊、流水帳及所有附加資料表)
+export function triggerDownloadFullJsonBackupFile(): void {
+  const link = document.createElement('a');
+  link.href = '/api/database/dump-json';
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  link.download = `petty_cash_full_backup_${dateStr}.json`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
