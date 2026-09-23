@@ -78,12 +78,20 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
   // 目前選取的報表 ID
   const [activeReportId, setActiveReportId] = useState<string>('tx_details');
 
-  // 三社共用零用金金庫判斷與法定掛名公司
+  // 關係企業共用零用金金庫判斷與法定掛名公司
   const isSharedView = activeCompanyId === 'all';
   const nominalCompany = useMemo(() => {
     return companies.find(c => c.isNominalPettyCashHolder) || companies.find(c => c.isDefault) || companies[0] || companyProfile;
   }, [companies, companyProfile]);
   const effectiveCompany = isSharedView ? nominalCompany : (companyProfile || nominalCompany);
+
+  // 關係企業公司名稱清單 (以 / 隔開)
+  const combinedCompaniesTitle = useMemo(() => {
+    if (companies && companies.length > 0) {
+      return companies.map(c => c.name).join(' / ');
+    }
+    return '田頭工程有限公司 / 田頭工業有限公司 / 第三關係商行';
+  }, [companies]);
 
   // 篩選條件
   const [periodType, setPeriodType] = useState<'month' | 'year' | 'custom' | 'all'>('month');
@@ -616,27 +624,27 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
                         <div className="inline-flex items-center gap-2 mb-1">
                           <span className="text-xs font-semibold text-stone-600 tracking-wider">
                             {isSharedView ? (
-                              '三社關係企業 聯合零用金專戶（三社共用金庫，統一撥付）'
+                              combinedCompaniesTitle
                             ) : (
-                              `${effectiveCompany?.name || '公司'} 零用金報銷帳務（款項由三社共用金庫撥付）`
+                              `${effectiveCompany?.name || '公司'} 零用金報銷帳務`
                             )}
                           </span>
                           {isSharedView && (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066cc] border border-blue-200">
-                              三社共用金庫
+                              田頭關係企業
                             </span>
                           )}
                         </div>
                         <h3 className="text-xl font-black text-stone-900 tracking-tight">
                           {isSharedView ? (
-                            `【三社共用金庫 ${currentReportDef.name}】`
+                            `【${combinedCompaniesTitle} ${currentReportDef.name}】`
                           ) : (
                             `【${effectiveCompany?.name || ''} ${currentReportDef.name}】`
                           )}
                         </h3>
                         <p className="text-xs text-stone-600 font-medium">
                           {isSharedView ? (
-                            `三間關係企業共用現金庫 ｜ 法定掛名主理：${nominalCompany?.name || '田頭工程有限公司'}（統編：${nominalCompany?.taxId || '—'}）`
+                            `田頭關係企業共用現金庫 ｜ 法定掛名主管：${nominalCompany?.name || '田頭工程有限公司'}（統編：${nominalCompany?.taxId || '—'}）`
                           ) : (
                             currentReportDef.shortDesc
                           )}
@@ -725,18 +733,19 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
                       )}
                     </div>
 
-                    {/* 3. 報表審核簽核欄 (正式會計列印必備) */}
-                    <div className="pt-8 border-t border-stone-200 grid grid-cols-3 gap-4 text-xs text-stone-600 print-avoid-break">
+                    {/* 3. 報表審核簽核欄 (回復原狀，去除預設審核人名，供紙本實體簽章蓋印) */}
+                    <div className="pt-8 border-t border-stone-200 grid grid-cols-4 gap-4 text-xs text-stone-600 print-avoid-break">
                       <div className="border-b border-stone-300 pb-2">
-                        <span className="font-semibold text-stone-500">經辦/製表同仁：</span>
+                        <span className="font-semibold text-stone-600">經辦請領人：</span>
                       </div>
                       <div className="border-b border-stone-300 pb-2">
-                        <span className="font-semibold text-stone-500">出納/財務覆核：</span>
-                        <span className="font-medium text-stone-800 ml-1">{effectiveCompany?.cashier || ''}</span>
+                        <span className="font-semibold text-stone-600">出納經管：</span>
                       </div>
                       <div className="border-b border-stone-300 pb-2">
-                        <span className="font-semibold text-stone-500">主管/會計核決：</span>
-                        <span className="font-medium text-stone-800 ml-1">{effectiveCompany?.chiefAccountant || effectiveCompany?.representative || ''}</span>
+                        <span className="font-semibold text-stone-600">主辦會計：</span>
+                      </div>
+                      <div className="border-b border-stone-300 pb-2">
+                        <span className="font-semibold text-stone-600">總經理 / 負責人：</span>
                       </div>
                     </div>
 
@@ -1142,9 +1151,15 @@ const TxDetailsTable: React.FC<{
                   </td>
                   {isSharedView && (
                     <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066cc] border border-blue-200">
-                        {companies.find(c => c.id === t.companyId)?.shortName || companies.find(c => c.id === t.companyId)?.name || '田頭工程'}
-                      </span>
+                      {t.companyId === 'shared' ? (
+                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200">
+                          🏛️ 共用大水池
+                        </span>
+                      ) : (
+                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066cc] border border-blue-200">
+                          {companies.find(c => c.id === t.companyId)?.shortName || companies.find(c => c.id === t.companyId)?.name || '田頭工程'}
+                        </span>
+                      )}
                     </td>
                   )}
                   <td className="py-2.5 px-3 text-center whitespace-nowrap">
@@ -1206,16 +1221,27 @@ const TxDetailsTable: React.FC<{
                     )}
                   </td>
                   <td className="py-2.5 px-3 whitespace-nowrap">
-                    <div className="flex items-center gap-1.5 text-xs">
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                        t.receiptType === 'invoice' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
-                        t.receiptType === 'receipt' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
-                        'bg-stone-100 text-stone-500'
-                      }`}>
-                        {t.receiptType === 'invoice' ? '發票' : t.receiptType === 'receipt' ? '收據' : '無憑證'}
-                      </span>
-                      {t.invoiceNumber ? (
-                        <span className="font-mono text-stone-800 font-bold text-[11px]">{t.invoiceNumber}</span>
+                    <div className="flex flex-col gap-0.5 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                          t.receiptType === 'invoice' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' :
+                          t.receiptType === 'receipt' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
+                          'bg-stone-100 text-stone-500'
+                        }`}>
+                          {t.receiptType === 'invoice' ? '發票' : t.receiptType === 'receipt' ? '收據' : '無憑證'}
+                        </span>
+                        {t.invoiceNumber ? (
+                          <span className="font-mono text-stone-800 font-bold text-[11px]">{t.invoiceNumber}</span>
+                        ) : null}
+                      </div>
+                      {t.receiptType === 'invoice' && t.taxAmount !== undefined && t.taxAmount > 0 ? (
+                        <div className="text-[10px] text-stone-500 font-mono flex items-center gap-1">
+                          <span>未稅 ${t.netAmount?.toLocaleString() || '-'}</span>
+                          <span className="text-emerald-700 font-bold">稅 ${t.taxAmount?.toLocaleString()}</span>
+                          {t.sellerTaxId && <span className="text-stone-400">({t.sellerTaxId})</span>}
+                        </div>
+                      ) : t.receiptType === 'invoice' && t.taxDeductible === false ? (
+                        <span className="text-[9px] text-amber-700">不得扣抵營業稅</span>
                       ) : null}
                     </div>
                   </td>

@@ -733,6 +733,11 @@ export default function App() {
               <CompanySettingsView
                 companies={companies}
                 activeCompanyId={activeCompanyId}
+                onGoToReports={() => {
+                  setActiveApp('petty_cash');
+                  setActiveTab('reports');
+                  setReportsSubTab('center');
+                }}
                 onUpdateCompanies={(updated) => {
                   setCompanies(updated);
                   const def = updated.find(c => c.isDefault) || updated[0];
@@ -1077,7 +1082,7 @@ export default function App() {
             <>
               <span className="text-stone-300">|</span>
               <span className="font-medium text-amber-700 font-semibold">
-                目前檢視：三社共用獨立金庫（法定掛名：{nominalCompany?.shortName || nominalCompany?.name || '田頭工程有限公司'}）
+                目前檢視：田頭關係企業共用金庫（法定掛名：{nominalCompany?.name || '田頭工程有限公司'}）
               </span>
             </>
           )}

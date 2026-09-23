@@ -11,6 +11,8 @@ export interface CategoryConfigRow {
   subLabel: string;
   defaultSubItems: string[];
   hasPeopleCount?: boolean;
+  defaultReceiptType?: 'receipt' | 'invoice' | 'none';
+  taxCategory?: 'deductible' | 'non_deductible' | 'tax_exempt';
 }
 
 export interface TransactionRow {
@@ -32,6 +34,10 @@ export interface TransactionRow {
   subAccountSourceId?: string;
   subAccountSourceName?: string;
   companyId?: string;
+  netAmount?: number;
+  taxAmount?: number;
+  taxDeductible?: boolean;
+  sellerTaxId?: string;
 }
 
 export interface MonthBudgetRow {
@@ -424,7 +430,7 @@ export const DEFAULT_CUSTOMERS_SEED: CustomerRow[] = [
   }
 ];
 
-// 預設分類種子資料
+// 預設分類種子資料 (包含稅務扣抵性與單據預設)
 const INITIAL_CATEGORIES: CategoryConfigRow[] = [
   {
     id: 'dining',
@@ -434,7 +440,9 @@ const INITIAL_CATEGORIES: CategoryConfigRow[] = [
     color: '#ea580c',
     subLabel: '店家/餐飲名稱',
     defaultSubItems: ['八方雲集', '鬍鬚張便當', '星巴克會議咖啡', '麥當勞', '池上木片便當', '飲料手搖飲'],
-    hasPeopleCount: true
+    hasPeopleCount: true,
+    defaultReceiptType: 'receipt',
+    taxCategory: 'tax_exempt'
   },
   {
     id: 'fuel',
@@ -443,7 +451,9 @@ const INITIAL_CATEGORIES: CategoryConfigRow[] = [
     icon: 'fuel',
     color: '#0284c7',
     subLabel: '加油站名稱',
-    defaultSubItems: ['台灣中油 (直營)', '全國加油站', '台亞石油', '統一精工加油站', '高速公路休息站加油']
+    defaultSubItems: ['台灣中油 (直營)', '全國加油站', '台亞石油', '統一精工加油站', '高速公路休息站加油'],
+    defaultReceiptType: 'invoice',
+    taxCategory: 'deductible'
   },
   {
     id: 'advance',
@@ -452,7 +462,9 @@ const INITIAL_CATEGORIES: CategoryConfigRow[] = [
     icon: 'hand-coins',
     color: '#7c3aed',
     subLabel: '預支同仁姓名',
-    defaultSubItems: ['王大明', '李小華', '張志明', '工程部外勤同仁', '臨時工班預支']
+    defaultSubItems: ['王大明', '李小華', '張志明', '工程部外勤同仁', '臨時工班預支'],
+    defaultReceiptType: 'receipt',
+    taxCategory: 'tax_exempt'
   },
   {
     id: 'misc',
@@ -461,7 +473,9 @@ const INITIAL_CATEGORIES: CategoryConfigRow[] = [
     icon: 'package-check',
     color: '#475569',
     subLabel: '支出項目/用途',
-    defaultSubItems: ['文具影印紙張', '辦公室衛生紙茶包', '郵寄掛號郵資', '五金清潔耗材', '拜拜水果供品']
+    defaultSubItems: ['文具影印紙張', '辦公室衛生紙茶包', '郵寄掛號郵資', '五金清潔耗材', '拜拜水果供品'],
+    defaultReceiptType: 'receipt',
+    taxCategory: 'tax_exempt'
   },
   {
     id: 'transport',
@@ -470,7 +484,9 @@ const INITIAL_CATEGORIES: CategoryConfigRow[] = [
     icon: 'car',
     color: '#0d9488',
     subLabel: '交通項目/站名',
-    defaultSubItems: ['高鐵車票', '台鐵火車票', '計程車資 (Uber/小黃)', '市區公車/捷運', '臨時停車費', 'ETC eTag 儲值']
+    defaultSubItems: ['高鐵車票', '台鐵火車票', '計程車資 (Uber/小黃)', '市區公車/捷運', '臨時停車費', 'ETC eTag 儲值'],
+    defaultReceiptType: 'invoice',
+    taxCategory: 'deductible'
   },
   {
     id: 'replenishment',
@@ -479,7 +495,9 @@ const INITIAL_CATEGORIES: CategoryConfigRow[] = [
     icon: 'coins',
     color: '#059669',
     subLabel: '撥補來源 / 歸墊方式',
-    defaultSubItems: ['銀行提領補充', '主管交付撥款', '會計請款核銷歸墊', '同仁預支款繳回', '零星收入 / 押金退還']
+    defaultSubItems: ['銀行提領補充', '主管交付撥款', '會計請款核銷歸墊', '同仁預支款繳回', '零星收入 / 押金退還'],
+    defaultReceiptType: 'none',
+    taxCategory: 'tax_exempt'
   }
 ];
 
@@ -539,7 +557,12 @@ function initSchema(database: Database) {
       voucherNo TEXT,
       rawVoucherId TEXT,
       subAccountSourceId TEXT,
-      subAccountSourceName TEXT
+      subAccountSourceName TEXT,
+      companyId TEXT,
+      netAmount REAL,
+      taxAmount REAL,
+      taxDeductible INTEGER DEFAULT 1,
+      sellerTaxId TEXT
     );
 
     CREATE TABLE IF NOT EXISTS categories (
@@ -551,6 +574,8 @@ function initSchema(database: Database) {
       subLabel TEXT,
       defaultSubItems TEXT NOT NULL,
       hasPeopleCount INTEGER DEFAULT 0,
+      defaultReceiptType TEXT,
+      taxCategory TEXT,
       sortOrder INTEGER DEFAULT 0
     );
 
@@ -653,11 +678,30 @@ function initSchema(database: Database) {
 
   // 欄位升級防護
   try { database.run(`ALTER TABLE transactions ADD COLUMN companyId TEXT`); } catch (e) {}
+  try { database.run(`ALTER TABLE transactions ADD COLUMN netAmount REAL`); } catch (e) {}
+  try { database.run(`ALTER TABLE transactions ADD COLUMN taxAmount REAL`); } catch (e) {}
+  try { database.run(`ALTER TABLE transactions ADD COLUMN taxDeductible INTEGER DEFAULT 1`); } catch (e) {}
+  try { database.run(`ALTER TABLE transactions ADD COLUMN sellerTaxId TEXT`); } catch (e) {}
+  try { database.run(`ALTER TABLE categories ADD COLUMN defaultReceiptType TEXT`); } catch (e) {}
+  try { database.run(`ALTER TABLE categories ADD COLUMN taxCategory TEXT`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN color TEXT`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN isDefault INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN isNominalPettyCashHolder INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN sortOrder INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE customers ADD COLUMN events TEXT`); } catch (e) {}
+
+  // 既有交易自動補齊營業稅計算 (發票自動推算未稅與5%稅額，收據標為免稅/0稅額)
+  try {
+    database.run(`UPDATE transactions SET netAmount = ROUND(amount / 1.05), taxAmount = amount - ROUND(amount / 1.05), taxDeductible = 1 WHERE receiptType = 'invoice' AND (netAmount IS NULL OR netAmount = 0)`);
+    database.run(`UPDATE transactions SET netAmount = amount, taxAmount = 0, taxDeductible = 0 WHERE (receiptType != 'invoice' OR receiptType IS NULL) AND (netAmount IS NULL OR netAmount = 0)`);
+  } catch (e) {}
+
+  // 既有科目自動補齊稅務與憑證預設
+  try {
+    database.run(`UPDATE categories SET defaultReceiptType = 'invoice', taxCategory = 'deductible' WHERE id IN ('fuel', 'transport') AND (defaultReceiptType IS NULL OR defaultReceiptType = '')`);
+    database.run(`UPDATE categories SET defaultReceiptType = 'receipt', taxCategory = 'tax_exempt' WHERE id IN ('dining', 'advance', 'misc') AND (defaultReceiptType IS NULL OR defaultReceiptType = '')`);
+    database.run(`UPDATE categories SET defaultReceiptType = 'none', taxCategory = 'tax_exempt' WHERE id = 'replenishment' AND (defaultReceiptType IS NULL OR defaultReceiptType = '')`);
+  } catch (e) {}
 
   // 檢查既有行號主檔，並初始化 3 間關係企業（三社共用零用金專戶）
   const cpCountRes = database.exec('SELECT COUNT(*) AS cnt FROM company_profile');
@@ -845,6 +889,11 @@ export async function getAllTransactions(): Promise<TransactionRow[]> {
     columns.forEach((col, i) => {
       obj[col] = row[i];
     });
+    const amt = Number(obj.amount);
+    const isInv = obj.receiptType === 'invoice';
+    const computedNet = isInv ? Math.round(amt / 1.05) : amt;
+    const computedTax = isInv ? amt - computedNet : 0;
+
     return {
       id: obj.id,
       date: obj.date,
@@ -854,7 +903,7 @@ export async function getAllTransactions(): Promise<TransactionRow[]> {
       subItem: obj.subItem,
       claimant: obj.claimant || undefined,
       peopleCount: obj.peopleCount !== null && obj.peopleCount !== undefined ? Number(obj.peopleCount) : undefined,
-      amount: Number(obj.amount),
+      amount: amt,
       note: obj.note || '',
       createdAt: Number(obj.createdAt),
       receiptType: obj.receiptType || undefined,
@@ -863,19 +912,30 @@ export async function getAllTransactions(): Promise<TransactionRow[]> {
       rawVoucherId: obj.rawVoucherId || undefined,
       subAccountSourceId: obj.subAccountSourceId || undefined,
       subAccountSourceName: obj.subAccountSourceName || undefined,
-      companyId: obj.companyId ? String(obj.companyId) : 'comp_1'
+      companyId: obj.companyId ? String(obj.companyId) : 'comp_1',
+      netAmount: obj.netAmount !== null && obj.netAmount !== undefined ? Number(obj.netAmount) : computedNet,
+      taxAmount: obj.taxAmount !== null && obj.taxAmount !== undefined ? Number(obj.taxAmount) : computedTax,
+      taxDeductible: obj.taxDeductible !== null && obj.taxDeductible !== undefined ? Boolean(obj.taxDeductible) : (isInv ? true : false),
+      sellerTaxId: obj.sellerTaxId || undefined
     };
   });
 }
 
 export async function addTransaction(t: TransactionRow): Promise<void> {
   const database = await getDb();
+  const amt = Number(t.amount) || 0;
+  const isInv = t.receiptType === 'invoice';
+  const computedNet = t.netAmount !== undefined ? t.netAmount : (isInv ? Math.round(amt / 1.05) : amt);
+  const computedTax = t.taxAmount !== undefined ? t.taxAmount : (isInv ? amt - computedNet : 0);
+  const isDeductible = t.taxDeductible !== undefined ? (t.taxDeductible ? 1 : 0) : (isInv ? 1 : 0);
+
   database.run(
     `INSERT OR REPLACE INTO transactions (
       id, date, type, categoryId, categoryName, subItem, claimant, peopleCount,
       amount, note, createdAt, receiptType, invoiceNumber, voucherNo, rawVoucherId,
-      subAccountSourceId, subAccountSourceName, companyId
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      subAccountSourceId, subAccountSourceName, companyId,
+      netAmount, taxAmount, taxDeductible, sellerTaxId
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       t.id || `tx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       t.date || new Date().toISOString().slice(0, 10),
@@ -885,7 +945,7 @@ export async function addTransaction(t: TransactionRow): Promise<void> {
       t.subItem || '',
       t.claimant || null,
       t.peopleCount ?? null,
-      Number(t.amount) || 0,
+      amt,
       t.note || '',
       t.createdAt || Date.now(),
       t.receiptType || null,
@@ -894,7 +954,11 @@ export async function addTransaction(t: TransactionRow): Promise<void> {
       t.rawVoucherId || null,
       t.subAccountSourceId || null,
       t.subAccountSourceName || null,
-      t.companyId || 'comp_1'
+      t.companyId || 'comp_1',
+      computedNet,
+      computedTax,
+      isDeductible,
+      t.sellerTaxId || null
     ]
   );
   persist();
@@ -914,12 +978,19 @@ export async function replaceAllTransactions(transactions: TransactionRow[]): Pr
   const database = await getDb();
   database.run(`DELETE FROM transactions`);
   for (const t of transactions) {
+    const amt = Number(t.amount) || 0;
+    const isInv = t.receiptType === 'invoice';
+    const computedNet = t.netAmount !== undefined ? t.netAmount : (isInv ? Math.round(amt / 1.05) : amt);
+    const computedTax = t.taxAmount !== undefined ? t.taxAmount : (isInv ? amt - computedNet : 0);
+    const isDeductible = t.taxDeductible !== undefined ? (t.taxDeductible ? 1 : 0) : (isInv ? 1 : 0);
+
     database.run(
       `INSERT INTO transactions (
         id, date, type, categoryId, categoryName, subItem, claimant, peopleCount,
         amount, note, createdAt, receiptType, invoiceNumber, voucherNo, rawVoucherId,
-        subAccountSourceId, subAccountSourceName, companyId
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        subAccountSourceId, subAccountSourceName, companyId,
+        netAmount, taxAmount, taxDeductible, sellerTaxId
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         t.id || `tx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         t.date || new Date().toISOString().slice(0, 10),
@@ -929,7 +1000,7 @@ export async function replaceAllTransactions(transactions: TransactionRow[]): Pr
         t.subItem || '',
         t.claimant || null,
         t.peopleCount ?? null,
-        Number(t.amount) || 0,
+        amt,
         t.note || '',
         t.createdAt || Date.now(),
         t.receiptType || null,
@@ -938,7 +1009,11 @@ export async function replaceAllTransactions(transactions: TransactionRow[]): Pr
         t.rawVoucherId || null,
         t.subAccountSourceId || null,
         t.subAccountSourceName || null,
-        t.companyId || 'comp_1'
+        t.companyId || 'comp_1',
+        computedNet,
+        computedTax,
+        isDeductible,
+        t.sellerTaxId || null
       ]
     );
   }
@@ -969,7 +1044,9 @@ export async function getAllCategories(): Promise<CategoryConfigRow[]> {
       color: obj.color,
       subLabel: obj.subLabel,
       defaultSubItems: subItems,
-      hasPeopleCount: Boolean(obj.hasPeopleCount)
+      hasPeopleCount: Boolean(obj.hasPeopleCount),
+      defaultReceiptType: obj.defaultReceiptType || (obj.id === 'fuel' || obj.id === 'transport' ? 'invoice' : obj.id === 'replenishment' ? 'none' : 'receipt'),
+      taxCategory: obj.taxCategory || (obj.id === 'fuel' || obj.id === 'transport' ? 'deductible' : 'tax_exempt')
     };
   });
 }
@@ -979,8 +1056,8 @@ export async function saveAllCategories(categories: CategoryConfigRow[]): Promis
   database.run(`DELETE FROM categories`);
   categories.forEach((cat, idx) => {
     database.run(
-      `INSERT INTO categories (id, name, type, icon, color, subLabel, defaultSubItems, hasPeopleCount, sortOrder)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO categories (id, name, type, icon, color, subLabel, defaultSubItems, hasPeopleCount, defaultReceiptType, taxCategory, sortOrder)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         cat.id,
         cat.name,
@@ -990,6 +1067,8 @@ export async function saveAllCategories(categories: CategoryConfigRow[]): Promis
         cat.subLabel,
         JSON.stringify(cat.defaultSubItems || []),
         cat.hasPeopleCount ? 1 : 0,
+        cat.defaultReceiptType || (cat.id === 'fuel' || cat.id === 'transport' ? 'invoice' : cat.id === 'replenishment' ? 'none' : 'receipt'),
+        cat.taxCategory || (cat.id === 'fuel' || cat.id === 'transport' ? 'deductible' : 'tax_exempt'),
         idx
       ]
     );

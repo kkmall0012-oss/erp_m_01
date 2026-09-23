@@ -1019,6 +1019,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   </div>
                 )}
 
+                {/* 💡 科目稅務與單據自動化規則 (依照科目自動判斷稅務與憑證歸檔) */}
+                {currentCategory && currentCategory.type === 'expense' && (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-2 pb-1 border-t border-stone-200/80 text-[11px] bg-stone-100/60 -mx-4 px-4 py-2 mt-2 rounded-lg">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-stone-600 font-bold">預設憑證單據：</span>
+                      <select
+                        value={currentCategory.defaultReceiptType || 'receipt'}
+                        onChange={(e) => {
+                          const val = e.target.value as any;
+                          const updated = localCategories.map(c => c.id === currentCategory.id ? { ...c, defaultReceiptType: val } : c);
+                          updateAndSaveCategories(updated);
+                        }}
+                        className="px-2 py-1 rounded-md border border-stone-300 bg-white font-medium text-stone-800 focus:outline-hidden"
+                      >
+                        <option value="receipt">📄 普通收據 (無統編／歸入共用大水池)</option>
+                        <option value="invoice">🧾 統一發票 (含統編／公司帳務歸檔)</option>
+                        <option value="none">❌ 無單據</option>
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-stone-600 font-bold">401 稅務判定：</span>
+                      <select
+                        value={currentCategory.taxCategory || 'tax_exempt'}
+                        onChange={(e) => {
+                          const val = e.target.value as any;
+                          const updated = localCategories.map(c => c.id === currentCategory.id ? { ...c, taxCategory: val } : c);
+                          updateAndSaveCategories(updated);
+                        }}
+                        className="px-2 py-1 rounded-md border border-stone-300 bg-white font-medium text-stone-800 focus:outline-hidden"
+                      >
+                        <option value="deductible">可扣抵 5% 營業稅 (加油、公用耗材，可折抵401)</option>
+                        <option value="non_deductible">不得扣抵 (交際應酬、職工福利，營業稅法§19)</option>
+                        <option value="tax_exempt">免稅/收據憑證 (餐飲便當、小規模免稅)</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
                 {/* 新增子項目輸入框 */}
                 <form onSubmit={handleAddSubItem} className="flex gap-2 pt-1">
                   <input

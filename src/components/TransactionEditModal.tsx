@@ -10,7 +10,8 @@ import {
   ShieldCheck,
   Receipt,
   Building2,
-  Check
+  Check,
+  Sparkles
 } from 'lucide-react';
 import { CategoryConfig, Transaction, ReceiptType, CompanyProfile } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -48,6 +49,8 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
   const [amount, setAmount] = useState<string>('');
   const [note, setNote] = useState<string>('');
   const [companyId, setCompanyId] = useState<string>('comp_1');
+  const [taxDeductible, setTaxDeductible] = useState<boolean>(true);
+  const [sellerTaxId, setSellerTaxId] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
 
@@ -61,6 +64,8 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
       setPeopleCount(transaction.peopleCount || 1);
       setReceiptType(transaction.receiptType || (transaction.type === 'expense' ? 'receipt' : 'none'));
       setInvoiceNumber(transaction.invoiceNumber || '');
+      setTaxDeductible(transaction.taxDeductible !== undefined ? transaction.taxDeductible : (transaction.receiptType === 'invoice'));
+      setSellerTaxId(transaction.sellerTaxId || '');
       setAmount(String(transaction.amount));
       setNote(transaction.note || '');
       setCompanyId(transaction.companyId || (companies[0]?.id || 'comp_1'));
@@ -111,6 +116,10 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
       return;
     }
 
+    const isInv = isExpense && receiptType === 'invoice';
+    const computedNet = isInv ? (taxDeductible ? Math.round(numAmount / 1.05) : numAmount) : numAmount;
+    const computedTax = isInv ? (taxDeductible ? numAmount - computedNet : 0) : 0;
+
     // 依使用者指示：嚴格維持原始收支性質，不可將支出變收入，亦不可將收入變支出
     const updated: Transaction = {
       ...transaction,
@@ -125,7 +134,11 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
       claimant: isExpense ? claimant : undefined,
       receiptType: isExpense ? receiptType : undefined,
       invoiceNumber: isExpense && receiptType === 'invoice' ? (invoiceNumber.trim() ? invoiceNumber.trim().toUpperCase() : undefined) : undefined,
-      companyId: companyId
+      companyId: companyId,
+      netAmount: computedNet,
+      taxAmount: computedTax,
+      taxDeductible: isInv ? taxDeductible : false,
+      sellerTaxId: isExpense && receiptType === 'invoice' ? (sellerTaxId.trim() || undefined) : undefined
     };
 
     onSave(updated);
@@ -208,19 +221,19 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
             </span>
           </div>
 
-          {/* 🏢 帳單歸屬公司行號 (三間關係企業切換) */}
+          {/* 🏢 帳單歸屬公司行號 (三間關係企業切換 + 田頭共用大水池) */}
           {companies.length > 0 && (
             <div className="bg-stone-50 p-3 rounded-xl border border-stone-200">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-xs font-bold text-stone-700 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-[#0066cc]" />
-                  <span>歸屬關係企業/行號：</span>
+                  <span>歸屬關係企業 / 水池：</span>
                 </label>
                 <span className="text-[10px] text-stone-400 font-mono">
-                  統編：{companies.find(c => c.id === companyId)?.taxId || '未設定'}
+                  {companyId === 'shared' ? '🏛️ 田頭共用大水池（收據/免稅公用雜支）' : `統編：${companies.find(c => c.id === companyId)?.taxId || '未設定'}`}
                 </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {companies.map(c => {
                   const isSelected = companyId === c.id;
                   return (
@@ -242,6 +255,23 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
                     </button>
                   );
                 })}
+
+                {/* 🏛️ 田頭共用大水池 */}
+                <button
+                  type="button"
+                  onClick={() => setCompanyId('shared')}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+                    companyId === 'shared'
+                      ? 'border-amber-600 bg-amber-50 text-amber-900 shadow-2xs ring-2 ring-amber-500/20'
+                      : 'border-stone-200 bg-white/60 text-stone-600 hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 truncate">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0 bg-amber-500 shadow-2xs" />
+                    <span className="truncate font-bold">🏛️ 共用大水池</span>
+                  </div>
+                  {companyId === 'shared' && <Check className="w-3 h-3 text-amber-700 shrink-0" />}
+                </button>
               </div>
             </div>
           )}
@@ -428,19 +458,58 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
               </div>
 
               {receiptType === 'invoice' && (
-                <div className="pt-1">
-                  <label className="block text-[11px] font-semibold text-amber-900 mb-1">
-                    <span>發票號碼</span> <span className="text-rose-600 font-bold">*必填</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={invoiceNumber}
-                    onChange={(e) => setInvoiceNumber(e.target.value.toUpperCase())}
-                    placeholder="輸入發票號碼 (例：AB-12345678)"
-                    maxLength={14}
-                    className="w-full px-3 py-1.5 text-xs font-mono font-bold bg-white border border-amber-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 uppercase text-stone-800"
-                  />
+                <div className="pt-1 space-y-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-amber-900 mb-1">
+                        <span>發票號碼</span> <span className="text-rose-600 font-bold">*必填</span>
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={invoiceNumber}
+                        onChange={(e) => setInvoiceNumber(e.target.value.toUpperCase())}
+                        placeholder="例：AB-12345678"
+                        maxLength={14}
+                        className="w-full px-3 py-1.5 text-xs font-mono font-bold bg-white border border-amber-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 uppercase text-stone-800"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-amber-900 mb-1">
+                        <span>開立店家統編</span> <span className="text-stone-400 font-normal">(選填 8 碼)</span>
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={8}
+                        value={sellerTaxId}
+                        onChange={(e) => setSellerTaxId(e.target.value.replace(/\D/g, ''))}
+                        placeholder="例：03557311 (中油/店家統編)"
+                        className="w-full px-3 py-1.5 text-xs font-mono bg-white border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 text-stone-800"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] text-stone-600 font-medium">401 營業稅申報屬性：</span>
+                    <button
+                      type="button"
+                      onClick={() => setTaxDeductible(!taxDeductible)}
+                      className={`text-[11px] px-2 py-0.5 rounded-md font-bold border cursor-pointer transition-colors ${
+                        taxDeductible
+                          ? 'bg-emerald-100 border-emerald-300 text-emerald-800'
+                          : 'bg-amber-100 border-amber-300 text-amber-800'
+                      }`}
+                    >
+                      {taxDeductible ? '✓ 得扣抵進項稅額 5%' : '✕ 依法不得扣抵 (營業稅法第19條)'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {receiptType === 'receipt' && (
+                <div className="pt-1 text-[11px] text-amber-800 flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>收據免徵營業稅，全額實付列為年度營利事業所得稅費用憑證。</span>
                 </div>
               )}
             </div>
@@ -465,6 +534,24 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
                 className="w-full pl-12 pr-4 py-2 text-lg font-bold font-mono bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-stone-900"
               />
             </div>
+
+            {/* 稅額即時試算提示 */}
+            {parseInt(amount, 10) > 0 && isExpense && (
+              <div className="mt-2 p-2 bg-stone-100 rounded-lg text-[11px] text-stone-600 flex items-center justify-between">
+                <span>稅務智慧拆算：</span>
+                {receiptType === 'invoice' ? (
+                  taxDeductible ? (
+                    <span>
+                      未稅 <strong className="font-mono text-indigo-700">NT$ {Math.round(parseInt(amount, 10) / 1.05).toLocaleString()}</strong> + 營業稅 5% <strong className="font-mono text-emerald-700">NT$ {(parseInt(amount, 10) - Math.round(parseInt(amount, 10) / 1.05)).toLocaleString()}</strong>
+                    </span>
+                  ) : (
+                    <span>未稅 <strong className="font-mono">NT$ {parseInt(amount, 10).toLocaleString()}</strong>（不得扣抵營業稅）</span>
+                  )
+                ) : (
+                  <span>全額列營所稅營業費用 <strong className="font-mono">NT$ {parseInt(amount, 10).toLocaleString()}</strong></span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 備註說明 */}

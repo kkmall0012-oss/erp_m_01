@@ -10,6 +10,8 @@ export interface CategoryConfig {
   subLabel: string; // e.g. "店家", "加油站", "姓名", "細項", "撥補來源"
   defaultSubItems: string[];
   hasPeopleCount?: boolean; // true for 餐飲
+  defaultReceiptType?: ReceiptType; // 預設憑證類型：'invoice' (發票) | 'receipt' (收據) | 'none' (無)
+  taxCategory?: 'deductible' | 'non_deductible' | 'tax_exempt'; // 營業稅屬性：可扣抵5% | 依稅法不得扣抵 | 免稅/收據大水池
 }
 
 export interface Transaction {
@@ -21,7 +23,7 @@ export interface Transaction {
   subItem: string; // 靜態寫入 Snapshot (店家、加油站、預支姓名、雜支項目、撥補來源)
   claimant?: string; // 零用金請領人 (經辦同仁/請領人，方便查核是誰領的)
   peopleCount?: number; // 餐飲人數
-  amount: number; // 金額 (NT$)
+  amount: number; // 金額 (NT$) - 實付含稅總額
   note: string;
   createdAt: number;
   receiptType?: ReceiptType; // 'receipt' (收據) | 'invoice' (發票) | 'none' (無憑證)
@@ -30,7 +32,12 @@ export interface Transaction {
   rawVoucherId?: string; // 帳務小管家原生建檔模式編號 (例如：P20260907142530123，用於與小管家 100% 相容匯入匯出)
   subAccountSourceId?: string; // 若是由專款子帳戶匯入，記錄來源子帳戶 ID
   subAccountSourceName?: string; // 若是由專款子帳戶匯入，記錄子帳戶名稱
-  companyId?: string; // 所屬公司/行號 ID (支援 3 間關係企業獨立作帳與切換)
+  companyId?: string; // 所屬公司/行號 ID (支援 3 間關係企業，或 'shared' 代表田頭共用大水池)
+  // --- 稅務智慧計算與歸檔支援 (供未來稅務/會計模組直接抓取) ---
+  netAmount?: number; // 未稅金額 / 銷售額 (NT$)
+  taxAmount?: number; // 營業稅額 5% (NT$)
+  taxDeductible?: boolean; // 是否得扣抵 401 營業稅 (true: 可扣抵進項稅額；false: 免稅或依法不得扣抵)
+  sellerTaxId?: string; // 開立發票之店家/加油站統一編號 (8碼，供未來 401 媒體檔申報)
 }
 
 // 採買子帳號 (例如：小明每週午餐採買備用金5000元、工地臨時採買備用金等)
@@ -506,7 +513,7 @@ export const DEFAULT_CLAIMANTS: string[] = [
   '李同仁'
 ];
 
-// 公司零用金預設主分類與階層設定 (完全支援自訂與刪除)
+// 公司零用金預設主分類與階層設定 (完全支援自訂與刪除，自帶稅務與單據智慧預設規則)
 export const DEFAULT_CATEGORIES: CategoryConfig[] = [
   {
     id: 'dining',
@@ -527,7 +534,9 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
       '便利商店',
       '咖啡店'
     ],
-    hasPeopleCount: true
+    hasPeopleCount: true,
+    defaultReceiptType: 'receipt', // 預設收據憑證 (免稅小吃店/便當店)
+    taxCategory: 'tax_exempt' // 免稅營業費用，不扣抵 401 營業稅，歸入田頭共用大水池
   },
   {
     id: 'fuel',
@@ -544,7 +553,9 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
       '台亞石油',
       '福懋加油站'
     ],
-    hasPeopleCount: false
+    hasPeopleCount: false,
+    defaultReceiptType: 'invoice', // 預設統一發票
+    taxCategory: 'deductible' // 進項可扣抵 5% 營業稅 (401 申報扣抵憑證)
   },
   {
     id: 'advance',
@@ -560,7 +571,9 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
       '張副理',
       '李同仁'
     ],
-    hasPeopleCount: false
+    hasPeopleCount: false,
+    defaultReceiptType: 'receipt', // 預設內部借支單據
+    taxCategory: 'tax_exempt'
   },
   {
     id: 'misc',
@@ -579,7 +592,9 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
       '設備修繕維護',
       '臨時急用'
     ],
-    hasPeopleCount: false
+    hasPeopleCount: false,
+    defaultReceiptType: 'receipt', // 預設收據 (亦可切換為發票)
+    taxCategory: 'tax_exempt'
   },
   {
     id: 'transport',
@@ -596,7 +611,9 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
       '國道通行費 / 通行費',
       '市區公車 / 捷運'
     ],
-    hasPeopleCount: false
+    hasPeopleCount: false,
+    defaultReceiptType: 'invoice', // 高鐵/台鐵/停車費發票
+    taxCategory: 'deductible' // 營業公務差旅發票可扣抵 5%
   },
   {
     id: 'replenishment',
@@ -612,6 +629,8 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
       '同仁預支款繳回',
       '零星收入 / 押金退還'
     ],
-    hasPeopleCount: false
+    hasPeopleCount: false,
+    defaultReceiptType: 'none',
+    taxCategory: 'tax_exempt'
   }
 ];

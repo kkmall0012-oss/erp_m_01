@@ -217,8 +217,21 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                           {item.voucherNo || item.id}
                         </div>
                       )}
-                      {/* 關係企業行號標籤 */}
-                      {companies.length > 0 && (() => {
+                      {/* 關係企業行號標籤 / 田頭共用大水池 */}
+                      {(() => {
+                        if (item.companyId === 'shared') {
+                          return (
+                            <div className="mt-1">
+                              <span 
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border bg-amber-50 border-amber-200 text-amber-800"
+                                title="田頭共用大水池（收據/免稅公用雜支，待後續模組統籌核銷）"
+                              >
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-amber-500" />
+                                <span>田頭共用池</span>
+                              </span>
+                            </div>
+                          );
+                        }
                         const itemComp = companies.find(c => c.id === item.companyId);
                         if (!itemComp) return null;
                         return (
@@ -278,10 +291,19 @@ export const TransactionList: React.FC<TransactionListProps> = ({
                               🧾 發票
                             </span>
                             {item.invoiceNumber && (
-                              <span className="text-[9px] font-mono text-purple-700 mt-0.5 max-w-[90px] truncate" title={item.invoiceNumber}>
+                              <span className="text-[9px] font-mono text-purple-700 mt-0.5 max-w-[95px] truncate" title={item.invoiceNumber}>
                                 {item.invoiceNumber}
                               </span>
                             )}
+                            {item.taxAmount !== undefined && item.taxAmount > 0 ? (
+                              <span className="text-[9px] text-emerald-700 font-mono font-medium" title={`未稅 NT$ ${item.netAmount?.toLocaleString() || '-'} / 稅額 NT$ ${item.taxAmount?.toLocaleString() || '-'}`}>
+                                稅 ${item.taxAmount}
+                              </span>
+                            ) : item.taxDeductible === false ? (
+                              <span className="text-[8px] text-amber-700 bg-amber-50 px-1 rounded mt-0.5" title="依法不得扣抵營業稅">
+                                不得扣抵
+                              </span>
+                            ) : null}
                           </div>
                         ) : item.receiptType === 'receipt' ? (
                           <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md font-medium text-[10px] bg-blue-50 text-blue-700 border border-blue-200">
