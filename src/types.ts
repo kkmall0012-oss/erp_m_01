@@ -343,6 +343,8 @@ export interface CustomerEventRecord {
   ourRepresentative?: string; // 我方經手人 / 出席代表 (例如：廠長、李業務、總經理)
   isPettyCashLinked?: boolean; // 是否已由公司零用金出款核銷
   voucherNo?: string; // 零用金傳票號碼 (選填)
+  linkedTransactionId?: string; // 關聯之零用金交易 ID (選填)
+  companyId?: string; // 出款所屬公司 ID (選填)
   proofNote?: string; // 憑證與附件 (如：謝卡已收、喜帖存查、已附訃聞、合約正本存檔)
   note?: string; // 補充備註說明
   createdAt: number;
@@ -579,7 +581,7 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
       '咖啡店'
     ],
     hasPeopleCount: true,
-    defaultReceiptType: 'receipt', // 預設收據憑證 (免稅小吃店/便當店)
+    defaultReceiptType: 'none', // 預設無單據
     taxCategory: 'tax_exempt' // 免稅營業費用，不扣抵 401 營業稅，歸入田頭共用大水池
   },
   {
@@ -598,7 +600,7 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
       '福懋加油站'
     ],
     hasPeopleCount: false,
-    defaultReceiptType: 'invoice', // 預設統一發票
+    defaultReceiptType: 'none', // 預設無單據 (可手動點選切換為發票)
     taxCategory: 'deductible' // 進項可扣抵 5% 營業稅 (401 申報扣抵憑證)
   },
   {
@@ -616,7 +618,7 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
       '李同仁'
     ],
     hasPeopleCount: false,
-    defaultReceiptType: 'receipt', // 預設內部借支單據
+    defaultReceiptType: 'none', // 預設無單據 (內部借支)
     taxCategory: 'tax_exempt'
   },
   {
@@ -637,8 +639,28 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
       '臨時急用'
     ],
     hasPeopleCount: false,
-    defaultReceiptType: 'receipt', // 預設收據 (亦可切換為發票)
+    defaultReceiptType: 'none', // 預設無單據
     taxCategory: 'tax_exempt'
+  },
+  {
+    id: 'courtesy',
+    name: '交際應酬 / 禮金公關',
+    type: 'expense',
+    icon: 'HeartHandshake',
+    color: '#e11d48', // rose-600
+    subLabel: '交際對象 / 項目',
+    defaultSubItems: [
+      '婚喪喜慶紅白包 (喜事賀禮/喪事奠儀)',
+      '年節公關禮盒 (中秋月餅/端午禮品/春節伴手禮)',
+      '業務拜訪禮品/伴手禮',
+      '開工動土/喬遷誌慶花籃',
+      '地方宮廟活動/睦鄰贊助款',
+      '同業公會/商會贊助費',
+      '客戶/廠商餐敘招待'
+    ],
+    hasPeopleCount: false,
+    defaultReceiptType: 'none', // 預設無單據 (可選喜帖/收據/發票)
+    taxCategory: 'non_deductible' // 依加值型營業稅法第19條，交際應酬進項稅額依法不得扣抵銷項稅額
   },
   {
     id: 'transport',

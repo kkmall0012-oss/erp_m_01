@@ -93,8 +93,8 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
   // 4. 餐飲人數
   const [peopleCount, setPeopleCount] = useState<number>(1);
   
-  // 5. 支出憑證 (收據、發票、無) 與發票號碼
-  const [receiptType, setReceiptType] = useState<ReceiptType>('receipt');
+  // 5. 支出憑證 (收據、發票、無) 與發票號碼，預設為「無單據」
+  const [receiptType, setReceiptType] = useState<ReceiptType>('none');
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
 
   // 6. 金額

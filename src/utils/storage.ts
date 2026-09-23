@@ -55,14 +55,21 @@ export function loadCategories(): CategoryConfig[] {
     if (Array.isArray(parsed) && parsed.length > 0) {
       // 遷移：如果含有個人舊薪資分類，替換為零用金撥補
       const hasSalary = parsed.some((c: CategoryConfig) => c.id === 'salary');
+      let cleaned = parsed;
       if (hasSalary) {
-        const migrated = parsed
+        cleaned = parsed
           .filter((c: CategoryConfig) => c.id !== 'salary')
           .concat(DEFAULT_CATEGORIES.filter((c) => c.id === 'replenishment'));
-        saveCategories(migrated);
-        return migrated;
       }
-      return parsed;
+      // 確保支出分類預設皆為無單據
+      const normalized = cleaned.map((c: CategoryConfig) => {
+        if (c.type === 'expense' && (c.defaultReceiptType === 'receipt' || !c.defaultReceiptType)) {
+          return { ...c, defaultReceiptType: 'none' as const };
+        }
+        return c;
+      });
+      saveCategories(normalized);
+      return normalized;
     }
     return DEFAULT_CATEGORIES;
   } catch (e) {

@@ -92,9 +92,9 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
 
   // 5. 其他開支欄位
   const [peopleCount, setPeopleCount] = useState<number>(1);
-  const [receiptType, setReceiptType] = useState<ReceiptType>('invoice');
+  const [receiptType, setReceiptType] = useState<ReceiptType>('none');
   const [invoiceNumber, setInvoiceNumber] = useState<string>('');
-  const [taxDeductible, setTaxDeductible] = useState<boolean>(true);
+  const [taxDeductible, setTaxDeductible] = useState<boolean>(false);
   const [sellerTaxId, setSellerTaxId] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [note, setNote] = useState<string>('');
@@ -206,39 +206,17 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
     return map;
   }, [transactions, queryMonth]);
 
-  // 依科目規則自動推導單據憑證與 401 營業稅扣抵屬性
+  // 依科目規則自動推導單據憑證與 401 營業稅扣抵屬性 (支出預設一律為無單據，除非使用者自己點選切換)
   const applyCategoryPresets = (cat: CategoryConfig | undefined) => {
     if (!cat) return;
-    // 1. 單據憑證類型
-    const presetReceipt: ReceiptType = cat.defaultReceiptType || (
-      cat.id === 'fuel' || cat.id === 'transport' ? 'invoice' :
-      cat.id === 'replenishment' ? 'none' : 'receipt'
-    );
-    setReceiptType(presetReceipt);
+    // 1. 單據憑證類型：一律預設為「無單據」(none)
+    setReceiptType('none');
 
-    // 2. 營業稅 401 扣抵屬性 (發票預設可扣抵5%，餐飲/收據免稅)
-    let isDeductible = true;
-    if (cat.taxCategory === 'deductible') {
-      isDeductible = true;
-    } else if (cat.taxCategory === 'non_deductible' || cat.taxCategory === 'tax_exempt') {
-      isDeductible = false;
-    } else {
-      isDeductible = (cat.id === 'fuel' || cat.id === 'transport');
-    }
-    setTaxDeductible(isDeductible);
+    // 2. 營業稅 401 扣抵屬性
+    setTaxDeductible(false);
 
-    // 3. 公司/大水池自動判定：
-    // 若為收據憑證 (例如便當、雜支)，且使用者目前未特別指定特定公司，自動切換至「田頭共用大水池」
-    if (presetReceipt === 'receipt') {
-      if (!selectedCompanyId || selectedCompanyId === 'all') {
-        setSelectedCompanyId('shared');
-      }
-    } else if (presetReceipt === 'invoice') {
-      // 若為發票，且目前是大水池，自動建議切換到第一間實體公司
-      if (selectedCompanyId === 'shared') {
-        setSelectedCompanyId(activeCompanyId && activeCompanyId !== 'all' ? activeCompanyId : (companies[0]?.id || 'comp_1'));
-      }
-    }
+    // 3. 公司/大水池：無單據或收據預設歸入共用大水池
+    setSelectedCompanyId('shared');
   };
 
   // 當開啟時重設表單與監聽 Esc 鍵
@@ -482,17 +460,17 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
             </div>
           )}
 
-          {/* 🏢 帳單歸屬公司行號選擇 (關係企業 3 間分開記帳 + 田頭共用大水池) */}
-          {companies.length > 0 && (
+          {/* 🏢 撥補收入專用歸屬選擇 (支出則移至下方單據選擇時動態出現) */}
+          {type === 'income' && companies.length > 0 && (
             <div className="bg-stone-50/90 p-3 rounded-xl border border-stone-200">
               <div className="flex items-center justify-between mb-2">
                 <label className="font-bold text-stone-700 flex items-center gap-1.5 text-xs">
                   <Building2 className="w-3.5 h-3.5 text-[#0066cc]" />
-                  <span>此筆帳單歸屬（打統編歸入所屬公司，無統編/收據歸入共用大水池）：</span>
+                  <span>撥補來源公司 / 水池：</span>
                 </label>
                 <span className="text-[10px] text-stone-500 font-mono">
                   {selectedCompanyId === 'shared' 
-                    ? '🏛️ 田頭共用大水池（收據/公用雜支，未指定特定統編）' 
+                    ? '🏛️ 田頭共用大水池' 
                     : `統編：${companies.find(c => c.id === selectedCompanyId)?.taxId || '未設定統編'}`}
                 </span>
               </div>
@@ -776,7 +754,13 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => setReceiptType('invoice')}
+                    onClick={() => {
+                      setReceiptType('invoice');
+                      // 切換為發票時，若目前是大水池，預設選中第一家實體公司
+                      if (selectedCompanyId === 'shared') {
+                        setSelectedCompanyId(activeCompanyId && activeCompanyId !== 'all' ? activeCompanyId : (companies[0]?.id || 'comp_1'));
+                      }
+                    }}
                     className={`p-2 rounded-xl border text-center font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       receiptType === 'invoice'
                         ? 'border-indigo-600 bg-indigo-50 text-indigo-800 ring-1 ring-indigo-500'
@@ -789,7 +773,11 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setReceiptType('receipt')}
+                    onClick={() => {
+                      setReceiptType('receipt');
+                      // 收據預設都是共用
+                      setSelectedCompanyId('shared');
+                    }}
                     className={`p-2 rounded-xl border text-center font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       receiptType === 'receipt'
                         ? 'border-amber-600 bg-amber-50 text-amber-800 ring-1 ring-amber-500'
@@ -801,7 +789,10 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
 
                   <button
                     type="button"
-                    onClick={() => setReceiptType('none')}
+                    onClick={() => {
+                      setReceiptType('none');
+                      setSelectedCompanyId('shared');
+                    }}
                     className={`p-2 rounded-xl border text-center font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                       receiptType === 'none'
                         ? 'border-stone-400 bg-stone-200 text-stone-800 ring-1 ring-stone-400'
@@ -811,6 +802,67 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                     <span>❌ 無單據</span>
                   </button>
                 </div>
+
+                {/* 只有選擇「發票」或「收據」時，才出現帳戶/歸屬公司選擇 (收據預設共用) */}
+                {(receiptType === 'invoice' || receiptType === 'receipt') && companies.length > 0 && (
+                  <div className="mt-2.5 p-3 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-stone-700 flex items-center gap-1">
+                        <Building2 className="w-3.5 h-3.5 text-[#0066cc]" />
+                        <span>{receiptType === 'invoice' ? '發票買受人公司（打統編報帳帳戶）：' : '收據報銷歸屬帳戶（預設為共用）：'}</span>
+                      </span>
+                      <span className="text-[10px] text-stone-500 font-mono">
+                        {selectedCompanyId === 'shared' 
+                          ? '🏛️ 共用大水池' 
+                          : `統編：${companies.find(c => c.id === selectedCompanyId)?.taxId || '未設定'}`}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                      {companies.map(c => {
+                        const isSelected = selectedCompanyId === c.id;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setSelectedCompanyId(c.id)}
+                            className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+                              isSelected
+                                ? 'border-[#0066cc] bg-white text-[#0066cc] shadow-2xs ring-1 ring-[#0066cc]'
+                                : 'border-stone-200 bg-white/70 text-stone-600 hover:bg-white hover:border-stone-300'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                              <span 
+                                className="w-2 h-2 rounded-full shrink-0 shadow-2xs" 
+                                style={{ backgroundColor: c.color || '#0066cc' }} 
+                              />
+                              <span className="truncate">{c.shortName || c.name}</span>
+                            </div>
+                            {isSelected && <Check className="w-3 h-3 text-[#0066cc] shrink-0" />}
+                          </button>
+                        );
+                      })}
+
+                      {/* 🏛️ 田頭共用大水池 (收據預設歸入) */}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedCompanyId('shared')}
+                        className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+                          selectedCompanyId === 'shared'
+                            ? 'border-amber-600 bg-amber-50 text-amber-900 shadow-2xs ring-1 ring-amber-500'
+                            : 'border-stone-200 bg-white/70 text-stone-600 hover:bg-white hover:border-stone-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                          <span className="w-2 h-2 rounded-full shrink-0 bg-amber-500 shadow-2xs" />
+                          <span className="truncate font-bold">🏛️ 共用</span>
+                        </div>
+                        {selectedCompanyId === 'shared' && <Check className="w-3 h-3 text-amber-700 shrink-0" />}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {receiptType === 'invoice' && (
                   <div className="mt-2.5 p-3 rounded-xl bg-indigo-50/50 border border-indigo-200 space-y-2.5">

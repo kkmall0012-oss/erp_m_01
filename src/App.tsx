@@ -370,6 +370,7 @@ export default function App() {
       createdAt
     };
     handleTransactionsChange([newRecord, ...transactions]);
+    return newRecord;
   };
 
   // 更新零用金記帳 (由獨立跳出彈窗專用儲存)
@@ -409,9 +410,9 @@ export default function App() {
 
   // 刪除記帳
   const handleDeleteTransaction = (id: string) => {
-    const updated = transactions.filter((t) => t.id !== id);
+    const updated = transactions.filter((t) => t.id !== id && t.voucherNo !== id);
     handleTransactionsChange(updated);
-    if (editingTransaction?.id === id) {
+    if (editingTransaction?.id === id || editingTransaction?.voucherNo === id) {
       setEditingTransaction(null);
     }
   };
@@ -759,6 +760,12 @@ export default function App() {
                 customers={customers}
                 companies={companies}
                 activeCompanyId={activeCompanyId}
+                transactions={transactions}
+                categories={categories}
+                claimants={claimants}
+                onAddTransaction={handleAddTransaction}
+                onUpdateTransaction={handleUpdateTransaction}
+                onDeleteTransaction={handleDeleteTransaction}
                 onRefreshCustomers={reloadFromDb}
                 onSwitchToSuppliers={() => setActiveApp('suppliers')}
               />
@@ -772,6 +779,12 @@ export default function App() {
                 customers={customers}
                 companies={companies}
                 activeCompanyId={activeCompanyId}
+                transactions={transactions}
+                categories={categories}
+                claimants={claimants}
+                onAddTransaction={handleAddTransaction}
+                onUpdateTransaction={handleUpdateTransaction}
+                onDeleteTransaction={handleDeleteTransaction}
                 onRefreshCustomers={reloadFromDb}
                 onSwitchToCustomers={() => setActiveApp('customers')}
               />

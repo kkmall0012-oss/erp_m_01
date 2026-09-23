@@ -138,6 +138,8 @@ export interface CustomerEventRecordRow {
   ourRepresentative?: string;
   isPettyCashLinked?: boolean;
   voucherNo?: string;
+  linkedTransactionId?: string;
+  companyId?: string;
   proofNote?: string;
   note?: string;
   createdAt: number;
@@ -537,6 +539,25 @@ const INITIAL_CATEGORIES: CategoryConfigRow[] = [
     taxCategory: 'tax_exempt'
   },
   {
+    id: 'courtesy',
+    name: '交際禮金 / 公關應酬',
+    type: 'expense',
+    icon: 'heart-handshake',
+    color: '#e11d48',
+    subLabel: '交際對象 / 項目',
+    defaultSubItems: [
+      '婚喪喜慶紅白包 (喜事賀禮/喪事奠儀)',
+      '年節公關禮盒 (中秋月餅/端午禮品/春節伴手禮)',
+      '業務拜訪禮品/伴手禮',
+      '開工動土/喬遷誌慶花籃',
+      '地方宮廟活動/睦鄰贊助款',
+      '同業公會/商會贊助費',
+      '客戶/廠商餐敘招待'
+    ],
+    defaultReceiptType: 'receipt',
+    taxCategory: 'non_deductible'
+  },
+  {
     id: 'transport',
     name: '交通出差',
     type: 'expense',
@@ -864,6 +885,41 @@ function initSchema(database: Database) {
         ]
       );
     });
+  }
+
+  // 自動升級保證：確保資料庫中必定包含「交際禮金 / 公關應酬」支出大類
+  try {
+    const courtesyRes = database.exec("SELECT COUNT(*) AS cnt FROM categories WHERE id = 'courtesy' OR name LIKE '%禮金%' OR name LIKE '%交際%'");
+    const courtesyCount = (courtesyRes[0]?.values[0]?.[0] as number) || 0;
+    if (courtesyCount === 0) {
+      database.run(
+        `INSERT INTO categories (id, name, type, icon, color, subLabel, defaultSubItems, hasPeopleCount, defaultReceiptType, taxCategory, sortOrder)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          'courtesy',
+          '交際禮金 / 公關應酬',
+          'expense',
+          'heart-handshake',
+          '#e11d48',
+          '交際對象 / 項目',
+          JSON.stringify([
+            '婚喪喜慶紅白包 (喜事賀禮/喪事奠儀)',
+            '年節公關禮盒 (中秋月餅/端午禮品/春節伴手禮)',
+            '業務拜訪禮品/伴手禮',
+            '開工動土/喬遷誌慶花籃',
+            '地方宮廟活動/睦鄰贊助款',
+            '同業公會/商會贊助費',
+            '客戶/廠商餐敘招待'
+          ]),
+          0,
+          'receipt',
+          'non_deductible',
+          6
+        ]
+      );
+    }
+  } catch (err) {
+    console.warn('courtesy category migration check notice:', err);
   }
 
   // Seed default claimants if empty

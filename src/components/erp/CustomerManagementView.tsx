@@ -47,6 +47,8 @@ import {
   CustomerEventCategory,
   EVENT_CATEGORY_CONFIG,
   CompanyProfile, 
+  CategoryConfig,
+  Transaction,
   TAIWAN_BANKS, 
   PAYMENT_TERMS_OPTIONS, 
   CUSTOMER_CATEGORY_OPTIONS,
@@ -59,7 +61,7 @@ import {
   deleteCustomerApi 
 } from '../../services/api';
 import { ConfirmDialog } from '../ConfirmDialog';
-import { CustomerEventModal } from './CustomerEventModal';
+import { CustomerEventModal, PettyCashLinkPayload } from './CustomerEventModal';
 import { CustomerEventsSummaryModal } from './CustomerEventsSummaryModal';
 import { SupplierDirectoryModal } from './SupplierDirectoryModal';
 
@@ -67,6 +69,12 @@ interface CustomerManagementViewProps {
   customers: Customer[];
   companies: CompanyProfile[];
   activeCompanyId: string;
+  transactions?: Transaction[];
+  categories?: CategoryConfig[];
+  claimants?: string[];
+  onAddTransaction?: (data: Omit<Transaction, 'id' | 'createdAt'>) => Transaction;
+  onUpdateTransaction?: (transaction: Transaction) => void;
+  onDeleteTransaction?: (id: string) => void;
   onRefreshCustomers: () => void;
   onSelectCustomer?: (customer: Customer) => void;
   onSwitchToSuppliers?: () => void;
@@ -76,6 +84,12 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
   customers,
   companies,
   activeCompanyId,
+  transactions = [],
+  categories = [],
+  claimants = [],
+  onAddTransaction,
+  onUpdateTransaction,
+  onDeleteTransaction,
   onRefreshCustomers,
   onSwitchToSuppliers
 }) => {
@@ -136,6 +150,12 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
   const [quickEventsCustomer, setQuickEventsCustomer] = useState<Customer | null>(null);
 
   // 表單資料初始預設值
+  const [eventToDeleteWithPettyCash, setEventToDeleteWithPettyCash] = useState<{
+    event: CustomerEventRecord;
+    customer?: Customer;
+    isInsideMainForm: boolean;
+  } | null>(null);
+
   const initialFormData: Customer = {
     id: '',
     name: '',
@@ -378,11 +398,39 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
     setIsEventModalOpen(true);
   };
 
-  const handleDeleteEventInForm = (eventId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      events: (prev.events || []).filter(e => e.id !== eventId)
-    }));
+  const executeDeleteEvent = async (eventId: string, targetCust?: Customer, isInsideForm?: boolean) => {
+    if (isInsideForm) {
+      setFormData(prev => ({
+        ...prev,
+        events: (prev.events || []).filter(e => e.id !== eventId)
+      }));
+    } else if (targetCust) {
+      const updatedEvents = (targetCust.events || []).filter(e => e.id !== eventId);
+      const updatedCust: Customer = {
+        ...targetCust,
+        events: updatedEvents,
+        updatedAt: Date.now()
+      };
+      try {
+        await updateCustomerApi(updatedCust);
+        onRefreshCustomers();
+        setQuickEventsCustomer(updatedCust);
+      } catch (err: any) {
+        console.error('刪除大事紀失敗', err);
+      }
+    }
+  };
+
+  const handleDeleteEventInForm = (evt: CustomerEventRecord) => {
+    if (evt.isPettyCashLinked && evt.voucherNo && onDeleteTransaction) {
+      setEventToDeleteWithPettyCash({
+        event: evt,
+        isInsideMainForm: true
+      });
+    } else {
+      executeDeleteEvent(evt.id, undefined, true);
+      showTemporaryFeedback('已刪除該筆重要事項紀錄');
+    }
   };
 
   // 卡片快捷大事紀
@@ -410,25 +458,63 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
     setIsEventModalOpen(true);
   };
 
-  const handleDeleteEventForCustomer = async (cust: Customer, eventId: string) => {
-    const updatedEvents = (cust.events || []).filter(e => e.id !== eventId);
-    const updatedCust: Customer = {
-      ...cust,
-      events: updatedEvents,
-      updatedAt: Date.now()
-    };
-    try {
-      await updateCustomerApi(updatedCust);
-      onRefreshCustomers();
-      setQuickEventsCustomer(updatedCust);
+  const handleDeleteEventForCustomer = async (cust: Customer, evt: CustomerEventRecord) => {
+    if (evt.isPettyCashLinked && evt.voucherNo && onDeleteTransaction) {
+      setEventToDeleteWithPettyCash({
+        event: evt,
+        customer: cust,
+        isInsideMainForm: false
+      });
+    } else {
+      executeDeleteEvent(evt.id, cust, false);
       showTemporaryFeedback(`已刪除「${cust.name}」的該筆重要事項紀錄`);
-    } catch (err: any) {
-      console.error('刪除失敗', err);
     }
   };
 
-  // 儲存大事紀 (由 CustomerEventModal 回傳)
-  const handleSaveEvent = async (savedEvent: CustomerEventRecord) => {
+  // 儲存大事紀 (由 CustomerEventModal 回傳，支援自動建立或連動零用金支出傳票)
+  const handleSaveEvent = async (savedEvent: CustomerEventRecord, pettyCashAction?: PettyCashLinkPayload) => {
+    let createdVoucherNo: string | undefined = undefined;
+
+    // 1. 若設定為自動由零用金出款，且金額 > 0，且有 onAddTransaction
+    if (pettyCashAction?.mode === 'auto_create' && onAddTransaction && savedEvent.hasAmount && savedEvent.amount && savedEvent.amount > 0) {
+      const targetName = eventTargetCustomer.name || formData.name || '客戶';
+      const descItem = `${targetName} - ${savedEvent.eventType || savedEvent.title}`;
+      const newTx = onAddTransaction({
+        date: savedEvent.date,
+        type: 'expense',
+        categoryId: pettyCashAction.categoryId,
+        categoryName: pettyCashAction.categoryName,
+        subItem: descItem,
+        amount: savedEvent.amount,
+        claimant: pettyCashAction.claimant || savedEvent.ourRepresentative || '廠長',
+        receiptType: pettyCashAction.receiptType,
+        companyId: pettyCashAction.companyId,
+        note: `【系統自動出款 - 客戶交際事項】對象: ${targetName}${savedEvent.targetPerson ? ` (${savedEvent.targetPerson})` : ''} | 事由: ${savedEvent.title}${savedEvent.proofNote ? ` | 憑證: ${savedEvent.proofNote}` : ''}${savedEvent.note ? ` | 備註: ${savedEvent.note}` : ''}`
+      });
+      createdVoucherNo = newTx.voucherNo;
+      savedEvent.isPettyCashLinked = true;
+      savedEvent.voucherNo = newTx.voucherNo;
+      savedEvent.linkedTransactionId = newTx.id;
+      savedEvent.companyId = pettyCashAction.companyId;
+    } else if (pettyCashAction?.mode === 'update_linked' && onUpdateTransaction && savedEvent.voucherNo && transactions) {
+      if (pettyCashAction.shouldUpdateLinkedTx) {
+        const existingTx = transactions.find(t => t.voucherNo === savedEvent.voucherNo || t.id === savedEvent.voucherNo);
+        if (existingTx) {
+          onUpdateTransaction({
+            ...existingTx,
+            amount: savedEvent.amount || existingTx.amount,
+            date: savedEvent.date || existingTx.date,
+            claimant: savedEvent.ourRepresentative || existingTx.claimant,
+            companyId: savedEvent.companyId || existingTx.companyId,
+            note: `【系統同步更新 - 客戶交際事項】對象: ${eventTargetCustomer.name || formData.name || '客戶'}${savedEvent.targetPerson ? ` (${savedEvent.targetPerson})` : ''} | 事由: ${savedEvent.title}${savedEvent.proofNote ? ` | 憑證: ${savedEvent.proofNote}` : ''}${savedEvent.note ? ` | 備註: ${savedEvent.note}` : ''}`
+          });
+        }
+      }
+    } else if (pettyCashAction?.mode === 'none') {
+      savedEvent.isPettyCashLinked = false;
+      savedEvent.voucherNo = undefined;
+    }
+
     if (eventTargetCustomer.isInsideMainForm) {
       setFormData(prev => {
         const currentEvents = prev.events || [];
@@ -443,6 +529,9 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
         updatedEvents.sort((a, b) => b.date.localeCompare(a.date));
         return { ...prev, events: updatedEvents };
       });
+      if (createdVoucherNo) {
+        showTemporaryFeedback(`🎉 已儲存大事紀，並於公司零用金總帳自動開立支出傳票【${createdVoucherNo}】(NT$ ${savedEvent.amount?.toLocaleString()})！`);
+      }
     } else if (eventTargetCustomer.id) {
       const targetCust = customers.find(c => c.id === eventTargetCustomer.id) || quickEventsCustomer;
       if (targetCust) {
@@ -465,7 +554,11 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
           await updateCustomerApi(updatedCust);
           onRefreshCustomers();
           setQuickEventsCustomer(updatedCust);
-          showTemporaryFeedback(`已儲存「${targetCust.name}」的重要事項紀錄！`);
+          if (createdVoucherNo) {
+            showTemporaryFeedback(`🎉 已儲存「${targetCust.name}」大事紀，並於公司零用金總帳自動開立支出傳票【${createdVoucherNo}】(NT$ ${savedEvent.amount?.toLocaleString()})！`);
+          } else {
+            showTemporaryFeedback(`已儲存「${targetCust.name}」的重要事項紀錄！`);
+          }
         } catch (err: any) {
           console.error('儲存失敗', err);
         }
@@ -2118,7 +2211,7 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => handleDeleteEventInForm(evt.id)}
+                                  onClick={() => handleDeleteEventInForm(evt)}
                                   className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-white rounded transition-colors cursor-pointer"
                                   title="刪除此筆紀錄"
                                 >
@@ -2275,7 +2368,7 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                             </button>
                             <button
                               type="button"
-                              onClick={() => handleDeleteEventForCustomer(quickEventsCustomer, evt.id)}
+                              onClick={() => handleDeleteEventForCustomer(quickEventsCustomer, evt)}
                               className="p-1.5 text-stone-400 hover:text-red-600 hover:bg-white rounded transition-colors cursor-pointer"
                               title="刪除此筆紀錄"
                             >
@@ -2307,14 +2400,82 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
         </div>
       )}
 
-      {/* 新增/編輯個別大事紀/禮金彈窗 */}
+      {/* 新增/編輯個別大事紀/禮金彈窗 (支援由零用金自動開立支出傳票) */}
       <CustomerEventModal
         isOpen={isEventModalOpen}
         onClose={() => setIsEventModalOpen(false)}
         onSave={handleSaveEvent}
         editingEvent={editingEvent}
         customerName={eventTargetCustomer.name}
+        companies={companies}
+        activeCompanyId={activeCompanyId}
+        categories={categories}
+        claimants={claimants}
+        transactions={transactions}
       />
+
+      {/* 刪除含零用金傳票連動大事紀確認對話框 */}
+      {eventToDeleteWithPettyCash && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-stone-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3 mb-3 text-amber-600">
+              <span className="p-2 rounded-xl bg-amber-100 text-amber-700">
+                <AlertCircle className="w-5 h-5" />
+              </span>
+              <h3 className="text-base font-bold text-stone-900">大事紀與零用金連動提示</h3>
+            </div>
+            <p className="text-xs text-stone-600 leading-relaxed mb-4">
+              此紀錄「<strong className="text-stone-900">{eventToDeleteWithPettyCash.event.title}</strong>」已關聯公司零用金支出傳票【<strong className="text-blue-700 font-mono">{eventToDeleteWithPettyCash.event.voucherNo}</strong>】(金額 NT$ {eventToDeleteWithPettyCash.event.amount?.toLocaleString()})。
+              <br /><br />
+              請問您希望如何處理這筆零用金帳本中的支出傳票？
+            </p>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (onDeleteTransaction && eventToDeleteWithPettyCash.event.voucherNo) {
+                    onDeleteTransaction(eventToDeleteWithPettyCash.event.voucherNo);
+                  }
+                  executeDeleteEvent(
+                    eventToDeleteWithPettyCash.event.id,
+                    eventToDeleteWithPettyCash.customer,
+                    eventToDeleteWithPettyCash.isInsideMainForm
+                  );
+                  const voucher = eventToDeleteWithPettyCash.event.voucherNo;
+                  setEventToDeleteWithPettyCash(null);
+                  showTemporaryFeedback(`已刪除大事紀，並同步自零用金帳本刪除傳票 ${voucher}`);
+                }}
+                className="w-full py-2.5 px-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-2xs"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>🗑️ 同步刪除零用金帳本支出傳票 (推薦)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  executeDeleteEvent(
+                    eventToDeleteWithPettyCash.event.id,
+                    eventToDeleteWithPettyCash.customer,
+                    eventToDeleteWithPettyCash.isInsideMainForm
+                  );
+                  setEventToDeleteWithPettyCash(null);
+                  showTemporaryFeedback(`已刪除大事紀（零用金傳票仍保留於帳本中）`);
+                }}
+                className="w-full py-2 px-3 bg-stone-100 hover:bg-stone-200 text-stone-700 rounded-xl text-xs font-medium transition-colors cursor-pointer"
+              >
+                📄 僅刪除大事紀 (保留零用金傳票)
+              </button>
+              <button
+                type="button"
+                onClick={() => setEventToDeleteWithPettyCash(null)}
+                className="w-full py-2 px-3 border border-stone-200 text-stone-600 hover:bg-stone-50 rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 全集團紅白包與大事紀加總分析總表 */}
       <CustomerEventsSummaryModal
