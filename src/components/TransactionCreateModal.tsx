@@ -337,10 +337,16 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
       return;
     }
 
-    // 單據發票強制填寫驗證 (選擇發票時，發票號碼為強制輸入選項)
-    if (receiptType === 'invoice' && !invoiceNumber.trim()) {
-      setErrorMessage('選擇「發票」時，發票號碼為強制輸入選項，請填寫發票號碼');
-      return;
+    // 單據發票強制填寫驗證 (選擇發票時，發票號碼為強制輸入選項，且不可選大水庫)
+    if (receiptType === 'invoice') {
+      if (!invoiceNumber.trim()) {
+        setErrorMessage('選擇「發票」時，發票號碼為強制輸入選項，請填寫發票號碼');
+        return;
+      }
+      if (selectedCompanyId === 'shared') {
+        setErrorMessage('選擇「發票」時不可歸入「共用大水池」，請選擇所屬買受人公司');
+        return;
+      }
     }
 
     // 若為自訂並勾選儲存至下拉選單
@@ -375,11 +381,11 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
       receiptType,
       invoiceNumber: receiptType === 'invoice' ? invoiceNumber.trim().toUpperCase() : undefined,
       note: note.trim(),
-      companyId: selectedCompanyId,
+      companyId: receiptType === 'none' ? 'shared' : selectedCompanyId,
       netAmount: computedNet,
       taxAmount: computedTax,
       taxDeductible: isInv ? taxDeductible : false,
-      sellerTaxId: sellerTaxId.trim() || undefined
+      sellerTaxId: receiptType !== 'none' ? (sellerTaxId.trim() || undefined) : undefined
     });
 
     onClose();
@@ -748,7 +754,7 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                 </div>
               )}
 
-              {/* 4. 單據憑證類型 (三選一，傻瓜式直覺選擇) */}
+              {/* 4. 單據憑證類型 (三選一，直覺選擇) */}
               <div>
                 <label className="block font-bold text-stone-800 mb-1.5">支出憑證單據</label>
                 <div className="grid grid-cols-3 gap-2">
@@ -756,7 +762,7 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                     type="button"
                     onClick={() => {
                       setReceiptType('invoice');
-                      // 切換為發票時，若目前是大水池，預設選中第一家實體公司
+                      // 切換為發票時，發票不可選大水庫，若目前為 shared 則自動指定第一家實體公司
                       if (selectedCompanyId === 'shared') {
                         setSelectedCompanyId(activeCompanyId && activeCompanyId !== 'all' ? activeCompanyId : (companies[0]?.id || 'comp_1'));
                       }
@@ -775,7 +781,7 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                     type="button"
                     onClick={() => {
                       setReceiptType('receipt');
-                      // 收據預設都是共用
+                      // 收據預設為共用大水池
                       setSelectedCompanyId('shared');
                     }}
                     className={`p-2 rounded-xl border text-center font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
@@ -803,75 +809,56 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                   </button>
                 </div>
 
-                {/* 只有選擇「發票」或「收據」時，才出現帳戶/歸屬公司選擇 (收據預設共用) */}
-                {(receiptType === 'invoice' || receiptType === 'receipt') && companies.length > 0 && (
-                  <div className="mt-2.5 p-3 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-stone-700 flex items-center gap-1">
-                        <Building2 className="w-3.5 h-3.5 text-[#0066cc]" />
-                        <span>{receiptType === 'invoice' ? '發票買受人公司（打統編報帳帳戶）：' : '收據報銷歸屬帳戶（預設為共用）：'}</span>
-                      </span>
-                      <span className="text-[10px] text-stone-500 font-mono">
-                        {selectedCompanyId === 'shared' 
-                          ? '🏛️ 共用大水池' 
-                          : `統編：${companies.find(c => c.id === selectedCompanyId)?.taxId || '未設定'}`}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
-                      {companies.map(c => {
-                        const isSelected = selectedCompanyId === c.id;
-                        return (
-                          <button
-                            key={c.id}
-                            type="button"
-                            onClick={() => setSelectedCompanyId(c.id)}
-                            className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
-                              isSelected
-                                ? 'border-[#0066cc] bg-white text-[#0066cc] shadow-2xs ring-1 ring-[#0066cc]'
-                                : 'border-stone-200 bg-white/70 text-stone-600 hover:bg-white hover:border-stone-300'
-                            }`}
-                          >
-                            <div className="flex items-center gap-1.5 min-w-0 pr-1">
-                              <span 
-                                className="w-2 h-2 rounded-full shrink-0 shadow-2xs" 
-                                style={{ backgroundColor: c.color || '#0066cc' }} 
-                              />
-                              <span className="truncate">{c.shortName || c.name}</span>
-                            </div>
-                            {isSelected && <Check className="w-3 h-3 text-[#0066cc] shrink-0" />}
-                          </button>
-                        );
-                      })}
-
-                      {/* 🏛️ 田頭共用大水池 (收據預設歸入) */}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedCompanyId('shared')}
-                        className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
-                          selectedCompanyId === 'shared'
-                            ? 'border-amber-600 bg-amber-50 text-amber-900 shadow-2xs ring-1 ring-amber-500'
-                            : 'border-stone-200 bg-white/70 text-stone-600 hover:bg-white hover:border-stone-300'
-                        }`}
-                      >
-                        <div className="flex items-center gap-1.5 min-w-0 pr-1">
-                          <span className="w-2 h-2 rounded-full shrink-0 bg-amber-500 shadow-2xs" />
-                          <span className="truncate font-bold">🏛️ 共用</span>
-                        </div>
-                        {selectedCompanyId === 'shared' && <Check className="w-3 h-3 text-amber-700 shrink-0" />}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
+                {/* a. 選發票：出現買受人公司（禁止大水庫）+ 發票號碼 + 開立店家統編 */}
                 {receiptType === 'invoice' && (
-                  <div className="mt-2.5 p-3 rounded-xl bg-indigo-50/50 border border-indigo-200 space-y-2.5">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="mt-2.5 p-3 rounded-xl bg-indigo-50/60 border border-indigo-200 space-y-3">
+                    {companies.length > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-bold text-indigo-950 flex items-center gap-1">
+                            <Building2 className="w-3.5 h-3.5 text-indigo-700" />
+                            <span>發票買受人公司（打統編報帳或二聯入帳）：</span>
+                          </span>
+                          <span className="text-[10px] text-indigo-700 font-mono font-medium">
+                            統編：{companies.find(c => c.id === selectedCompanyId)?.taxId || '未設定統編'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          {companies.map(c => {
+                            const isSelected = selectedCompanyId === c.id;
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => setSelectedCompanyId(c.id)}
+                                className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'border-indigo-600 bg-white text-indigo-950 shadow-2xs ring-1 ring-indigo-500 font-bold'
+                                    : 'border-indigo-200 bg-white/70 text-stone-600 hover:bg-white'
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                                  <span 
+                                    className="w-2 h-2 rounded-full shrink-0 shadow-2xs" 
+                                    style={{ backgroundColor: c.color || '#0066cc' }} 
+                                  />
+                                  <span className="truncate">{c.shortName || c.name}</span>
+                                </div>
+                                {isSelected && <Check className="w-3 h-3 text-indigo-600 shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-indigo-200/60">
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] font-bold text-indigo-900 flex items-center gap-1">
+                          <span className="text-[11px] font-bold text-indigo-950 flex items-center gap-1">
                             <span>發票號碼</span>
-                            <span className="text-rose-600 font-bold">*必填（未輸入無法建檔）</span>
+                            <span className="text-rose-600 font-bold">*必填</span>
                           </span>
                         </div>
                         <input
@@ -880,15 +867,15 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                           placeholder="請輸入發票號碼（例：AB-12345678）"
                           value={invoiceNumber}
                           onChange={(e) => setInvoiceNumber(e.target.value.toUpperCase())}
-                          className="w-full px-3 py-2 rounded-xl border border-indigo-300 bg-white focus:border-indigo-600 focus:outline-hidden font-mono font-bold text-xs text-indigo-900 uppercase"
+                          className="w-full px-3 py-2 rounded-xl border border-indigo-300 bg-white focus:border-indigo-600 focus:outline-hidden font-mono font-bold text-xs text-indigo-950 uppercase"
                         />
                       </div>
 
                       <div>
                         <div className="flex items-center justify-between mb-1">
-                          <span className="text-[11px] font-bold text-indigo-900 flex items-center gap-1">
+                          <span className="text-[11px] font-bold text-indigo-950 flex items-center gap-1">
                             <span>開立店家統一編號</span>
-                            <span className="text-stone-400 font-normal">(選填 8 碼，預留 401 媒體檔)</span>
+                            <span className="text-stone-400 font-normal">(選填 8 碼)</span>
                           </span>
                         </div>
                         <input
@@ -904,14 +891,89 @@ export const TransactionCreateModal: React.FC<TransactionCreateModalProps> = ({
                   </div>
                 )}
 
+                {/* b. 選收據：只有收據可選大水庫（預設共用大水庫）+ 開立店家統編（不出現發票號碼） */}
                 {receiptType === 'receipt' && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-[11px] text-amber-900 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>
-                      <strong>收據歸檔模式：</strong>收據多為免稅小吃或雜支無統編，系統預設歸入「田頭共用大水池」，年度結算時由會計核銷營業費用。
-                    </span>
+                  <div className="mt-2.5 p-3 rounded-xl bg-amber-50/70 border border-amber-200 space-y-3">
+                    {companies.length > 0 && (
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[11px] font-bold text-amber-950 flex items-center gap-1">
+                            <Building2 className="w-3.5 h-3.5 text-amber-700" />
+                            <span>收據報銷歸屬帳戶（預設為共用大水池）：</span>
+                          </span>
+                          <span className="text-[10px] text-amber-700 font-mono font-medium">
+                            {selectedCompanyId === 'shared' 
+                              ? '🏛️ 田頭共用大水池' 
+                              : `指定：${companies.find(c => c.id === selectedCompanyId)?.shortName || '實體公司'}`}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                          {/* 🏛️ 田頭共用大水池 (只有收據才能選大水庫) */}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedCompanyId('shared')}
+                            className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+                              selectedCompanyId === 'shared'
+                                ? 'border-amber-600 bg-amber-500 text-white shadow-2xs font-bold'
+                                : 'border-stone-200 bg-white text-stone-600 hover:bg-amber-50/50'
+                            }`}
+                          >
+                            <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                              <span className="w-2 h-2 rounded-full shrink-0 bg-white shadow-2xs" />
+                              <span className="truncate font-bold">🏛️ 共用大水池</span>
+                            </div>
+                            {selectedCompanyId === 'shared' && <Check className="w-3 h-3 text-white shrink-0" />}
+                          </button>
+
+                          {companies.map(c => {
+                            const isSelected = selectedCompanyId === c.id;
+                            return (
+                              <button
+                                key={c.id}
+                                type="button"
+                                onClick={() => setSelectedCompanyId(c.id)}
+                                className={`px-2 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between border transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'border-amber-600 bg-white text-amber-950 shadow-2xs ring-1 ring-amber-500 font-bold'
+                                    : 'border-stone-200 bg-white text-stone-600 hover:bg-amber-50/50'
+                                }`}
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                                  <span 
+                                    className="w-2 h-2 rounded-full shrink-0 shadow-2xs" 
+                                    style={{ backgroundColor: c.color || '#0066cc' }} 
+                                  />
+                                  <span className="truncate">{c.shortName || c.name}</span>
+                                </div>
+                                {isSelected && <Check className="w-3 h-3 text-amber-700 shrink-0" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pt-2 border-t border-amber-200/60">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[11px] font-bold text-amber-950 flex items-center gap-1">
+                          <span>開立店家統一編號 / 免用統一發票統編</span>
+                          <span className="text-stone-400 font-normal">(選填 8 碼，收據章統編)</span>
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        maxLength={8}
+                        placeholder="例：03557311 (免用發票專用章上的 8 碼統編)"
+                        value={sellerTaxId}
+                        onChange={(e) => setSellerTaxId(e.target.value.replace(/\D/g, ''))}
+                        className="w-full px-3 py-2 rounded-xl border border-amber-300 bg-white focus:border-amber-600 focus:outline-hidden font-mono text-xs text-stone-800"
+                      />
+                    </div>
                   </div>
                 )}
+
+                {/* c. 無單據：甚麼都不需要出現！ */}
               </div>
 
               {/* 5. 請領同仁 */}
