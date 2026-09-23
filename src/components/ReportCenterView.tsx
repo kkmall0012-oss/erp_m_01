@@ -60,6 +60,8 @@ interface ReportCenterViewProps {
   subAccounts?: SubAccount[];
   directorWithdrawals?: DirectorWithdrawal[];
   companyProfile?: CompanyProfile;
+  companies?: CompanyProfile[];
+  activeCompanyId?: string;
 }
 
 export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
@@ -69,10 +71,19 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
   budgets = {},
   subAccounts = [],
   directorWithdrawals = [],
-  companyProfile
+  companyProfile,
+  companies = [],
+  activeCompanyId = 'all'
 }) => {
   // 目前選取的報表 ID
   const [activeReportId, setActiveReportId] = useState<string>('tx_details');
+
+  // 三社共用零用金金庫判斷與法定掛名公司
+  const isSharedView = activeCompanyId === 'all';
+  const nominalCompany = useMemo(() => {
+    return companies.find(c => c.isNominalPettyCashHolder) || companies.find(c => c.isDefault) || companies[0] || companyProfile;
+  }, [companies, companyProfile]);
+  const effectiveCompany = isSharedView ? nominalCompany : (companyProfile || nominalCompany);
 
   // 篩選條件
   const [periodType, setPeriodType] = useState<'month' | 'year' | 'custom' | 'all'>('month');
@@ -602,14 +613,33 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
                     {/* 1. 報表表頭 (Header) - 跨頁列印時每頁頂端皆自動重複出現 */}
                     <div className="report-header-banner border-b-2 border-stone-900 pb-3 mb-4 bg-white">
                       <div className="text-center space-y-1">
-                        <span className="text-xs font-semibold text-stone-500 tracking-wider">
-                          {companyProfile?.name ? `${companyProfile.name} 內部帳務管理系統` : '公司內部零用金帳務管理系統'}
-                        </span>
+                        <div className="inline-flex items-center gap-2 mb-1">
+                          <span className="text-xs font-semibold text-stone-600 tracking-wider">
+                            {isSharedView ? (
+                              '三社關係企業 聯合零用金專戶（三社共用金庫，統一撥付）'
+                            ) : (
+                              `${effectiveCompany?.name || '公司'} 零用金報銷帳務（款項由三社共用金庫撥付）`
+                            )}
+                          </span>
+                          {isSharedView && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066cc] border border-blue-200">
+                              三社共用金庫
+                            </span>
+                          )}
+                        </div>
                         <h3 className="text-xl font-black text-stone-900 tracking-tight">
-                          【{companyProfile?.shortName ? `${companyProfile.shortName} ` : ''}{currentReportDef.name}】
+                          {isSharedView ? (
+                            `【三社共用金庫 ${currentReportDef.name}】`
+                          ) : (
+                            `【${effectiveCompany?.name || ''} ${currentReportDef.name}】`
+                          )}
                         </h3>
                         <p className="text-xs text-stone-600 font-medium">
-                          {currentReportDef.shortDesc}
+                          {isSharedView ? (
+                            `三間關係企業共用現金庫 ｜ 法定掛名主理：${nominalCompany?.name || '田頭工程有限公司'}（統編：${nominalCompany?.taxId || '—'}）`
+                          ) : (
+                            currentReportDef.shortDesc
+                          )}
                         </p>
                       </div>
 
@@ -619,10 +649,13 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
                             <span className="text-stone-400">統計期間：</span>
                             <span className="font-bold text-stone-800">{periodDesc}</span>
                           </div>
-                          {companyProfile?.taxId && (
+                          {effectiveCompany?.taxId && (
                             <div>
-                              <span className="text-stone-400">統一編號：</span>
-                              <span className="font-mono font-bold text-stone-800">{companyProfile.taxId}</span>
+                              <span className="text-stone-400">{isSharedView ? '掛名統編：' : '統一編號：'}</span>
+                              <span className="font-mono font-bold text-stone-800">{effectiveCompany.taxId}</span>
+                              {isSharedView && (
+                                <span className="text-stone-400 text-[10px] ml-1">({effectiveCompany.name})</span>
+                              )}
                             </div>
                           )}
                           <div>
@@ -654,6 +687,8 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
                       {activeReportId === 'tx_details' && (
                         <TxDetailsTable 
                           transactions={filteredTransactions} 
+                          companies={companies}
+                          isSharedView={isSharedView}
                         />
                       )}
 
@@ -697,17 +732,17 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
                       </div>
                       <div className="border-b border-stone-300 pb-2">
                         <span className="font-semibold text-stone-500">出納/財務覆核：</span>
-                        <span className="font-medium text-stone-800 ml-1">{companyProfile?.cashier || ''}</span>
+                        <span className="font-medium text-stone-800 ml-1">{effectiveCompany?.cashier || ''}</span>
                       </div>
                       <div className="border-b border-stone-300 pb-2">
                         <span className="font-semibold text-stone-500">主管/會計核決：</span>
-                        <span className="font-medium text-stone-800 ml-1">{companyProfile?.chiefAccountant || companyProfile?.representative || ''}</span>
+                        <span className="font-medium text-stone-800 ml-1">{effectiveCompany?.chiefAccountant || effectiveCompany?.representative || ''}</span>
                       </div>
                     </div>
 
-                    {companyProfile?.taxInvoiceNote && (
+                    {effectiveCompany?.taxInvoiceNote && (
                       <div className="pt-2 text-[10px] text-stone-400 text-center font-normal">
-                        {companyProfile.taxInvoiceNote}
+                        {effectiveCompany.taxInvoiceNote}
                       </div>
                     )}
                   </td>
@@ -957,7 +992,11 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
 // =========================================================================
 // 子表格組件 1：帳務記錄明細表 (收支分開列示)
 // =========================================================================
-const TxDetailsTable: React.FC<{ transactions: Transaction[] }> = ({ transactions }) => {
+const TxDetailsTable: React.FC<{ 
+  transactions: Transaction[];
+  companies?: CompanyProfile[];
+  isSharedView?: boolean;
+}> = ({ transactions, companies = [], isSharedView = false }) => {
   const [viewMode, setViewMode] = useState<'all' | 'expense' | 'income'>('all');
   const data = useMemo(() => buildTxDetailsReport(transactions), [transactions]);
 
@@ -1067,6 +1106,9 @@ const TxDetailsTable: React.FC<{ transactions: Transaction[] }> = ({ transaction
             <tr className="bg-stone-100 text-stone-700 border-b border-stone-200 font-bold">
               <th className="py-2.5 px-2.5 w-12 text-center whitespace-nowrap">序</th>
               <th className="py-2.5 px-3 w-32 whitespace-nowrap">記帳日期 / 傳票</th>
+              {isSharedView && (
+                <th className="py-2.5 px-3 w-28 text-center whitespace-nowrap bg-blue-50/70 text-blue-900">報銷公司</th>
+              )}
               <th className="py-2.5 px-3 w-28 text-center whitespace-nowrap">收支類型</th>
               <th className="py-2.5 px-3 w-28 whitespace-nowrap">科目分類</th>
               <th className="py-2.5 px-3 min-w-[200px]">品名店家 / 開銷細項</th>
@@ -1084,7 +1126,7 @@ const TxDetailsTable: React.FC<{ transactions: Transaction[] }> = ({ transaction
           <tbody className="divide-y divide-stone-200 text-stone-700">
             {displayedRows.length === 0 ? (
               <tr>
-                <td colSpan={10} className="py-10 text-center text-stone-400">
+                <td colSpan={isSharedView ? 11 : 10} className="py-10 text-center text-stone-400">
                   此期間無符合條件的收支流水紀錄
                 </td>
               </tr>
@@ -1098,6 +1140,13 @@ const TxDetailsTable: React.FC<{ transactions: Transaction[] }> = ({ transaction
                       <span className="font-mono text-[10px] text-stone-400 tracking-tight">{t.voucherNo || t.id}</span>
                     </div>
                   </td>
+                  {isSharedView && (
+                    <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                      <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066cc] border border-blue-200">
+                        {companies.find(c => c.id === t.companyId)?.shortName || companies.find(c => c.id === t.companyId)?.name || '田頭工程'}
+                      </span>
+                    </td>
+                  )}
                   <td className="py-2.5 px-3 text-center whitespace-nowrap">
                     <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-lg text-xs font-bold whitespace-nowrap ${
                       t.type === 'income'
@@ -1184,7 +1233,7 @@ const TxDetailsTable: React.FC<{ transactions: Transaction[] }> = ({ transaction
           {displayedRows.length > 0 && (
             <tfoot>
               <tr className="bg-stone-100/95 font-bold text-stone-900 border-t-2 border-stone-300">
-                <td colSpan={5} className="py-2.5 px-4 text-right">
+                <td colSpan={isSharedView ? 6 : 5} className="py-2.5 px-4 text-right">
                   清單合計 (共 {displayedRows.length} 筆)：
                 </td>
                 <td className="py-2.5 px-3 text-right font-mono text-emerald-700 text-xs sm:text-sm bg-emerald-50/50 border-x border-emerald-100/60">

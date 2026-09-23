@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Building2, 
   Save, 
@@ -54,10 +54,15 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
   const currentCompany = companyList.find(c => c.id === editingCompanyId) || companyList[0] || DEFAULT_COMPANIES[0];
 
   const [activeSubTab, setActiveSubTab] = useState<'basic' | 'contact' | 'finance' | 'preview'>('basic');
+  const [previewSharedMode, setPreviewSharedMode] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [saveMessage, setSaveMessage] = useState<string>('');
   const [saveError, setSaveError] = useState<string | null>(null);
+
+  const nominalCompany = useMemo(() => {
+    return companyList.find(c => c.isNominalPettyCashHolder) || companyList.find(c => c.isDefault) || companyList[0] || currentCompany;
+  }, [companyList, currentCompany]);
 
   // 刪除公司彈窗狀態 (避免 iframe 阻擋原生 window.confirm)
   const [companyToDelete, setCompanyToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -93,6 +98,14 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
     setCompanyList(prev => prev.map(c => ({
       ...c,
       isDefault: c.id === id
+    })));
+  };
+
+  // 設為三社共用零用金之法定掛名主管公司
+  const handleSetNominalPettyCashHolder = (id: string) => {
+    setCompanyList(prev => prev.map(c => ({
+      ...c,
+      isNominalPettyCashHolder: c.id === id
     })));
   };
 
@@ -200,10 +213,13 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
         return;
       }
 
-      // 確保至少有一間為 default
+      // 確保至少有一間為 default，至少有一間為 nominal holder
       let toSave = [...companyList];
       if (!toSave.some(c => c.isDefault) && toSave.length > 0) {
         toSave[0].isDefault = true;
+      }
+      if (!toSave.some(c => c.isNominalPettyCashHolder) && toSave.length > 0) {
+        toSave[0].isNominalPettyCashHolder = true;
       }
       
       const saved = await saveCompaniesApi(toSave);
@@ -526,7 +542,7 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                   required
                   value={currentCompany.name}
                   onChange={(e) => handleChange('name', e.target.value)}
-                  placeholder="例如：宏揚精密工業股份有限公司、宏揚科技有限公司、弘揚商行"
+                  placeholder="例如：田頭工程有限公司、田碩工程有限公司、田馨企業社"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent font-medium"
                 />
                 <span className="text-[11px] text-stone-500 mt-1 block">
@@ -543,7 +559,7 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                   type="text"
                   value={currentCompany.shortName || ''}
                   onChange={(e) => handleChange('shortName', e.target.value)}
-                  placeholder="例如：宏揚精密、宏揚科技、弘揚商行"
+                  placeholder="例如：田頭工程、田碩工程、田馨企業"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
                 />
                 <span className="text-[11px] text-stone-500 mt-1 block">
@@ -566,7 +582,7 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                   maxLength={8}
                   value={currentCompany.taxId || ''}
                   onChange={(e) => handleChange('taxId', e.target.value.replace(/\D/g, ''))}
-                  placeholder="例如：84920193"
+                  placeholder="例如：13044353"
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent ${
                     !isTaxIdValid ? 'border-rose-400 bg-rose-50/40 text-rose-900' : 'border-stone-300'
                   }`}
@@ -585,13 +601,13 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                   type="text"
                   value={currentCompany.representative || ''}
                   onChange={(e) => handleChange('representative', e.target.value)}
-                  placeholder="例如：林宏遠"
+                  placeholder="例如：李永勝"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
                 />
               </div>
 
-              {/* 是否為預設行號 */}
-              <div className="flex items-center pt-5">
+              {/* 預設登入行號設定 */}
+              <div className="flex items-center pt-2">
                 <label className="flex items-center gap-2 text-xs font-bold text-stone-700 cursor-pointer">
                   <input
                     type="checkbox"
@@ -601,6 +617,29 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                   />
                   <span>設為系統預設登入行號</span>
                 </label>
+              </div>
+
+              {/* 三社共用零用金之法定掛名主理行號 (跨公司共享架構) */}
+              <div className="md:col-span-2 p-4 rounded-xl border-2 border-blue-200 bg-blue-50/40 space-y-2">
+                <div className="flex items-start justify-between gap-4">
+                  <label className="flex items-center gap-2.5 text-xs font-bold text-blue-950 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(currentCompany.isNominalPettyCashHolder)}
+                      onChange={() => handleSetNominalPettyCashHolder(currentCompany.id)}
+                      className="w-4 h-4 rounded text-[#0066cc] focus:ring-[#0066cc]"
+                    />
+                    <span className="text-sm">指定此公司為「三社共用零用金之法定掛名主管公司」</span>
+                  </label>
+                  {currentCompany.isNominalPettyCashHolder && (
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#0066cc] text-white">
+                      目前法定掛名
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-blue-800/90 leading-relaxed">
+                  💡 <strong>業務架構說明</strong>：本系統的零用金為三間公司共用之現金庫（不屬於單一公司獨佔，三間公司的各項開銷皆從此金庫撥付）。然而在依法報稅、工商行政登記與綜合對外報表上，聯合專戶統一掛名於此公司名下（目前由【<strong>{nominalCompany.name}</strong>】統一代表管轄與列印聯合總表）。
+                </p>
               </div>
 
               {/* 報表頁尾附註 (選填) */}
@@ -672,7 +711,7 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                   type="email"
                   value={currentCompany.email || ''}
                   onChange={(e) => handleChange('email', e.target.value)}
-                  placeholder="例如：finance@hongyang.com.tw"
+                  placeholder="例如：v23039@yahoo.com.tw"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
                 />
               </div>
@@ -808,32 +847,84 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
         {/* ========================================================= */}
         {activeSubTab === 'preview' && (
           <div className="bg-stone-100 p-6 rounded-2xl border border-stone-300 space-y-4 animate-fade-in">
-            <div className="flex items-center justify-between text-xs text-stone-600">
-              <span className="font-bold flex items-center gap-1.5">
+            {/* 預覽模式切換工具列 */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-stone-600 bg-white p-3.5 rounded-xl border border-stone-200 shadow-2xs">
+              <div className="flex items-center gap-1.5 font-bold text-stone-800">
                 <Printer className="w-4 h-4 text-[#0066cc]" />
-                <span>【{currentCompany.shortName || currentCompany.name}】A4 正式報表自動套印預覽</span>
-              </span>
-              <span className="text-stone-400">實際產出將依據目前填寫資料自動套印</span>
+                <span>A4 正式報表自動套印預覽：</span>
+              </div>
+              <div className="inline-flex p-1 bg-stone-100 rounded-xl border border-stone-200">
+                <button
+                  type="button"
+                  onClick={() => setPreviewSharedMode(false)}
+                  className={`px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                    !previewSharedMode 
+                      ? 'bg-white text-stone-900 shadow-2xs font-bold' 
+                      : 'text-stone-600 hover:text-stone-900 font-medium'
+                  }`}
+                >
+                  【{currentCompany.name}】個別報表
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewSharedMode(true)}
+                  className={`px-3 py-1.5 rounded-lg text-xs transition-all flex items-center gap-1.5 cursor-pointer ${
+                    previewSharedMode 
+                      ? 'bg-[#0066cc] text-white shadow-2xs font-bold' 
+                      : 'text-stone-600 hover:text-stone-900 font-medium'
+                  }`}
+                >
+                  <span>🏛️ 三社共用聯合總表</span>
+                  <span className={`text-[10px] ${previewSharedMode ? 'text-blue-100' : 'text-stone-400'}`}>
+                    (法定掛名：{nominalCompany.name})
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* 模擬 A4 報表抬頭紙張 */}
             <div className="bg-white p-8 rounded-lg shadow-md border border-stone-200 max-w-3xl mx-auto font-sans text-stone-800">
               {/* 報表大抬頭 */}
               <div className="text-center border-b-2 border-stone-900 pb-4">
-                <div className="text-xs tracking-widest text-stone-500 font-semibold mb-1">
-                  {currentCompany.name}
+                <div className="inline-flex items-center gap-2 mb-1">
+                  <span className="text-xs tracking-widest text-stone-600 font-semibold">
+                    {previewSharedMode 
+                      ? '三社關係企業 聯合零用金專戶（三社共用金庫，統一撥付）' 
+                      : `${currentCompany.name} 零用金報銷帳務（由三社共用金庫撥付）`}
+                  </span>
+                  {previewSharedMode && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066cc] border border-blue-200">
+                      三社共用金庫
+                    </span>
+                  )}
                 </div>
                 <h1 className="text-xl font-extrabold tracking-wider text-stone-900">
-                  {currentCompany.reportHeader || `${currentCompany.name} 零用金收支月報表`}
+                  {previewSharedMode
+                    ? '【三社共用金庫 零用金收支月報表】'
+                    : `【${currentCompany.name} 零用金收支月報表】`}
                 </h1>
-                <div className="mt-2 flex items-center justify-center gap-6 text-xs text-stone-600 font-mono">
-                  <span>統一編號：<strong className="text-stone-900">{currentCompany.taxId || '84920193'}</strong></span>
-                  <span>電話：{currentCompany.phone || '02-2798-8888'}</span>
+                <p className="text-xs text-stone-600 mt-1">
+                  {previewSharedMode ? (
+                    `三間關係企業共用現金庫 ｜ 法定掛名主理：${nominalCompany.name}（統編：${nominalCompany.taxId || '—'}）`
+                  ) : (
+                    `本公司零用金款項統一由三社共用金庫撥發核銷`
+                  )}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center justify-center gap-6 text-xs text-stone-600 font-mono">
+                  <span>
+                    {previewSharedMode ? '主理統編：' : '統一編號：'}
+                    <strong className="text-stone-900">
+                      {previewSharedMode ? (nominalCompany.taxId || '—') : (currentCompany.taxId || '—')}
+                    </strong>
+                  </span>
+                  <span>電話：{previewSharedMode ? (nominalCompany.phone || '—') : (currentCompany.phone || '—')}</span>
                   <span>會計年度：115 年 09 月</span>
                 </div>
-                {currentCompany.address && (
+                {(previewSharedMode ? nominalCompany.address : currentCompany.address) && (
                   <div className="text-[11px] text-stone-400 mt-1">
-                    營業地址：{currentCompany.postalCode ? `(${currentCompany.postalCode}) ` : ''}{currentCompany.address}
+                    營業地址：{previewSharedMode 
+                      ? `${nominalCompany.postalCode ? `(${nominalCompany.postalCode}) ` : ''}${nominalCompany.address}`
+                      : `${currentCompany.postalCode ? `(${currentCompany.postalCode}) ` : ''}${currentCompany.address}`}
                   </div>
                 )}
               </div>
@@ -845,6 +936,9 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                     <tr className="border-b border-stone-800 bg-stone-50 text-stone-600">
                       <th className="p-2 text-left">傳票編號</th>
                       <th className="p-2 text-left">日期</th>
+                      {previewSharedMode && (
+                        <th className="p-2 text-center bg-blue-50/60 text-blue-900">報銷歸屬公司</th>
+                      )}
                       <th className="p-2 text-left">會計科目</th>
                       <th className="p-2 text-left">摘要/品項</th>
                       <th className="p-2 text-left">經辦人</th>
@@ -855,6 +949,13 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                     <tr>
                       <td className="p-2 font-mono text-stone-500">P20260901-001</td>
                       <td className="p-2 font-mono">2026-09-01</td>
+                      {previewSharedMode && (
+                        <td className="p-2 text-center">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066cc] border border-blue-200">
+                            田頭工程
+                          </span>
+                        </td>
+                      )}
                       <td className="p-2 font-medium text-stone-800">誤餐費</td>
                       <td className="p-2 text-stone-600">廠區加班便當 (發票: AB-12345678)</td>
                       <td className="p-2">林志明</td>
@@ -863,6 +964,13 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                     <tr>
                       <td className="p-2 font-mono text-stone-500">P20260905-002</td>
                       <td className="p-2 font-mono">2026-09-05</td>
+                      {previewSharedMode && (
+                        <td className="p-2 text-center">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-[#0066cc] border border-blue-200">
+                            田碩工程
+                          </span>
+                        </td>
+                      )}
                       <td className="p-2 font-medium text-stone-800">文具用品</td>
                       <td className="p-2 text-stone-600">採購傳票夾與印泥 (收據)</td>
                       <td className="p-2">張美玲</td>
@@ -873,12 +981,24 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
               </div>
 
               {/* 匯款帳號提示 */}
-              {currentCompany.bankAccount && (
+              {(previewSharedMode ? nominalCompany.bankAccount : currentCompany.bankAccount) && (
                 <div className="mt-4 p-3 bg-stone-50 rounded border border-stone-200 text-[11px] text-stone-600">
-                  <span className="font-bold text-stone-800">撥款/匯款資訊：</span>
-                  <span>{currentCompany.bankName} {currentCompany.bankBranch} ({currentCompany.bankCode || '—'}) 帳號：</span>
-                  <span className="font-mono font-bold text-stone-900">{currentCompany.bankAccount}</span>
-                  <span className="ml-2">戶名：{currentCompany.accountName || currentCompany.name}</span>
+                  <span className="font-bold text-stone-800">
+                    {previewSharedMode ? '三社共用金庫撥付/受款專戶：' : '撥款/匯款資訊：'}
+                  </span>
+                  <span>
+                    {previewSharedMode 
+                      ? `${nominalCompany.bankName} ${nominalCompany.bankBranch} (${nominalCompany.bankCode || '—'}) 帳號：`
+                      : `${currentCompany.bankName} ${currentCompany.bankBranch} (${currentCompany.bankCode || '—'}) 帳號：`}
+                  </span>
+                  <span className="font-mono font-bold text-stone-900">
+                    {previewSharedMode ? nominalCompany.bankAccount : currentCompany.bankAccount}
+                  </span>
+                  <span className="ml-2">
+                    戶名：{previewSharedMode 
+                      ? (nominalCompany.accountName || nominalCompany.name) 
+                      : (currentCompany.accountName || currentCompany.name)}
+                  </span>
                 </div>
               )}
 
@@ -887,21 +1007,21 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                 <div className="border border-stone-200 p-2 rounded bg-stone-50/50">
                   <div className="text-[10px] text-stone-500 mb-1 font-medium">總經理 / 負責人</div>
                   <div className="h-9 flex items-center justify-center font-bold text-stone-800">
-                    {currentCompany.representative || '（簽章核決）'}
+                    {(previewSharedMode ? nominalCompany.representative : currentCompany.representative) || '（簽章核決）'}
                   </div>
                 </div>
 
                 <div className="border border-stone-200 p-2 rounded bg-stone-50/50">
                   <div className="text-[10px] text-stone-500 mb-1 font-medium">主辦會計</div>
-                  <div className="h-9 flex items-center justify-center text-stone-400">
-                    （會計覆核）
+                  <div className="h-9 flex items-center justify-center text-stone-700 font-medium">
+                    {(previewSharedMode ? nominalCompany.chiefAccountant : currentCompany.chiefAccountant) || '（會計覆核）'}
                   </div>
                 </div>
 
                 <div className="border border-stone-200 p-2 rounded bg-stone-50/50">
                   <div className="text-[10px] text-stone-500 mb-1 font-medium">出納 / 經管人</div>
-                  <div className="h-9 flex items-center justify-center text-stone-400">
-                    （出納放款）
+                  <div className="h-9 flex items-center justify-center text-stone-700 font-medium">
+                    {(previewSharedMode ? nominalCompany.cashier : currentCompany.cashier) || '（出納放款）'}
                   </div>
                 </div>
 
@@ -914,9 +1034,9 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
               </div>
 
               {/* 頁尾附註 */}
-              {currentCompany.taxInvoiceNote && (
+              {(previewSharedMode ? nominalCompany.taxInvoiceNote : currentCompany.taxInvoiceNote) && (
                 <div className="mt-4 pt-2 border-t border-stone-200 text-[10px] text-stone-400 text-center">
-                  {currentCompany.taxInvoiceNote}
+                  {previewSharedMode ? nominalCompany.taxInvoiceNote : currentCompany.taxInvoiceNote}
                 </div>
               )}
             </div>

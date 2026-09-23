@@ -1167,7 +1167,7 @@ export const CustomerManagementView: React.FC<CustomerManagementViewProps> = ({
                       type="text"
                       value={formData.lineId || ''}
                       onChange={(e) => setFormData(prev => ({ ...prev, lineId: e.target.value }))}
-                      placeholder="例如：@hongyang888"
+                      placeholder="例如：@company_line"
                       className="w-full px-3 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs"
                     />
                   </div>

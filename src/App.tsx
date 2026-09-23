@@ -580,6 +580,11 @@ export default function App() {
     return companies.find((c) => c.id === activeCompanyId) || companies[0] || companyProfile;
   }, [companies, activeCompanyId, companyProfile]);
 
+  // 三社共用零用金之法定掛名主體公司
+  const nominalCompany = useMemo(() => {
+    return companies.find((c) => c.isNominalPettyCashHolder) || companies.find((c) => c.isDefault) || companies[0] || companyProfile;
+  }, [companies, companyProfile]);
+
   // 依當前選取的公司行號篩選之交易清單 (三間公司分開記帳核心，隨時切換)
   const activeTransactions = useMemo(() => {
     if (activeCompanyId === 'all') {
@@ -984,7 +989,9 @@ export default function App() {
                 budgets={budgets}
                 subAccounts={subAccounts}
                 directorWithdrawals={directorWithdrawals}
-                companyProfile={activeCompany || companyProfile}
+                companyProfile={activeCompany || nominalCompany}
+                companies={companies}
+                activeCompanyId={activeCompanyId}
               />
             ) : (
               <CategoryReportView
@@ -1070,7 +1077,7 @@ export default function App() {
             <>
               <span className="text-stone-300">|</span>
               <span className="font-medium text-amber-700 font-semibold">
-                目前作帳：3間關係企業合併視圖
+                目前檢視：三社共用獨立金庫（法定掛名：{nominalCompany?.shortName || nominalCompany?.name || '田頭工程有限公司'}）
               </span>
             </>
           )}

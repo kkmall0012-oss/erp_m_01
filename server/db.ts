@@ -102,6 +102,7 @@ export interface CompanyProfileRow {
   taxInvoiceNote?: string;
   color?: string;
   isDefault?: boolean;
+  isNominalPettyCashHolder?: boolean;
   sortOrder?: number;
   updatedAt: number;
 }
@@ -170,17 +171,17 @@ export interface CustomerRow {
   updatedAt: number;
 }
 
-// 預設 3 間關係企業/行號主檔種子
+// 預設 3 間關係企業/行號主檔種子（三社共用零用金專戶，掛名主理：田頭工程有限公司）
 export const DEFAULT_COMPANIES_SEED: CompanyProfileRow[] = [
   {
     id: 'comp_1',
-    name: '宏揚精密工業股份有限公司',
-    shortName: '宏揚精密',
-    taxId: '84920193',
-    representative: '陳負責人',
+    name: '田頭工程有限公司',
+    shortName: '田頭工程',
+    taxId: '13044353',
+    representative: '李永勝',
     phone: '02-2345-6789',
-    fax: '02-2345-6790',
-    email: 'finance@hongyang.com.tw',
+    fax: '',
+    email: '',
     website: '',
     postalCode: '221',
     address: '新北市汐止區新台五路一段100號',
@@ -188,68 +189,71 @@ export const DEFAULT_COMPANIES_SEED: CompanyProfileRow[] = [
     bankBranch: '南港分行',
     bankCode: '004',
     bankAccount: '004-012-3456789',
-    accountName: '宏揚精密工業股份有限公司',
-    chiefAccountant: '林會計',
-    cashier: '張出納',
-    reportHeader: '宏揚精密工業 零用金收支報表',
-    invoiceBuyerName: '宏揚精密工業股份有限公司',
-    taxInvoiceNote: '請開立三聯式發票，載明統編 84920193',
+    accountName: '田頭工程有限公司',
+    chiefAccountant: '會計',
+    cashier: '出納',
+    reportHeader: '田頭工程有限公司 零用金收支月報表',
+    invoiceBuyerName: '田頭工程有限公司',
+    taxInvoiceNote: '報銷請開立三聯式發票，載明統編 13044353',
     color: '#0066cc',
     isDefault: true,
+    isNominalPettyCashHolder: true,
     sortOrder: 1,
     updatedAt: Date.now()
   },
   {
     id: 'comp_2',
-    name: '宏揚智能科技有限公司',
-    shortName: '宏揚科技',
-    taxId: '90218842',
-    representative: '陳負責人',
-    phone: '02-2345-6780',
-    fax: '02-2345-6791',
-    email: 'smart@hongyang.com.tw',
+    name: '田頭工業有限公司',
+    shortName: '田頭工業',
+    taxId: '45107604',
+    representative: '李湋薇',
+    phone: '',
+    fax: '',
+    email: '',
     website: '',
-    postalCode: '114',
-    address: '台北市內湖區瑞光路500號',
-    bankName: '玉山銀行 內湖分行',
-    bankBranch: '內湖分行',
-    bankCode: '808',
-    bankAccount: '808-987-6543210',
-    accountName: '宏揚智能科技有限公司',
-    chiefAccountant: '林會計',
-    cashier: '張出納',
-    reportHeader: '宏揚智能科技 零用金收支月報表',
-    invoiceBuyerName: '宏揚智能科技有限公司',
-    taxInvoiceNote: '請開立三聯式發票，載明統編 90218842',
+    postalCode: '',
+    address: '',
+    bankName: '',
+    bankBranch: '',
+    bankCode: '',
+    bankAccount: '',
+    accountName: '田頭工業有限公司',
+    chiefAccountant: '會計',
+    cashier: '出納',
+    reportHeader: '田頭工業有限公司 零用金收支月報表',
+    invoiceBuyerName: '田頭工業有限公司',
+    taxInvoiceNote: '發票請載明各項支出報銷憑證',
     color: '#059669',
     isDefault: false,
+    isNominalPettyCashHolder: false,
     sortOrder: 2,
     updatedAt: Date.now()
   },
   {
     id: 'comp_3',
-    name: '弘揚工程商行',
-    shortName: '弘揚商行',
-    taxId: '38472910',
-    representative: '陳負責人',
-    phone: '02-2345-6788',
+    name: '第三關係商行',
+    shortName: '關係行號三',
+    taxId: '',
+    representative: '負責人',
+    phone: '',
     fax: '',
-    email: 'engineering@hongyang.com.tw',
+    email: '',
     website: '',
-    postalCode: '221',
-    address: '新北市汐止區工建路200號',
-    bankName: '第一銀行 汐止分行',
-    bankBranch: '汐止分行',
-    bankCode: '007',
-    bankAccount: '007-567-8901234',
-    accountName: '弘揚工程商行',
-    chiefAccountant: '林會計',
-    cashier: '張出納',
-    reportHeader: '弘揚工程商行 現金收支帳簿',
-    invoiceBuyerName: '弘揚工程商行',
-    taxInvoiceNote: '二聯式發票或收據請蓋商行專用印章',
+    postalCode: '',
+    address: '',
+    bankName: '',
+    bankBranch: '',
+    bankCode: '',
+    bankAccount: '',
+    accountName: '第三關係商行',
+    chiefAccountant: '會計',
+    cashier: '出納',
+    reportHeader: '第三關係商行 現金收支帳簿',
+    invoiceBuyerName: '第三關係商行',
+    taxInvoiceNote: '二聯式發票或收據請蓋公司/商行專用印章',
     color: '#d97706',
     isDefault: false,
+    isNominalPettyCashHolder: false,
     sortOrder: 3,
     updatedAt: Date.now()
   }
@@ -607,6 +611,7 @@ function initSchema(database: Database) {
       taxInvoiceNote TEXT,
       color TEXT,
       isDefault INTEGER DEFAULT 0,
+      isNominalPettyCashHolder INTEGER DEFAULT 0,
       sortOrder INTEGER DEFAULT 0,
       updatedAt INTEGER NOT NULL
     );
@@ -650,10 +655,11 @@ function initSchema(database: Database) {
   try { database.run(`ALTER TABLE transactions ADD COLUMN companyId TEXT`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN color TEXT`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN isDefault INTEGER DEFAULT 0`); } catch (e) {}
+  try { database.run(`ALTER TABLE company_profile ADD COLUMN isNominalPettyCashHolder INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN sortOrder INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE customers ADD COLUMN events TEXT`); } catch (e) {}
 
-  // 檢查既有行號主檔，並初始化 3 間關係企業
+  // 檢查既有行號主檔，並初始化 3 間關係企業（三社共用零用金專戶）
   const cpCountRes = database.exec('SELECT COUNT(*) AS cnt FROM company_profile');
   const cpCount = (cpCountRes[0]?.values[0]?.[0] as number) || 0;
   
@@ -664,8 +670,8 @@ function initSchema(database: Database) {
           id, name, shortName, taxId, representative, phone, fax, email, website,
           postalCode, address, bankName, bankBranch, bankCode, bankAccount, accountName,
           chiefAccountant, cashier, reportHeader, invoiceBuyerName, taxInvoiceNote,
-          color, isDefault, sortOrder, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          color, isDefault, isNominalPettyCashHolder, sortOrder, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           cp.id, cp.name, cp.shortName || null, cp.taxId || null, cp.representative || null,
           cp.phone || null, cp.fax || null, cp.email || null, cp.website || null,
@@ -673,61 +679,56 @@ function initSchema(database: Database) {
           cp.bankCode || null, cp.bankAccount || null, cp.accountName || null,
           cp.chiefAccountant || null, cp.cashier || null, cp.reportHeader || null,
           cp.invoiceBuyerName || null, cp.taxInvoiceNote || null,
-          cp.color || '#0066cc', cp.isDefault ? 1 : 0, cp.sortOrder || 1, cp.updatedAt
+          cp.color || '#0066cc', cp.isDefault ? 1 : 0, cp.isNominalPettyCashHolder ? 1 : 0, cp.sortOrder || 1, cp.updatedAt
         ]
       );
     });
   } else if (cpCount === 1) {
-    // 若只有 default 一筆且是空白佔位，替換為 3 間示範企業；若是真實資料則重命名為 comp_1 並補齊 comp_2, comp_3
-    const defRes = database.exec(`SELECT * FROM company_profile WHERE id = 'default' LIMIT 1`);
+    // 檢查現有唯一行號，補齊第二、第三間關係企業
+    const defRes = database.exec(`SELECT * FROM company_profile LIMIT 1`);
     if (defRes && defRes.length > 0 && defRes[0].values.length > 0) {
-      const defaultName = String(defRes[0].values[0][1] || '');
-      if (defaultName.includes('您的公司全名')) {
-        database.run(`DELETE FROM company_profile WHERE id = 'default'`);
-        DEFAULT_COMPANIES_SEED.forEach((cp) => {
-          database.run(
-            `INSERT INTO company_profile (
-              id, name, shortName, taxId, representative, phone, fax, email, website,
-              postalCode, address, bankName, bankBranch, bankCode, bankAccount, accountName,
-              chiefAccountant, cashier, reportHeader, invoiceBuyerName, taxInvoiceNote,
-              color, isDefault, sortOrder, updatedAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              cp.id, cp.name, cp.shortName || null, cp.taxId || null, cp.representative || null,
-              cp.phone || null, cp.fax || null, cp.email || null, cp.website || null,
-              cp.postalCode || null, cp.address || null, cp.bankName || null, cp.bankBranch || null,
-              cp.bankCode || null, cp.bankAccount || null, cp.accountName || null,
-              cp.chiefAccountant || null, cp.cashier || null, cp.reportHeader || null,
-              cp.invoiceBuyerName || null, cp.taxInvoiceNote || null,
-              cp.color || '#0066cc', cp.isDefault ? 1 : 0, cp.sortOrder || 1, cp.updatedAt
-            ]
-          );
-        });
-      } else {
-        database.run(`UPDATE company_profile SET id = 'comp_1', isDefault = 1, sortOrder = 1, color = '#0066cc' WHERE id = 'default'`);
-        // 補上第二、第三家公司
-        const otherSeeds = DEFAULT_COMPANIES_SEED.filter(c => c.id !== 'comp_1');
-        otherSeeds.forEach((cp) => {
-          database.run(
-            `INSERT OR IGNORE INTO company_profile (
-              id, name, shortName, taxId, representative, phone, fax, email, website,
-              postalCode, address, bankName, bankBranch, bankCode, bankAccount, accountName,
-              chiefAccountant, cashier, reportHeader, invoiceBuyerName, taxInvoiceNote,
-              color, isDefault, sortOrder, updatedAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
-              cp.id, cp.name, cp.shortName || null, cp.taxId || null, cp.representative || null,
-              cp.phone || null, cp.fax || null, cp.email || null, cp.website || null,
-              cp.postalCode || null, cp.address || null, cp.bankName || null, cp.bankBranch || null,
-              cp.bankCode || null, cp.bankAccount || null, cp.accountName || null,
-              cp.chiefAccountant || null, cp.cashier || null, cp.reportHeader || null,
-              cp.invoiceBuyerName || null, cp.taxInvoiceNote || null,
-              cp.color || '#059669', 0, cp.sortOrder || 2, cp.updatedAt
-            ]
-          );
-        });
-      }
+      const curId = String(defRes[0].values[0][0] || 'comp_1');
+      // 將第一家公司設為預設與法定掛名零用金公司
+      database.run(`UPDATE company_profile SET isDefault = 1, isNominalPettyCashHolder = 1 WHERE id = ?`, [curId]);
+      
+      // 補上第二、第三家公司
+      const otherSeeds = DEFAULT_COMPANIES_SEED.filter(c => c.id !== curId && c.id !== 'comp_1');
+      otherSeeds.forEach((cp) => {
+        database.run(
+          `INSERT OR IGNORE INTO company_profile (
+            id, name, shortName, taxId, representative, phone, fax, email, website,
+            postalCode, address, bankName, bankBranch, bankCode, bankAccount, accountName,
+            chiefAccountant, cashier, reportHeader, invoiceBuyerName, taxInvoiceNote,
+            color, isDefault, isNominalPettyCashHolder, sortOrder, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            cp.id, cp.name, cp.shortName || null, cp.taxId || null, cp.representative || null,
+            cp.phone || null, cp.fax || null, cp.email || null, cp.website || null,
+            cp.postalCode || null, cp.address || null, cp.bankName || null, cp.bankBranch || null,
+            cp.bankCode || null, cp.bankAccount || null, cp.accountName || null,
+            cp.chiefAccountant || null, cp.cashier || null, cp.reportHeader || null,
+            cp.invoiceBuyerName || null, cp.taxInvoiceNote || null,
+            cp.color || '#059669', 0, 0, cp.sortOrder || 2, cp.updatedAt
+          ]
+        );
+      });
     }
+  }
+
+  // 系統升級與自動清理殘留的預設種子「宏揚」、「hongyang」與舊版暫存「第二關係企業」字眼
+  try {
+    database.run(`UPDATE company_profile SET reportHeader = name || ' 零用金收支月報表' WHERE reportHeader LIKE '%宏揚%' OR reportHeader LIKE '%第二關係企業%' OR reportHeader IS NULL`);
+    database.run(`UPDATE company_profile SET accountName = name WHERE accountName LIKE '%宏揚%' OR accountName LIKE '%第二關係企業%'`);
+    database.run(`UPDATE company_profile SET invoiceBuyerName = name WHERE invoiceBuyerName LIKE '%宏揚%' OR invoiceBuyerName LIKE '%第二關係企業%'`);
+    database.run(`UPDATE company_profile SET email = NULL WHERE email LIKE '%hongyang%'`);
+    database.run(`UPDATE company_profile SET website = NULL WHERE website LIKE '%hongyang%'`);
+    // 確保有且僅有一家作為三社共用零用金之法定掛名主理公司
+    const nomRes = database.exec(`SELECT COUNT(*) AS cnt FROM company_profile WHERE isNominalPettyCashHolder = 1`);
+    if (!nomRes || !nomRes[0]?.values[0]?.[0]) {
+      database.run(`UPDATE company_profile SET isNominalPettyCashHolder = 1 WHERE isDefault = 1 OR id = 'comp_1'`);
+    }
+  } catch (err) {
+    console.warn('Residual seed cleanup notice:', err);
   }
 
   // 確保舊交易若無 companyId 預設補為 comp_1
@@ -1148,6 +1149,7 @@ export function mapRowToCompanyProfile(obj: any): CompanyProfileRow {
     taxInvoiceNote: obj.taxInvoiceNote ? String(obj.taxInvoiceNote) : '',
     color: obj.color ? String(obj.color) : '#0066cc',
     isDefault: Boolean(obj.isDefault),
+    isNominalPettyCashHolder: Boolean(obj.isNominalPettyCashHolder),
     sortOrder: Number(obj.sortOrder || 1),
     updatedAt: Number(obj.updatedAt || Date.now())
   };
@@ -1198,13 +1200,16 @@ export async function saveCompanyProfile(profile: CompanyProfileRow): Promise<vo
   if (profile.isDefault) {
     database.run(`UPDATE company_profile SET isDefault = 0 WHERE id != ?`, [profile.id]);
   }
+  if (profile.isNominalPettyCashHolder) {
+    database.run(`UPDATE company_profile SET isNominalPettyCashHolder = 0 WHERE id != ?`, [profile.id]);
+  }
   database.run(
     `INSERT OR REPLACE INTO company_profile (
       id, name, shortName, taxId, representative, phone, fax, email, website,
       postalCode, address, bankName, bankBranch, bankCode, bankAccount, accountName,
       chiefAccountant, cashier, reportHeader, invoiceBuyerName, taxInvoiceNote,
-      color, isDefault, sortOrder, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      color, isDefault, isNominalPettyCashHolder, sortOrder, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       profile.id || 'comp_1',
       profile.name || '公司名稱',
@@ -1229,6 +1234,7 @@ export async function saveCompanyProfile(profile: CompanyProfileRow): Promise<vo
       profile.taxInvoiceNote || null,
       profile.color || '#0066cc',
       profile.isDefault ? 1 : 0,
+      profile.isNominalPettyCashHolder ? 1 : 0,
       profile.sortOrder ?? 1,
       Date.now()
     ]
