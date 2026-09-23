@@ -38,6 +38,11 @@ export interface Transaction {
   taxAmount?: number; // 營業稅額 5% (NT$)
   taxDeductible?: boolean; // 是否得扣抵 401 營業稅 (true: 可扣抵進項稅額；false: 免稅或依法不得扣抵)
   sellerTaxId?: string; // 開立發票之店家/加油站統一編號 (8碼，供未來 401 媒體檔申報)
+  // --- 零用金與往來客戶/廠商大事紀逆向連動 (k12 規格) ---
+  courtesyTargetId?: string; // 關聯之客戶/廠商 ID (如 cust_xxx)
+  courtesyTargetName?: string; // 關聯之客戶/廠商名稱 (如 台塑鋼鐵)
+  courtesyTargetType?: 'supplier' | 'customer'; // 對象類型：廠商 或 客戶
+  courtesyEventId?: string; // 關聯的大事紀紀錄 ID
 }
 
 // 採買子帳號 (例如：小明每週午餐採買備用金5000元、工地臨時採買備用金等)
@@ -678,7 +683,7 @@ export const DEFAULT_CATEGORIES: CategoryConfig[] = [
       '市區公車 / 捷運'
     ],
     hasPeopleCount: false,
-    defaultReceiptType: 'invoice', // 高鐵/台鐵/停車費發票
+    defaultReceiptType: 'none', // 預設無單據 (可手動點選切換為發票)
     taxCategory: 'deductible' // 營業公務差旅發票可扣抵 5%
   },
   {
