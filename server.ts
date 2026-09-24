@@ -285,6 +285,23 @@ async function startServer() {
   });
 
   // 公司基本設定與表格抬頭 API (支援多行號/關係企業)
+  const syncSeedsModule = async (moduleKey: string) => {
+    try {
+      const seedsDir = path.join(process.cwd(), 'data', 'seeds');
+      if (!fs.existsSync(seedsDir)) {
+        fs.mkdirSync(seedsDir, { recursive: true });
+      }
+      const modData = await getModularDatabaseJsonExport(moduleKey);
+      fs.writeFileSync(
+        path.join(seedsDir, `${moduleKey}.json`),
+        JSON.stringify(modData, null, 2),
+        'utf-8'
+      );
+    } catch (e) {
+      console.warn(`Failed to auto-sync seed ${moduleKey}:`, e);
+    }
+  };
+
   app.get('/api/companies', async (req, res) => {
     try {
       const companies = await getAllCompanyProfiles();
@@ -301,6 +318,7 @@ async function startServer() {
         return res.status(400).json({ success: false, error: '格式錯誤，必須為公司陣列' });
       }
       await saveAllCompanyProfiles(companies);
+      syncSeedsModule('companies');
       const updated = await getAllCompanyProfiles();
       res.json({ success: true, data: updated, message: '全數公司行號設定已成功儲存！' });
     } catch (err: any) {
@@ -316,6 +334,7 @@ async function startServer() {
       }
       company.id = req.params.id;
       await saveCompanyProfile(company);
+      syncSeedsModule('companies');
       const updated = await getAllCompanyProfiles();
       res.json({ success: true, data: updated, message: '公司行號設定已更新！' });
     } catch (err: any) {
@@ -327,6 +346,7 @@ async function startServer() {
     try {
       const id = req.params.id;
       await deleteCompanyProfile(id);
+      syncSeedsModule('companies');
       const updated = await getAllCompanyProfiles();
       res.json({ success: true, data: updated, message: '公司行號已刪除' });
     } catch (err: any) {
@@ -351,6 +371,7 @@ async function startServer() {
         return res.status(400).json({ success: false, error: '格式錯誤' });
       }
       await saveCompanyProfile(profile);
+      syncSeedsModule('companies');
       const updated = await getCompanyProfile(profile.id);
       res.json({ success: true, data: updated, message: '公司設定已成功儲存至 SQLite 資料庫！' });
     } catch (err: any) {
@@ -378,6 +399,7 @@ async function startServer() {
         return res.status(400).json({ success: false, error: '客戶姓名/名稱為必填項目' });
       }
       await addCustomer(customer);
+      syncSeedsModule('customers');
       const updated = await getAllCustomers();
       res.json({ success: true, data: updated, message: '客戶聯絡資訊已成功新增！' });
     } catch (err: any) {
@@ -394,6 +416,7 @@ async function startServer() {
       }
       customer.id = id;
       await updateCustomer(customer);
+      syncSeedsModule('customers');
       const updated = await getAllCustomers();
       res.json({ success: true, data: updated, message: '客戶聯絡資訊已更新完成！' });
     } catch (err: any) {
@@ -405,6 +428,7 @@ async function startServer() {
     try {
       const { id } = req.params;
       await deleteCustomer(id);
+      syncSeedsModule('customers');
       const updated = await getAllCustomers();
       res.json({ success: true, data: updated, message: '客戶資料已成功刪除！' });
     } catch (err: any) {
@@ -419,6 +443,7 @@ async function startServer() {
         return res.status(400).json({ success: false, error: '資料格式錯誤' });
       }
       await replaceAllCustomers(customers);
+      syncSeedsModule('customers');
       const updated = await getAllCustomers();
       res.json({ success: true, data: updated, message: '客戶資料已全數同步！' });
     } catch (err: any) {

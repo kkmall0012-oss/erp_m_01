@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "backupType": "module",
   "moduleKey": "customers",
-  "exportedAt": "2026-09-24T00:30:17.248Z",
+  "exportedAt": "2026-09-24T02:50:43.332Z",
   "system": "企業零用金與客戶財務管理系統",
   "moduleLabel": "客戶與廠商名冊",
   "customers": [
@@ -20,18 +20,22 @@
       "contacts": [
         {
           "id": "cnt_1_1",
+          "customerId": "cust_seed_1",
           "name": "李如榮",
           "title": "業務專案經理",
           "mobile": "0922-111-222",
           "phone": "分機 301",
-          "note": "主要採購窗口"
+          "note": "主要採購窗口",
+          "sortOrder": 0
         },
         {
           "id": "cnt_1_2",
+          "customerId": "cust_seed_1",
           "name": "林玉秀",
           "title": "財務會計",
           "phone": "02-2789-0123 分機 105",
-          "note": "請款核銷窗口"
+          "note": "請款核銷窗口",
+          "sortOrder": 1
         }
       ],
       "paymentTerm": "銀行匯款 (月結 30 天)",
@@ -48,7 +52,26 @@
       ],
       "events": [
         {
+          "id": "evt_1_4",
+          "customerId": "cust_seed_1",
+          "date": "2026-09-02",
+          "category": "important_matter",
+          "categoryLabel": "重大記事",
+          "title": "續簽 2026~2027 年度產線高壓配電與空調設備聯合維護合約",
+          "eventType": "合約協議",
+          "hasAmount": false,
+          "amount": 0,
+          "direction": "outgoing",
+          "targetPerson": "陳志明 董事長 / 李如榮 經理",
+          "ourRepresentative": "陳負責人、林會計",
+          "isPettyCashLinked": false,
+          "proofNote": "合約編號 HY-2026-ENG08 正本雙方用印歸檔",
+          "note": "合約條件維持原合約單價，附工安保險切結書",
+          "createdAt": 1788336000000
+        },
+        {
           "id": "evt_1_1",
+          "customerId": "cust_seed_1",
           "date": "2026-08-18",
           "category": "wedding_funeral",
           "categoryLabel": "婚喪喜慶",
@@ -67,6 +90,7 @@
         },
         {
           "id": "evt_1_2",
+          "customerId": "cust_seed_1",
           "date": "2026-05-12",
           "category": "wedding_funeral",
           "categoryLabel": "婚喪喜慶",
@@ -85,6 +109,7 @@
         },
         {
           "id": "evt_1_3",
+          "customerId": "cust_seed_1",
           "date": "2026-01-20",
           "category": "business_gift",
           "categoryLabel": "商務交際",
@@ -99,20 +124,6 @@
           "proofNote": "花苑請款發票",
           "note": "高架羅馬柱鮮花一對，賀詞：駿業崇隆",
           "createdAt": 1768896000000
-        },
-        {
-          "id": "evt_1_4",
-          "date": "2026-09-02",
-          "category": "important_matter",
-          "categoryLabel": "重大記事",
-          "title": "續簽 2026~2027 年度產線高壓配電與空調設備聯合維護合約",
-          "eventType": "合約協議",
-          "hasAmount": false,
-          "targetPerson": "陳志明 董事長 / 李如榮 經理",
-          "ourRepresentative": "陳負責人、林會計",
-          "proofNote": "合約編號 HY-2026-ENG08 正本雙方用印歸檔",
-          "note": "合約條件維持原合約單價，附工安保險切結書",
-          "createdAt": 1788336000000
         }
       ],
       "note": "雙向合作夥伴：我方承接其瀝青工程，其亦為我方機電協力廠商",
@@ -133,10 +144,12 @@
       "contacts": [
         {
           "id": "cnt_2_1",
+          "customerId": "cust_seed_2",
           "name": "林國華",
           "title": "負責人/老闆",
           "mobile": "0933-456-789",
-          "note": "五金急料叫貨直接找林老闆"
+          "note": "五金急料叫貨直接找林老闆",
+          "sortOrder": 0
         }
       ],
       "paymentTerm": "開立支票 (次月 15 號換票 / 票期 30 天)",
@@ -155,6 +168,7 @@
       "events": [
         {
           "id": "evt_2_1",
+          "customerId": "cust_seed_2",
           "date": "2026-09-10",
           "category": "business_gift",
           "categoryLabel": "商務交際",
@@ -173,6 +187,7 @@
         },
         {
           "id": "evt_2_2",
+          "customerId": "cust_seed_2",
           "date": "2026-06-06",
           "category": "wedding_funeral",
           "categoryLabel": "婚喪喜慶",
