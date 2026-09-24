@@ -87,7 +87,8 @@ import {
   saveCompanyProfileApi,
   saveCompaniesApi,
   fetchCustomers,
-  syncCustomersBatchApi
+  syncCustomersBatchApi,
+  restoreModularDataApi
 } from './services/api';
 
 export default function App() {
@@ -447,9 +448,28 @@ export default function App() {
     setIsReportExportModalOpen(true);
   };
 
-  // 還原備份檔 (支援全庫還原、僅還原選單設定、僅還原流水帳)
-  const handleRestoreBackup = (data: BackupData, options?: RestoreOptions) => {
+  // 還原備份檔 (支援全庫還原、僅還原選單設定、僅還原流水帳、自選模組精準還原)
+  const handleRestoreBackup = async (data: BackupData, options?: RestoreOptions) => {
     const scope = options?.scope || 'full';
+
+    // 模組獨立精準還原
+    if (scope === 'modular' && options?.selectedModules && options.selectedModules.length > 0) {
+      try {
+        const mode = options.mode || 'replace';
+        await restoreModularDataApi(data, options.selectedModules, mode);
+        await reloadFromDb();
+        setImportNotification({
+          type: 'success',
+          message: `✓ 已成功完成【${options.selectedModules.length} 個指定模組】之${mode === 'merge' ? '智慧合併追加' : '鏡像覆蓋替換'}還原！資料庫已即時同步更新。`
+        });
+      } catch (err: any) {
+        setImportNotification({
+          type: 'error',
+          message: `模組還原失敗：${err.message}`
+        });
+      }
+      return;
+    }
 
     if (scope === 'settings_only') {
       // 僅還原選單項目、店家與請領人名冊 (完全保留現有記帳明細)

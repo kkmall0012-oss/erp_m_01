@@ -48,6 +48,7 @@ export interface MonthBudgetRow {
 
 export interface SubAccountItemRow {
   id: string;
+  subAccountId?: string;
   date: string;
   type: 'expense' | 'income';
   categoryId?: string;
@@ -115,6 +116,7 @@ export interface CompanyProfileRow {
 
 export interface CustomerContactPersonRow {
   id: string;
+  customerId?: string;
   name: string;
   title?: string;
   mobile?: string;
@@ -122,10 +124,12 @@ export interface CustomerContactPersonRow {
   email?: string;
   lineId?: string;
   note?: string;
+  sortOrder?: number;
 }
 
 export interface CustomerEventRecordRow {
   id: string;
+  customerId?: string;
   date: string;
   category: 'wedding_funeral' | 'business_gift' | 'important_matter' | 'other';
   categoryLabel?: string;
@@ -756,6 +760,63 @@ function initSchema(database: Database) {
       createdAt INTEGER NOT NULL,
       updatedAt INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS customer_contacts (
+      id TEXT PRIMARY KEY,
+      customerId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      title TEXT,
+      mobile TEXT,
+      phone TEXT,
+      email TEXT,
+      lineId TEXT,
+      note TEXT,
+      sortOrder INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS customer_events (
+      id TEXT PRIMARY KEY,
+      customerId TEXT NOT NULL,
+      date TEXT NOT NULL,
+      category TEXT NOT NULL,
+      categoryLabel TEXT,
+      title TEXT NOT NULL,
+      eventType TEXT,
+      hasAmount INTEGER DEFAULT 0,
+      amount REAL DEFAULT 0,
+      direction TEXT DEFAULT 'outgoing',
+      targetPerson TEXT,
+      ourRepresentative TEXT,
+      isPettyCashLinked INTEGER DEFAULT 0,
+      voucherNo TEXT,
+      linkedTransactionId TEXT,
+      companyId TEXT,
+      proofNote TEXT,
+      note TEXT,
+      createdAt INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sub_account_items (
+      id TEXT PRIMARY KEY,
+      subAccountId TEXT NOT NULL,
+      date TEXT NOT NULL,
+      type TEXT NOT NULL,
+      categoryId TEXT,
+      categoryName TEXT,
+      subItem TEXT,
+      amount REAL NOT NULL,
+      receiptType TEXT,
+      invoiceNumber TEXT,
+      claimant TEXT,
+      note TEXT,
+      createdAt INTEGER NOT NULL,
+      isImportedToGeneral INTEGER DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_contacts_customerId ON customer_contacts(customerId);
+    CREATE INDEX IF NOT EXISTS idx_events_customerId ON customer_events(customerId);
+    CREATE INDEX IF NOT EXISTS idx_events_linkedTx ON customer_events(linkedTransactionId);
+    CREATE INDEX IF NOT EXISTS idx_sub_items_subAccountId ON sub_account_items(subAccountId);
   `);
 
   // 欄位升級防護
@@ -979,7 +1040,202 @@ function initSchema(database: Database) {
           c.updatedAt || now
         ]
       );
+
+      // Seed customer_contacts
+      if (Array.isArray(c.contacts)) {
+        c.contacts.forEach((contact, idx) => {
+          database.run(
+            `INSERT OR IGNORE INTO customer_contacts (
+              id, customerId, name, title, mobile, phone, email, lineId, note, sortOrder
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              contact.id || `contact_${c.id}_${idx}`,
+              c.id,
+              contact.name,
+              contact.title || null,
+              contact.mobile || null,
+              contact.phone || null,
+              contact.email || null,
+              contact.lineId || null,
+              contact.note || null,
+              idx
+            ]
+          );
+        });
+      }
+
+      // Seed customer_events
+      if (Array.isArray(c.events)) {
+        c.events.forEach((ev) => {
+          database.run(
+            `INSERT OR IGNORE INTO customer_events (
+              id, customerId, date, category, categoryLabel, title, eventType,
+              hasAmount, amount, direction, targetPerson, ourRepresentative,
+              isPettyCashLinked, voucherNo, linkedTransactionId, companyId, proofNote, note, createdAt
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              ev.id || `ev_${c.id}_${Math.random().toString(36).slice(2, 6)}`,
+              c.id,
+              ev.date || new Date().toISOString().slice(0, 10),
+              ev.category || 'other',
+              ev.categoryLabel || null,
+              ev.title || '',
+              ev.eventType || null,
+              ev.hasAmount ? 1 : 0,
+              Number(ev.amount || 0),
+              ev.direction || 'outgoing',
+              ev.targetPerson || null,
+              ev.ourRepresentative || null,
+              ev.isPettyCashLinked ? 1 : 0,
+              ev.voucherNo || null,
+              ev.linkedTransactionId || null,
+              ev.companyId || null,
+              ev.proofNote || null,
+              ev.note || null,
+              Number(ev.createdAt || now)
+            ]
+          );
+        });
+      }
     });
+  }
+
+  // 既有資料自動遷移：將舊 JSON 欄位拆解遷移至獨立實體 SQL 資料表
+  try {
+    const contactsCountRes = database.exec('SELECT COUNT(*) AS cnt FROM customer_contacts');
+    const contactsCount = (contactsCountRes[0]?.values[0]?.[0] as number) || 0;
+    if (contactsCount === 0) {
+      const custRes = database.exec('SELECT id, contacts FROM customers');
+      if (custRes && custRes.length > 0 && custRes[0].values.length > 0) {
+        custRes[0].values.forEach((row) => {
+          const custId = String(row[0]);
+          const rawContacts = String(row[1] || '[]');
+          try {
+            const list = JSON.parse(rawContacts);
+            if (Array.isArray(list)) {
+              list.forEach((contact: any, idx: number) => {
+                database.run(
+                  `INSERT OR IGNORE INTO customer_contacts (
+                    id, customerId, name, title, mobile, phone, email, lineId, note, sortOrder
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                    contact.id || `contact_${custId}_${idx}`,
+                    custId,
+                    contact.name || '未具名聯絡人',
+                    contact.title || null,
+                    contact.mobile || null,
+                    contact.phone || null,
+                    contact.email || null,
+                    contact.lineId || null,
+                    contact.note || null,
+                    idx
+                  ]
+                );
+              });
+            }
+          } catch (e) {}
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('customer_contacts migration notice:', e);
+  }
+
+  try {
+    const eventsCountRes = database.exec('SELECT COUNT(*) AS cnt FROM customer_events');
+    const eventsCount = (eventsCountRes[0]?.values[0]?.[0] as number) || 0;
+    if (eventsCount === 0) {
+      const custRes = database.exec('SELECT id, events FROM customers');
+      if (custRes && custRes.length > 0 && custRes[0].values.length > 0) {
+        custRes[0].values.forEach((row) => {
+          const custId = String(row[0]);
+          const rawEvents = String(row[1] || '[]');
+          try {
+            const list = JSON.parse(rawEvents);
+            if (Array.isArray(list)) {
+              list.forEach((ev: any) => {
+                database.run(
+                  `INSERT OR IGNORE INTO customer_events (
+                    id, customerId, date, category, categoryLabel, title, eventType,
+                    hasAmount, amount, direction, targetPerson, ourRepresentative,
+                    isPettyCashLinked, voucherNo, linkedTransactionId, companyId, proofNote, note, createdAt
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                    ev.id || `ev_${custId}_${Math.random().toString(36).slice(2, 6)}`,
+                    custId,
+                    ev.date || new Date().toISOString().slice(0, 10),
+                    ev.category || 'other',
+                    ev.categoryLabel || null,
+                    ev.title || '',
+                    ev.eventType || null,
+                    ev.hasAmount ? 1 : 0,
+                    Number(ev.amount || 0),
+                    ev.direction || 'outgoing',
+                    ev.targetPerson || null,
+                    ev.ourRepresentative || null,
+                    ev.isPettyCashLinked ? 1 : 0,
+                    ev.voucherNo || null,
+                    ev.linkedTransactionId || null,
+                    ev.companyId || null,
+                    ev.proofNote || null,
+                    ev.note || null,
+                    Number(ev.createdAt || Date.now())
+                  ]
+                );
+              });
+            }
+          } catch (e) {}
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('customer_events migration notice:', e);
+  }
+
+  try {
+    const subItemsCountRes = database.exec('SELECT COUNT(*) AS cnt FROM sub_account_items');
+    const subItemsCount = (subItemsCountRes[0]?.values[0]?.[0] as number) || 0;
+    if (subItemsCount === 0) {
+      const subRes = database.exec('SELECT id, items, startDate FROM sub_accounts');
+      if (subRes && subRes.length > 0 && subRes[0].values.length > 0) {
+        subRes[0].values.forEach((row) => {
+          const subId = String(row[0]);
+          const rawItems = String(row[1] || '[]');
+          const defaultDate = String(row[2] || new Date().toISOString().slice(0, 10));
+          try {
+            const list = JSON.parse(rawItems);
+            if (Array.isArray(list)) {
+              list.forEach((item: any) => {
+                database.run(
+                  `INSERT OR IGNORE INTO sub_account_items (
+                    id, subAccountId, date, type, categoryId, categoryName, subItem, amount,
+                    receiptType, invoiceNumber, claimant, note, createdAt, isImportedToGeneral
+                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                  [
+                    item.id || `item_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                    subId,
+                    item.date || defaultDate,
+                    item.type || 'expense',
+                    item.categoryId || 'misc',
+                    item.categoryName || '雜支',
+                    item.subItem || '',
+                    Number(item.amount) || 0,
+                    item.receiptType || null,
+                    item.invoiceNumber || null,
+                    item.claimant || null,
+                    item.note || null,
+                    Number(item.createdAt || Date.now()),
+                    item.isImportedToGeneral ? 1 : 0
+                  ]
+                );
+              });
+            }
+          } catch (e) {}
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('sub_account_items migration notice:', e);
   }
 }
 
@@ -1244,7 +1500,7 @@ export async function getAllSubAccounts(): Promise<SubAccountRow[]> {
   const res = database.exec(`SELECT * FROM sub_accounts ORDER BY createdAt DESC`);
   if (!res || res.length === 0) return [];
   const columns = res[0].columns;
-  return res[0].values.map((row) => {
+  const subs = res[0].values.map((row) => {
     const obj: any = {};
     columns.forEach((col, i) => {
       obj[col] = row[i];
@@ -1269,11 +1525,48 @@ export async function getAllSubAccounts(): Promise<SubAccountRow[]> {
       items
     };
   });
+
+  // 讀取正規化 sub_account_items 資料表
+  const itemsMap: Record<string, SubAccountItemRow[]> = {};
+  const itemsRes = database.exec(`SELECT * FROM sub_account_items ORDER BY date ASC, createdAt ASC`);
+  if (itemsRes && itemsRes.length > 0 && itemsRes[0].values.length > 0) {
+    const iCols = itemsRes[0].columns;
+    itemsRes[0].values.forEach((row) => {
+      const obj: any = {};
+      iCols.forEach((col, idx) => {
+        obj[col] = row[idx];
+      });
+      const subId = String(obj.subAccountId);
+      if (!itemsMap[subId]) itemsMap[subId] = [];
+      itemsMap[subId].push({
+        id: String(obj.id),
+        subAccountId: subId,
+        date: String(obj.date),
+        type: obj.type,
+        categoryId: obj.categoryId || undefined,
+        categoryName: obj.categoryName || undefined,
+        subItem: String(obj.subItem || ''),
+        amount: Number(obj.amount),
+        receiptType: obj.receiptType || 'receipt',
+        invoiceNumber: obj.invoiceNumber || undefined,
+        claimant: obj.claimant || undefined,
+        note: obj.note || undefined,
+        createdAt: Number(obj.createdAt),
+        isImportedToGeneral: Boolean(obj.isImportedToGeneral)
+      });
+    });
+  }
+
+  return subs.map((sa) => ({
+    ...sa,
+    items: itemsMap[sa.id] !== undefined ? itemsMap[sa.id] : sa.items
+  }));
 }
 
 export async function saveAllSubAccounts(subAccounts: SubAccountRow[]): Promise<void> {
   const database = await getDb();
   database.run(`DELETE FROM sub_accounts`);
+  database.run(`DELETE FROM sub_account_items`);
   subAccounts.forEach((sa) => {
     database.run(
       `INSERT INTO sub_accounts (
@@ -1293,8 +1586,62 @@ export async function saveAllSubAccounts(subAccounts: SubAccountRow[]): Promise<
         JSON.stringify(sa.items || [])
       ]
     );
+
+    if (Array.isArray(sa.items)) {
+      sa.items.forEach((item) => {
+        database.run(
+          `INSERT INTO sub_account_items (
+            id, subAccountId, date, type, categoryId, categoryName, subItem, amount,
+            receiptType, invoiceNumber, claimant, note, createdAt, isImportedToGeneral
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            item.id || `item_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            sa.id,
+            item.date || sa.startDate,
+            item.type || 'expense',
+            item.categoryId || 'misc',
+            item.categoryName || '雜支',
+            item.subItem || '',
+            Number(item.amount) || 0,
+            item.receiptType || null,
+            item.invoiceNumber || null,
+            item.claimant || null,
+            item.note || null,
+            Number(item.createdAt || Date.now()),
+            item.isImportedToGeneral ? 1 : 0
+          ]
+        );
+      });
+    }
   });
   persist();
+}
+
+export async function getAllSubAccountItems(): Promise<SubAccountItemRow[]> {
+  const database = await getDb();
+  const res = database.exec(`SELECT * FROM sub_account_items ORDER BY date ASC, createdAt ASC`);
+  if (!res || res.length === 0 || !res[0].values.length) return [];
+  const columns = res[0].columns;
+  return res[0].values.map((row) => {
+    const obj: any = {};
+    columns.forEach((col, idx) => { obj[col] = row[idx]; });
+    return {
+      id: String(obj.id),
+      subAccountId: String(obj.subAccountId),
+      date: String(obj.date),
+      type: obj.type,
+      categoryId: obj.categoryId || undefined,
+      categoryName: obj.categoryName || undefined,
+      subItem: String(obj.subItem || ''),
+      amount: Number(obj.amount),
+      receiptType: obj.receiptType || 'receipt',
+      invoiceNumber: obj.invoiceNumber || undefined,
+      claimant: obj.claimant || undefined,
+      note: obj.note || undefined,
+      createdAt: Number(obj.createdAt),
+      isImportedToGeneral: Boolean(obj.isImportedToGeneral)
+    };
+  });
 }
 
 export async function getAllDirectorWithdrawals(): Promise<DirectorWithdrawalRow[]> {
@@ -1534,7 +1881,77 @@ export async function getAllCustomers(): Promise<CustomerRow[]> {
     return [];
   }
   const columns = res[0].columns;
-  return res[0].values.map((row) => mapRowToCustomer(row, columns));
+  const customers = res[0].values.map((row) => mapRowToCustomer(row, columns));
+
+  // 1. 載入正規化 customer_contacts 資料表
+  const contactsMap: Record<string, CustomerContactPersonRow[]> = {};
+  const contactsRes = database.exec(`SELECT * FROM customer_contacts ORDER BY sortOrder ASC, id ASC`);
+  if (contactsRes && contactsRes.length > 0 && contactsRes[0].values.length > 0) {
+    const cCols = contactsRes[0].columns;
+    contactsRes[0].values.forEach((row) => {
+      const obj: any = {};
+      cCols.forEach((col, idx) => { obj[col] = row[idx]; });
+      const custId = String(obj.customerId);
+      if (!contactsMap[custId]) contactsMap[custId] = [];
+      contactsMap[custId].push({
+        id: String(obj.id),
+        customerId: custId,
+        name: String(obj.name || ''),
+        title: obj.title ? String(obj.title) : undefined,
+        mobile: obj.mobile ? String(obj.mobile) : undefined,
+        phone: obj.phone ? String(obj.phone) : undefined,
+        email: obj.email ? String(obj.email) : undefined,
+        lineId: obj.lineId ? String(obj.lineId) : undefined,
+        note: obj.note ? String(obj.note) : undefined,
+        sortOrder: obj.sortOrder !== null && obj.sortOrder !== undefined ? Number(obj.sortOrder) : 0
+      });
+    });
+  }
+
+  // 2. 載入正規化 customer_events 資料表
+  const eventsMap: Record<string, CustomerEventRecordRow[]> = {};
+  const eventsRes = database.exec(`SELECT * FROM customer_events ORDER BY date DESC, createdAt DESC`);
+  if (eventsRes && eventsRes.length > 0 && eventsRes[0].values.length > 0) {
+    const eCols = eventsRes[0].columns;
+    eventsRes[0].values.forEach((row) => {
+      const obj: any = {};
+      eCols.forEach((col, idx) => { obj[col] = row[idx]; });
+      const custId = String(obj.customerId);
+      if (!eventsMap[custId]) eventsMap[custId] = [];
+      eventsMap[custId].push({
+        id: String(obj.id),
+        customerId: custId,
+        date: String(obj.date),
+        category: obj.category,
+        categoryLabel: obj.categoryLabel ? String(obj.categoryLabel) : undefined,
+        title: String(obj.title || ''),
+        eventType: obj.eventType ? String(obj.eventType) : undefined,
+        hasAmount: Boolean(obj.hasAmount),
+        amount: Number(obj.amount || 0),
+        direction: obj.direction || 'outgoing',
+        targetPerson: obj.targetPerson ? String(obj.targetPerson) : undefined,
+        ourRepresentative: obj.ourRepresentative ? String(obj.ourRepresentative) : undefined,
+        isPettyCashLinked: Boolean(obj.isPettyCashLinked),
+        voucherNo: obj.voucherNo ? String(obj.voucherNo) : undefined,
+        linkedTransactionId: obj.linkedTransactionId ? String(obj.linkedTransactionId) : undefined,
+        companyId: obj.companyId ? String(obj.companyId) : undefined,
+        proofNote: obj.proofNote ? String(obj.proofNote) : undefined,
+        note: obj.note ? String(obj.note) : undefined,
+        createdAt: Number(obj.createdAt)
+      });
+    });
+  }
+
+  // 將正規化關聯資料與客戶主檔無縫結合
+  return customers.map((c) => {
+    const normalizedContacts = contactsMap[c.id];
+    const normalizedEvents = eventsMap[c.id];
+    return {
+      ...c,
+      contacts: normalizedContacts !== undefined ? normalizedContacts : c.contacts,
+      events: normalizedEvents !== undefined ? normalizedEvents : c.events
+    };
+  });
 }
 
 export async function addCustomer(c: CustomerRow): Promise<void> {
@@ -1584,6 +2001,66 @@ export async function addCustomer(c: CustomerRow): Promise<void> {
       c.updatedAt || now
     ]
   );
+
+  // 同步寫入正規化 customer_contacts 表
+  database.run(`DELETE FROM customer_contacts WHERE customerId = ?`, [c.id]);
+  if (Array.isArray(c.contacts)) {
+    c.contacts.forEach((contact, idx) => {
+      database.run(
+        `INSERT OR REPLACE INTO customer_contacts (
+          id, customerId, name, title, mobile, phone, email, lineId, note, sortOrder
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          contact.id || `contact_${c.id}_${idx}`,
+          c.id,
+          contact.name,
+          contact.title || null,
+          contact.mobile || null,
+          contact.phone || null,
+          contact.email || null,
+          contact.lineId || null,
+          contact.note || null,
+          idx
+        ]
+      );
+    });
+  }
+
+  // 同步寫入正規化 customer_events 表
+  database.run(`DELETE FROM customer_events WHERE customerId = ?`, [c.id]);
+  if (Array.isArray(c.events)) {
+    c.events.forEach((ev) => {
+      database.run(
+        `INSERT OR REPLACE INTO customer_events (
+          id, customerId, date, category, categoryLabel, title, eventType,
+          hasAmount, amount, direction, targetPerson, ourRepresentative,
+          isPettyCashLinked, voucherNo, linkedTransactionId, companyId, proofNote, note, createdAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ev.id || `ev_${c.id}_${Math.random().toString(36).slice(2, 6)}`,
+          c.id,
+          ev.date || new Date().toISOString().slice(0, 10),
+          ev.category || 'other',
+          ev.categoryLabel || null,
+          ev.title || '',
+          ev.eventType || null,
+          ev.hasAmount ? 1 : 0,
+          Number(ev.amount || 0),
+          ev.direction || 'outgoing',
+          ev.targetPerson || null,
+          ev.ourRepresentative || null,
+          ev.isPettyCashLinked ? 1 : 0,
+          ev.voucherNo || null,
+          ev.linkedTransactionId || null,
+          ev.companyId || null,
+          ev.proofNote || null,
+          ev.note || null,
+          Number(ev.createdAt || now)
+        ]
+      );
+    });
+  }
+
   persist();
 }
 
@@ -1634,22 +2111,153 @@ export async function updateCustomer(c: CustomerRow): Promise<void> {
       c.id
     ]
   );
+
+  // 同步更新正規化 customer_contacts 表
+  database.run(`DELETE FROM customer_contacts WHERE customerId = ?`, [c.id]);
+  if (Array.isArray(c.contacts)) {
+    c.contacts.forEach((contact, idx) => {
+      database.run(
+        `INSERT OR REPLACE INTO customer_contacts (
+          id, customerId, name, title, mobile, phone, email, lineId, note, sortOrder
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          contact.id || `contact_${c.id}_${idx}`,
+          c.id,
+          contact.name,
+          contact.title || null,
+          contact.mobile || null,
+          contact.phone || null,
+          contact.email || null,
+          contact.lineId || null,
+          contact.note || null,
+          idx
+        ]
+      );
+    });
+  }
+
+  // 同步更新正規化 customer_events 表
+  database.run(`DELETE FROM customer_events WHERE customerId = ?`, [c.id]);
+  if (Array.isArray(c.events)) {
+    c.events.forEach((ev) => {
+      database.run(
+        `INSERT OR REPLACE INTO customer_events (
+          id, customerId, date, category, categoryLabel, title, eventType,
+          hasAmount, amount, direction, targetPerson, ourRepresentative,
+          isPettyCashLinked, voucherNo, linkedTransactionId, companyId, proofNote, note, createdAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ev.id || `ev_${c.id}_${Math.random().toString(36).slice(2, 6)}`,
+          c.id,
+          ev.date || new Date().toISOString().slice(0, 10),
+          ev.category || 'other',
+          ev.categoryLabel || null,
+          ev.title || '',
+          ev.eventType || null,
+          ev.hasAmount ? 1 : 0,
+          Number(ev.amount || 0),
+          ev.direction || 'outgoing',
+          ev.targetPerson || null,
+          ev.ourRepresentative || null,
+          ev.isPettyCashLinked ? 1 : 0,
+          ev.voucherNo || null,
+          ev.linkedTransactionId || null,
+          ev.companyId || null,
+          ev.proofNote || null,
+          ev.note || null,
+          Number(ev.createdAt || now)
+        ]
+      );
+    });
+  }
+
   persist();
 }
 
 export async function deleteCustomer(id: string): Promise<void> {
   const database = await getDb();
   database.run(`DELETE FROM customers WHERE id = ?`, [id]);
+  database.run(`DELETE FROM customer_contacts WHERE customerId = ?`, [id]);
+  database.run(`DELETE FROM customer_events WHERE customerId = ?`, [id]);
   persist();
 }
 
 export async function replaceAllCustomers(customers: CustomerRow[]): Promise<void> {
   const database = await getDb();
   database.run(`DELETE FROM customers`);
+  database.run(`DELETE FROM customer_contacts`);
+  database.run(`DELETE FROM customer_events`);
   for (const c of customers) {
     await addCustomer(c);
   }
   persist();
+}
+
+export async function getAllCustomerEvents(): Promise<(CustomerEventRecordRow & { customerName?: string })[]> {
+  const database = await getDb();
+  const res = database.exec(`
+    SELECT e.*, c.name AS customerName
+    FROM customer_events e
+    LEFT JOIN customers c ON e.customerId = c.id
+    ORDER BY e.date DESC, e.createdAt DESC
+  `);
+  if (!res || res.length === 0 || !res[0].values.length) return [];
+  const cols = res[0].columns;
+  return res[0].values.map((row) => {
+    const obj: any = {};
+    cols.forEach((col, idx) => { obj[col] = row[idx]; });
+    return {
+      id: String(obj.id),
+      customerId: String(obj.customerId),
+      customerName: obj.customerName ? String(obj.customerName) : undefined,
+      date: String(obj.date),
+      category: obj.category,
+      categoryLabel: obj.categoryLabel ? String(obj.categoryLabel) : undefined,
+      title: String(obj.title || ''),
+      eventType: obj.eventType ? String(obj.eventType) : undefined,
+      hasAmount: Boolean(obj.hasAmount),
+      amount: Number(obj.amount || 0),
+      direction: obj.direction || 'outgoing',
+      targetPerson: obj.targetPerson ? String(obj.targetPerson) : undefined,
+      ourRepresentative: obj.ourRepresentative ? String(obj.ourRepresentative) : undefined,
+      isPettyCashLinked: Boolean(obj.isPettyCashLinked),
+      voucherNo: obj.voucherNo ? String(obj.voucherNo) : undefined,
+      linkedTransactionId: obj.linkedTransactionId ? String(obj.linkedTransactionId) : undefined,
+      companyId: obj.companyId ? String(obj.companyId) : undefined,
+      proofNote: obj.proofNote ? String(obj.proofNote) : undefined,
+      note: obj.note ? String(obj.note) : undefined,
+      createdAt: Number(obj.createdAt)
+    };
+  });
+}
+
+export async function getAllCustomerContacts(): Promise<(CustomerContactPersonRow & { customerName?: string })[]> {
+  const database = await getDb();
+  const res = database.exec(`
+    SELECT ct.*, c.name AS customerName
+    FROM customer_contacts ct
+    LEFT JOIN customers c ON ct.customerId = c.id
+    ORDER BY ct.customerId ASC, ct.sortOrder ASC
+  `);
+  if (!res || res.length === 0 || !res[0].values.length) return [];
+  const cols = res[0].columns;
+  return res[0].values.map((row) => {
+    const obj: any = {};
+    cols.forEach((col, idx) => { obj[col] = row[idx]; });
+    return {
+      id: String(obj.id),
+      customerId: String(obj.customerId),
+      customerName: obj.customerName ? String(obj.customerName) : undefined,
+      name: String(obj.name || ''),
+      title: obj.title ? String(obj.title) : undefined,
+      mobile: obj.mobile ? String(obj.mobile) : undefined,
+      phone: obj.phone ? String(obj.phone) : undefined,
+      email: obj.email ? String(obj.email) : undefined,
+      lineId: obj.lineId ? String(obj.lineId) : undefined,
+      note: obj.note ? String(obj.note) : undefined,
+      sortOrder: Number(obj.sortOrder || 0)
+    };
+  });
 }
 
 // 匯出完整全庫 JSON 格式物件（包含全歷史流水帳、公司主檔、客戶通訊、專款子帳與所有自訂項目，並動態抓取未來新增的自訂資料表）
@@ -1673,7 +2281,8 @@ export async function getFullDatabaseJsonExport(): Promise<Record<string, any>> 
   const extraTables: Record<string, any[]> = {};
   const coreTableSet = new Set([
     'transactions', 'categories', 'claimants', 'budgets',
-    'sub_accounts', 'director_withdrawals', 'company_profile', 'customers'
+    'sub_accounts', 'sub_account_items', 'director_withdrawals', 'company_profile',
+    'customers', 'customer_contacts', 'customer_events'
   ]);
 
   if (allTablesRes && allTablesRes.length > 0 && allTablesRes[0].values.length > 0) {
@@ -1742,10 +2351,13 @@ export async function generateSqlDump(): Promise<string> {
   const preferredOrder = [
     'company_profile',
     'customers',
+    'customer_contacts',
+    'customer_events',
     'categories',
     'claimants',
     'budgets',
     'sub_accounts',
+    'sub_account_items',
     'director_withdrawals',
     'transactions'
   ];
@@ -1812,5 +2424,267 @@ export async function generateSqlDump(): Promise<string> {
 
   sql += `COMMIT;\n`;
   return sql;
+}
+
+// 匯出單一模組 JSON 格式物件（支援客戶、流水帳、公司主檔等獨立備份）
+export async function getModularDatabaseJsonExport(moduleKey: string): Promise<Record<string, any>> {
+  const database = await getDb();
+  persist();
+
+  const base = {
+    version: '2.0.0',
+    backupType: 'module',
+    moduleKey,
+    exportedAt: new Date().toISOString(),
+    system: '企業零用金與客戶財務管理系統'
+  };
+
+  switch (moduleKey) {
+    case 'companies':
+      return {
+        ...base,
+        moduleLabel: '公司行號主檔',
+        companies: await getAllCompanyProfiles(),
+        companyProfile: await getCompanyProfile()
+      };
+    case 'customers':
+      return {
+        ...base,
+        moduleLabel: '客戶與廠商名冊',
+        customers: await getAllCustomers()
+      };
+    case 'transactions':
+      return {
+        ...base,
+        moduleLabel: '零用金收支流水帳',
+        transactions: await getAllTransactions()
+      };
+    case 'categories_claimants':
+      return {
+        ...base,
+        moduleLabel: '系統分類與請領人名冊',
+        categories: await getAllCategories(),
+        claimants: await getAllClaimants()
+      };
+    case 'sub_accounts':
+      return {
+        ...base,
+        moduleLabel: '專案採買子帳戶',
+        subAccounts: await getAllSubAccounts()
+      };
+    case 'budgets':
+      return {
+        ...base,
+        moduleLabel: '月份預算額度',
+        budgets: await getAllBudgets()
+      };
+    case 'director_withdrawals':
+      return {
+        ...base,
+        moduleLabel: '廠長大額提領記錄',
+        directorWithdrawals: await getAllDirectorWithdrawals()
+      };
+    default:
+      throw new Error(`未知的模組代碼: ${moduleKey}`);
+  }
+}
+
+// 智慧模組還原 (支援 Replace 覆蓋替換 或 Merge 智慧比對追加)
+export async function restoreModularData(
+  data: Record<string, any>,
+  modules: string[],
+  mode: 'replace' | 'merge' = 'replace'
+): Promise<{ success: boolean; affectedModules: string[]; summary: Record<string, number> }> {
+  const database = await getDb();
+  const summary: Record<string, number> = {};
+
+  database.run('BEGIN TRANSACTION');
+
+  try {
+    for (const mod of modules) {
+      switch (mod) {
+        case 'companies': {
+          const incomingCompanies: CompanyProfileRow[] = Array.isArray(data.companies) 
+            ? data.companies 
+            : (data.companyProfile ? [data.companyProfile] : []);
+          
+          if (mode === 'replace') {
+            database.run(`DELETE FROM company_profile`);
+            for (const c of incomingCompanies) {
+              await saveCompanyProfile(c);
+            }
+            summary.companies = incomingCompanies.length;
+          } else {
+            let count = 0;
+            for (const inc of incomingCompanies) {
+              await saveCompanyProfile(inc);
+              count++;
+            }
+            summary.companies = count;
+          }
+          break;
+        }
+
+        case 'customers': {
+          const incomingCustomers: CustomerRow[] = Array.isArray(data.customers) ? data.customers : [];
+          if (mode === 'replace') {
+            database.run(`DELETE FROM customers`);
+            for (const c of incomingCustomers) {
+              await addCustomer(c);
+            }
+            summary.customers = incomingCustomers.length;
+          } else {
+            const existing = await getAllCustomers();
+            const existingIds = new Set(existing.map(c => c.id));
+            let count = 0;
+            for (const c of incomingCustomers) {
+              if (existingIds.has(c.id)) {
+                await updateCustomer(c);
+              } else {
+                await addCustomer(c);
+              }
+              count++;
+            }
+            summary.customers = count;
+          }
+          break;
+        }
+
+        case 'transactions': {
+          const incomingTx: TransactionRow[] = Array.isArray(data.transactions) ? data.transactions : [];
+          if (mode === 'replace') {
+            database.run(`DELETE FROM transactions`);
+            for (const tx of incomingTx) {
+              await addTransaction(tx);
+            }
+            summary.transactions = incomingTx.length;
+          } else {
+            const existing = await getAllTransactions();
+            const existingIds = new Set(existing.map(t => t.id));
+            let count = 0;
+            for (const tx of incomingTx) {
+              if (existingIds.has(tx.id)) {
+                await updateTransaction(tx);
+              } else {
+                await addTransaction(tx);
+              }
+              count++;
+            }
+            summary.transactions = count;
+          }
+          break;
+        }
+
+        case 'categories_claimants': {
+          const incomingCats: CategoryConfigRow[] = Array.isArray(data.categories) ? data.categories : [];
+          const incomingClaimants: string[] = Array.isArray(data.claimants) ? data.claimants : [];
+
+          if (mode === 'replace') {
+            if (incomingCats.length > 0) {
+              await saveAllCategories(incomingCats);
+            }
+            if (incomingClaimants.length > 0) {
+              await saveAllClaimants(incomingClaimants);
+            }
+            summary.categories = incomingCats.length;
+            summary.claimants = incomingClaimants.length;
+          } else {
+            const existingCats = await getAllCategories();
+            const existingCatMap = new Map(existingCats.map(c => [c.id, c]));
+            const mergedCats = [...existingCats];
+            for (const inc of incomingCats) {
+              if (existingCatMap.has(inc.id)) {
+                const idx = mergedCats.findIndex(c => c.id === inc.id);
+                if (idx >= 0) mergedCats[idx] = inc;
+              } else {
+                mergedCats.push(inc);
+              }
+            }
+            await saveAllCategories(mergedCats);
+
+            const existingClaimants = await getAllClaimants();
+            const claimantSet = new Set(existingClaimants);
+            for (const cl of incomingClaimants) {
+              if (typeof cl === 'string' && cl.trim()) {
+                claimantSet.add(cl.trim());
+              }
+            }
+            await saveAllClaimants(Array.from(claimantSet));
+
+            summary.categories = mergedCats.length;
+            summary.claimants = claimantSet.size;
+          }
+          break;
+        }
+
+        case 'sub_accounts': {
+          const incomingSubs: SubAccountRow[] = Array.isArray(data.subAccounts) ? data.subAccounts : [];
+          if (mode === 'replace') {
+            await saveAllSubAccounts(incomingSubs);
+            summary.subAccounts = incomingSubs.length;
+          } else {
+            const existing = await getAllSubAccounts();
+            const existingMap = new Map(existing.map(s => [s.id, s]));
+            const merged = [...existing];
+            for (const inc of incomingSubs) {
+              if (existingMap.has(inc.id)) {
+                const idx = merged.findIndex(s => s.id === inc.id);
+                if (idx >= 0) merged[idx] = inc;
+              } else {
+                merged.push(inc);
+              }
+            }
+            await saveAllSubAccounts(merged);
+            summary.subAccounts = merged.length;
+          }
+          break;
+        }
+
+        case 'budgets': {
+          const incomingBudgets = (typeof data.budgets === 'object' && data.budgets !== null) ? data.budgets : {};
+          if (mode === 'replace') {
+            await saveAllBudgets(incomingBudgets);
+            summary.budgets = Object.keys(incomingBudgets).length;
+          } else {
+            const existing = await getAllBudgets();
+            const merged = { ...existing, ...incomingBudgets };
+            await saveAllBudgets(merged);
+            summary.budgets = Object.keys(merged).length;
+          }
+          break;
+        }
+
+        case 'director_withdrawals': {
+          const incomingDw: DirectorWithdrawalRow[] = Array.isArray(data.directorWithdrawals) ? data.directorWithdrawals : [];
+          if (mode === 'replace') {
+            await saveAllDirectorWithdrawals(incomingDw);
+            summary.directorWithdrawals = incomingDw.length;
+          } else {
+            const existing = await getAllDirectorWithdrawals();
+            const existingIds = new Set(existing.map(d => d.id));
+            const merged = [...existing];
+            for (const inc of incomingDw) {
+              if (existingIds.has(inc.id)) {
+                const idx = merged.findIndex(d => d.id === inc.id);
+                if (idx >= 0) merged[idx] = inc;
+              } else {
+                merged.push(inc);
+              }
+            }
+            await saveAllDirectorWithdrawals(merged);
+            summary.directorWithdrawals = merged.length;
+          }
+          break;
+        }
+      }
+    }
+
+    database.run('COMMIT');
+    persist();
+    return { success: true, affectedModules: modules, summary };
+  } catch (err) {
+    database.run('ROLLBACK');
+    throw err;
+  }
 }
 

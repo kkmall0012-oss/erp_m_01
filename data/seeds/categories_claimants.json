@@ -1,0 +1,160 @@
+{
+  "version": "2.0.0",
+  "backupType": "module",
+  "moduleKey": "categories_claimants",
+  "exportedAt": "2026-09-24T00:30:17.252Z",
+  "system": "企業零用金與客戶財務管理系統",
+  "moduleLabel": "系統分類與請領人名冊",
+  "categories": [
+    {
+      "id": "dining",
+      "name": "餐飲",
+      "type": "expense",
+      "icon": "Utensils",
+      "color": "#f97316",
+      "subLabel": "用餐店家",
+      "defaultSubItems": [
+        "麵-鮮味町",
+        "麵-菁松牛肉麵",
+        "麵-李記小吃",
+        "麵-中壢老字號牛肉麵館",
+        "麵-大娘土魠魚羹",
+        "綜-路路現炒",
+        "綜-阿惠小吃",
+        "綜-岩葉拉麵",
+        "綜-斗南和記牛雜湯",
+        "飯-圓環火雞肉飯",
+        "飯-健康廚房",
+        "飯-東池便當",
+        "飯-初貳豬腳",
+        "飯-三合火雞肉飯",
+        "其他-鄧肉圓",
+        "其他-八方雲集",
+        "其他-外出工地"
+      ],
+      "hasPeopleCount": true,
+      "defaultReceiptType": "receipt",
+      "taxCategory": "tax_exempt"
+    },
+    {
+      "id": "fuel",
+      "name": "加油",
+      "type": "expense",
+      "icon": "Fuel",
+      "color": "#0284c7",
+      "subLabel": "加油站",
+      "defaultSubItems": [
+        "台灣中油",
+        "台塑石油",
+        "全國加油站",
+        "統一精工",
+        "台亞石油",
+        "福懋加油站"
+      ],
+      "hasPeopleCount": false,
+      "defaultReceiptType": "invoice",
+      "taxCategory": "deductible"
+    },
+    {
+      "id": "advance",
+      "name": "預支",
+      "type": "expense",
+      "icon": "HandCoins",
+      "color": "#8b5cf6",
+      "subLabel": "預支同仁姓名",
+      "defaultSubItems": [
+        "林崇盛",
+        "黎光高"
+      ],
+      "hasPeopleCount": false,
+      "defaultReceiptType": "receipt",
+      "taxCategory": "tax_exempt"
+    },
+    {
+      "id": "misc",
+      "name": "雜支",
+      "type": "expense",
+      "icon": "PackageCheck",
+      "color": "#64748b",
+      "subLabel": "雜支項目",
+      "defaultSubItems": [
+        "五金耗材",
+        "生活日用品",
+        "水電瓦斯費",
+        "文具紙張",
+        "清潔打掃用品",
+        "手續規費",
+        "設備修繕維護",
+        "臨時急用",
+        "中華郵政"
+      ],
+      "hasPeopleCount": false,
+      "defaultReceiptType": "receipt",
+      "taxCategory": "tax_exempt"
+    },
+    {
+      "id": "transport",
+      "name": "交通差旅",
+      "type": "expense",
+      "icon": "Car",
+      "color": "#0d9488",
+      "subLabel": "交通方式 / 業者",
+      "defaultSubItems": [
+        "計程車 / 叫車",
+        "台灣高鐵",
+        "台鐵火車",
+        "停車費",
+        "國道通行費 / 通行費",
+        "市區公車 / 捷運"
+      ],
+      "hasPeopleCount": false,
+      "defaultReceiptType": "invoice",
+      "taxCategory": "deductible"
+    },
+    {
+      "id": "replenishment",
+      "name": "零用金撥補",
+      "type": "income",
+      "icon": "Coins",
+      "color": "#16a34a",
+      "subLabel": "撥補來源 / 歸墊方式",
+      "defaultSubItems": [
+        "主管交付撥款",
+        "會計請款核銷歸墊",
+        "同仁預支款繳回",
+        "零星收入 / 押金退還",
+        "負責人交付撥款"
+      ],
+      "hasPeopleCount": false,
+      "defaultReceiptType": "none",
+      "taxCategory": "tax_exempt"
+    },
+    {
+      "id": "courtesy",
+      "name": "交際禮金 / 公關應酬",
+      "type": "expense",
+      "icon": "heart-handshake",
+      "color": "#e11d48",
+      "subLabel": "交際對象 / 項目",
+      "defaultSubItems": [
+        "婚喪喜慶紅白包 (喜事賀禮/喪事奠儀)",
+        "年節公關禮盒 (中秋月餅/端午禮品/春節伴手禮)",
+        "業務拜訪禮品/伴手禮",
+        "開工動土/喬遷誌慶花籃",
+        "地方宮廟活動/睦鄰贊助款",
+        "同業公會/商會贊助費",
+        "客戶/廠商餐敘招待"
+      ],
+      "hasPeopleCount": false,
+      "defaultReceiptType": "receipt",
+      "taxCategory": "non_deductible"
+    }
+  ],
+  "claimants": [
+    "自己 / 零用金管理員",
+    "廠長",
+    "劉孟瑜",
+    "陳坤成",
+    "林崇盛"
+  ]
+}

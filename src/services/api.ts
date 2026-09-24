@@ -293,11 +293,55 @@ export function triggerDownloadFullJsonBackupFile(): void {
   const link = document.createElement('a');
   link.href = '/api/database/dump-json';
   const now = new Date();
-  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
   link.download = `petty_cash_full_backup_${dateStr}.json`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+}
+
+// 一鍵下載單一模組 JSON 格式備份檔 (.json)
+export function triggerDownloadModularJsonBackupFile(moduleKey: string, moduleLabel?: string): void {
+  const link = document.createElement('a');
+  link.href = `/api/database/dump-json?module=${encodeURIComponent(moduleKey)}`;
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+  const label = moduleLabel || moduleKey;
+  link.download = `模組備份_${label}_${dateStr}.json`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+// 智慧模組精準還原 API
+export async function restoreModularDataApi(
+  data: any,
+  modules: string[],
+  mode: 'replace' | 'merge' = 'replace'
+): Promise<{ success: boolean; message: string; result?: any }> {
+  const res = await fetch('/api/database/restore-modular', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ data, modules, mode })
+  });
+  const resData = await res.json().catch(() => ({}));
+  if (!res.ok || !resData.success) {
+    throw new Error(resData.error || '模組還原失敗');
+  }
+  return resData;
+}
+
+// 將 SQLite 最新資料匯出至 data/seeds/*.json 以供 Git 追蹤
+export async function exportSeedsApi(): Promise<{ success: boolean; message: string }> {
+  const res = await fetch('/api/database/export-seeds', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  const resData = await res.json().catch(() => ({}));
+  if (!res.ok || !resData.success) {
+    throw new Error(resData.error || '匯出 Git 種子資料失敗');
+  }
+  return resData;
 }
 
 // 上傳替換 SQLite 實體檔案、.sql 腳本或 JSON 備份檔 (換機帶著走直接載入)

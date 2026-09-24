@@ -533,9 +533,83 @@ export function validateTaiwanTaxId(taxId?: string): { isValid: boolean; error?:
   return { isValid: false, error: '統一編號邏輯檢查碼不符（請確認是否有打錯數字）' };
 }
 
+export type DatabaseModuleKey = 
+  | 'companies' 
+  | 'customers' 
+  | 'transactions' 
+  | 'categories_claimants' 
+  | 'budgets' 
+  | 'sub_accounts' 
+  | 'director_withdrawals';
+
+export interface ModuleConfigInfo {
+  key: DatabaseModuleKey;
+  label: string;
+  description: string;
+  icon: string;
+  badgeColor: string;
+}
+
+export const DATABASE_MODULE_CONFIGS: Record<DatabaseModuleKey, ModuleConfigInfo> = {
+  companies: {
+    key: 'companies',
+    label: '公司行號主檔',
+    description: '公司全名、統一編號、負責人、銀行帳戶、會計出納與報表抬頭',
+    icon: 'Building2',
+    badgeColor: 'bg-blue-50 text-blue-800 border-blue-200'
+  },
+  customers: {
+    key: 'customers',
+    label: '客戶與廠商名冊',
+    description: '客戶廠商基本資料、聯絡窗口、付款條件、婚喪喜慶禮金與公關事件',
+    icon: 'Users',
+    badgeColor: 'bg-indigo-50 text-indigo-800 border-indigo-200'
+  },
+  transactions: {
+    key: 'transactions',
+    label: '零用金收支流水帳',
+    description: '全歷史收支記錄、金額、發票號碼、傳票編號、憑證與備註',
+    icon: 'FileSpreadsheet',
+    badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-200'
+  },
+  categories_claimants: {
+    key: 'categories_claimants',
+    label: '系統分類與請領人',
+    description: '自訂收支主分類、店家子選單、常用經辦請領人名冊',
+    icon: 'SlidersHorizontal',
+    badgeColor: 'bg-purple-50 text-purple-800 border-purple-200'
+  },
+  sub_accounts: {
+    key: 'sub_accounts',
+    label: '專案採買子帳戶',
+    description: '獨立備用金專款代管帳號、採買明細清單與結算紀錄',
+    icon: 'Package',
+    badgeColor: 'bg-amber-50 text-amber-800 border-amber-200'
+  },
+  budgets: {
+    key: 'budgets',
+    label: '月份預算額度',
+    description: '各月份設定之零用金預算上限與水位警戒百分比',
+    icon: 'Target',
+    badgeColor: 'bg-rose-50 text-rose-800 border-rose-200'
+  },
+  director_withdrawals: {
+    key: 'director_withdrawals',
+    label: '廠長大額提領',
+    description: '廠長/主管專用大額現金提領紀錄與備查備忘',
+    icon: 'Landmark',
+    badgeColor: 'bg-cyan-50 text-cyan-800 border-cyan-200'
+  }
+};
+
 export interface BackupData {
   version: string;
   exportedAt: string;
+  backupType?: 'full' | 'module';
+  moduleKey?: DatabaseModuleKey;
+  moduleLabel?: string;
+  isEncrypted?: boolean;
+  system?: string;
   transactions: Transaction[];
   categories: CategoryConfig[];
   budgets: Record<string, MonthBudget>;
@@ -545,12 +619,16 @@ export interface BackupData {
   companyProfile?: CompanyProfile;
   companies?: CompanyProfile[];
   customers?: Customer[];
+  extraTables?: Record<string, any[]>;
 }
 
-export type RestoreScope = 'full' | 'settings_only' | 'transactions_only';
+export type RestoreScope = 'full' | 'settings_only' | 'transactions_only' | 'modular';
+export type RestoreMode = 'replace' | 'merge';
 
 export interface RestoreOptions {
   scope: RestoreScope;
+  selectedModules?: DatabaseModuleKey[];
+  mode?: RestoreMode; // 'replace' 覆蓋清空取代 | 'merge' 智慧比對追加更新
 }
 
 // 預設常用請領人名單

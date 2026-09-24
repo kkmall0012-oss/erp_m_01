@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "backupType": "module",
+  "moduleKey": "budgets",
+  "exportedAt": "2026-09-24T00:30:17.256Z",
+  "system": "企業零用金與客戶財務管理系統",
+  "moduleLabel": "月份預算額度",
+  "budgets": {
+    "2026-09": {
+      "yearMonth": "2026-09",
+      "budgetAmount": 35000,
+      "alertThresholdPercent": 20
+    }
+  }
+}

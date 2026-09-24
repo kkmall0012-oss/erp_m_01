@@ -639,14 +639,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       }
       let catCount = 0;
       let claimantCount = 0;
-      if (parsed.categories && parsed.categories.length > 0) {
-        updateAndSaveCategories(parsed.categories);
-        setActiveCategoryId(parsed.categories[0].id);
-        catCount = parsed.categories.length;
+      const backupCategories = parsed.data?.categories;
+      const backupClaimants = parsed.data?.claimants;
+      if (backupCategories && backupCategories.length > 0) {
+        updateAndSaveCategories(backupCategories);
+        setActiveCategoryId(backupCategories[0].id);
+        catCount = backupCategories.length;
       }
-      if (parsed.claimants && parsed.claimants.length > 0) {
-        updateAndSaveClaimants(parsed.claimants);
-        claimantCount = parsed.claimants.length;
+      if (backupClaimants && backupClaimants.length > 0) {
+        updateAndSaveClaimants(backupClaimants);
+        claimantCount = backupClaimants.length;
       }
       showToast(`✓ 已從備份檔救回 ${catCount} 個分類與 ${claimantCount} 位請領人！記帳明細未受影響`);
     };

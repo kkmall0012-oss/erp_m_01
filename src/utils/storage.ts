@@ -10,8 +10,11 @@ import {
   CompanyProfile,
   DEFAULT_COMPANIES,
   DEFAULT_COMPANY_PROFILE,
-  Customer
+  Customer,
+  DatabaseModuleKey,
+  DATABASE_MODULE_CONFIGS
 } from '../types';
+import { encryptBackupData, isEncryptedBackup } from './crypto';
 
 const STORAGE_KEYS = {
   TRANSACTIONS: 'expense_tracker_transactions_v1',
@@ -436,8 +439,21 @@ function generateInitialSeedData(): Transaction[] {
   ];
 }
 
-// 產生可存 10 年以上的全本機備份檔 (.json，100% 完整包含公司主檔、客戶資料與所有流水帳目)
-export function exportBackupJSON(
+// 輔助函式：觸發瀏覽器下載檔案
+function triggerBrowserDownload(content: string, filename: string, mimeType: string = 'application/json;charset=utf-8') {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// 產生全本機備份檔 (.json，支援選用 AES-256-GCM 密碼加密保密)
+export async function exportBackupJSON(
   transactions: Transaction[],
   categories: CategoryConfig[],
   budgets: Record<string, MonthBudget>,
@@ -446,14 +462,17 @@ export function exportBackupJSON(
   subAccounts?: SubAccount[],
   companies?: CompanyProfile[],
   companyProfile?: CompanyProfile,
-  customers?: Customer[]
-): void {
+  customers?: Customer[],
+  password?: string
+): Promise<void> {
   const allCompanies = companies && companies.length > 0 ? companies : loadCompanies();
   const defCompany = companyProfile || allCompanies.find(c => c.isDefault) || allCompanies[0] || loadCompanyProfile();
 
   const data: BackupData = {
-    version: '1.4.0',
+    version: '2.0.0',
+    backupType: 'full',
     exportedAt: new Date().toISOString(),
+    system: '企業零用金與客戶財務管理系統',
     transactions,
     categories,
     budgets,
@@ -465,18 +484,92 @@ export function exportBackupJSON(
     customers: customers || []
   };
 
-  const jsonStr = JSON.stringify(data, null, 2);
-  const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
   const now = new Date();
-  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-  a.href = url;
-  a.download = `公司零用金完整備份庫_${dateStr}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+
+  if (password && password.trim().length > 0) {
+    const encrypted = await encryptBackupData(data, password.trim(), 'full');
+    triggerBrowserDownload(
+      JSON.stringify(encrypted, null, 2),
+      `系統全庫安全加密備份_${dateStr}.enc.json`
+    );
+  } else {
+    triggerBrowserDownload(
+      JSON.stringify(data, null, 2),
+      `系統全庫完整備份_${dateStr}.json`
+    );
+  }
+}
+
+// 單獨匯出特定模組備份檔 (.json，支援選用密碼加密)
+export async function exportModularBackupJSON(
+  moduleKey: DatabaseModuleKey,
+  allData: {
+    transactions: Transaction[];
+    categories: CategoryConfig[];
+    budgets: Record<string, MonthBudget>;
+    claimants?: string[];
+    directorWithdrawals?: DirectorWithdrawal[];
+    subAccounts?: SubAccount[];
+    companies?: CompanyProfile[];
+    companyProfile?: CompanyProfile;
+    customers?: Customer[];
+  },
+  password?: string
+): Promise<void> {
+  const config = DATABASE_MODULE_CONFIGS[moduleKey];
+  const moduleLabel = config?.label || moduleKey;
+
+  const modularData: Partial<BackupData> & { moduleKey: DatabaseModuleKey; moduleLabel: string } = {
+    version: '2.0.0',
+    backupType: 'module',
+    moduleKey,
+    moduleLabel,
+    exportedAt: new Date().toISOString(),
+    system: '企業零用金與客戶財務管理系統'
+  } as any;
+
+  switch (moduleKey) {
+    case 'companies':
+      modularData.companies = allData.companies && allData.companies.length > 0 ? allData.companies : loadCompanies();
+      modularData.companyProfile = allData.companyProfile || modularData.companies?.[0];
+      break;
+    case 'customers':
+      modularData.customers = allData.customers || [];
+      break;
+    case 'transactions':
+      modularData.transactions = allData.transactions || [];
+      break;
+    case 'categories_claimants':
+      modularData.categories = allData.categories || DEFAULT_CATEGORIES;
+      modularData.claimants = allData.claimants || loadClaimants();
+      break;
+    case 'sub_accounts':
+      modularData.subAccounts = allData.subAccounts || loadSubAccounts();
+      break;
+    case 'budgets':
+      modularData.budgets = allData.budgets || {};
+      break;
+    case 'director_withdrawals':
+      modularData.directorWithdrawals = allData.directorWithdrawals || loadDirectorWithdrawals();
+      break;
+  }
+
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+
+  if (password && password.trim().length > 0) {
+    const encrypted = await encryptBackupData(modularData, password.trim(), 'module', moduleKey, moduleLabel);
+    triggerBrowserDownload(
+      JSON.stringify(encrypted, null, 2),
+      `模組備份_${moduleLabel}_加密檔_${dateStr}.enc.json`
+    );
+  } else {
+    triggerBrowserDownload(
+      JSON.stringify(modularData, null, 2),
+      `模組備份_${moduleLabel}_${dateStr}.json`
+    );
+  }
 }
 
 // 單獨匯出選單項目與請領人設定 (.json)
@@ -485,52 +578,74 @@ export function exportSettingsBackupJSON(
   claimants: string[]
 ): void {
   const data = {
-    version: '1.4.0',
-    type: 'settings_only',
+    version: '2.0.0',
+    backupType: 'module',
+    moduleKey: 'categories_claimants' as DatabaseModuleKey,
+    moduleLabel: '系統分類與請領人名冊',
     exportedAt: new Date().toISOString(),
     categories,
     claimants
   };
 
-  const jsonStr = JSON.stringify(data, null, 2);
-  const blob = new Blob([jsonStr], { type: 'application/json;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
   const now = new Date();
   const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-  a.href = url;
-  a.download = `公司零用金_主題分類與請領人名冊_${dateStr}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  triggerBrowserDownload(JSON.stringify(data, null, 2), `公司零用金_主題分類與請領人名冊_${dateStr}.json`);
 }
 
-// 還原備份檔 (.json，支援完整庫備份或單獨分類備份)
-export function parseBackupJSON(jsonStr: string): BackupData | null {
+// 解析還原備份檔 (.json，支援完整庫備份或單獨模組備份，自動偵測加密)
+export function parseBackupJSON(jsonStr: string): { data?: BackupData; isEncrypted: boolean; encryptedPayload?: any } | null {
   try {
-    const data = JSON.parse(jsonStr);
-    const hasTransactions = Array.isArray(data.transactions);
-    const hasCategories = Array.isArray(data.categories);
-    const hasClaimants = Array.isArray(data.claimants);
-    const hasCustomers = Array.isArray(data.customers);
+    const parsed = JSON.parse(jsonStr);
 
-    if (!hasTransactions && !hasCategories && !hasClaimants && !hasCustomers) {
-      throw new Error('無效的備份檔案格式：缺少交易紀錄、分類資料或客戶資料');
+    // 1. 檢驗是否為加密檔案
+    if (isEncryptedBackup(parsed)) {
+      return { isEncrypted: true, encryptedPayload: parsed };
     }
-    return {
-      version: data.version || '1.4.0',
-      exportedAt: data.exportedAt || new Date().toISOString(),
-      transactions: hasTransactions ? data.transactions : [],
-      categories: hasCategories ? data.categories : DEFAULT_CATEGORIES,
-      budgets: typeof data.budgets === 'object' && data.budgets !== null ? data.budgets : {},
-      claimants: hasClaimants ? data.claimants : DEFAULT_CLAIMANTS,
-      directorWithdrawals: Array.isArray(data.directorWithdrawals) ? data.directorWithdrawals : [],
-      subAccounts: Array.isArray(data.subAccounts) ? data.subAccounts : [],
-      companies: Array.isArray(data.companies) ? data.companies : undefined,
-      companyProfile: data.companyProfile,
-      customers: Array.isArray(data.customers) ? data.customers : []
+
+    // 2. 檢驗模組與內容
+    const hasTransactions = Array.isArray(parsed.transactions);
+    const hasCategories = Array.isArray(parsed.categories);
+    const hasClaimants = Array.isArray(parsed.claimants);
+    const hasCustomers = Array.isArray(parsed.customers);
+    const hasCompanies = Array.isArray(parsed.companies) || !!parsed.companyProfile;
+    const hasSubAccounts = Array.isArray(parsed.subAccounts);
+    const hasBudgets = typeof parsed.budgets === 'object' && parsed.budgets !== null;
+    const hasDirectorWithdrawals = Array.isArray(parsed.directorWithdrawals);
+
+    const hasAnyValidData = 
+      hasTransactions || 
+      hasCategories || 
+      hasClaimants || 
+      hasCustomers || 
+      hasCompanies || 
+      hasSubAccounts || 
+      hasBudgets || 
+      hasDirectorWithdrawals;
+
+    if (!hasAnyValidData) {
+      throw new Error('無效的備份檔案格式：找不到任何合法的模組資料節點');
+    }
+
+    const backup: BackupData = {
+      version: parsed.version || '2.0.0',
+      backupType: parsed.backupType || (parsed.moduleKey ? 'module' : 'full'),
+      moduleKey: parsed.moduleKey,
+      moduleLabel: parsed.moduleLabel,
+      exportedAt: parsed.exportedAt || new Date().toISOString(),
+      system: parsed.system,
+      transactions: hasTransactions ? parsed.transactions : [],
+      categories: hasCategories ? parsed.categories : DEFAULT_CATEGORIES,
+      budgets: hasBudgets ? parsed.budgets : {},
+      claimants: hasClaimants ? parsed.claimants : DEFAULT_CLAIMANTS,
+      directorWithdrawals: hasDirectorWithdrawals ? parsed.directorWithdrawals : [],
+      subAccounts: hasSubAccounts ? parsed.subAccounts : [],
+      companies: Array.isArray(parsed.companies) ? parsed.companies : (parsed.companyProfile ? [parsed.companyProfile] : undefined),
+      companyProfile: parsed.companyProfile,
+      customers: hasCustomers ? parsed.customers : [],
+      extraTables: parsed.extraTables
     };
+
+    return { data: backup, isEncrypted: false };
   } catch (e) {
     console.error('Failed to parse backup JSON', e);
     return null;

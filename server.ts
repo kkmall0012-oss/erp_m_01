@@ -30,9 +30,14 @@ import {
   updateCustomer,
   deleteCustomer,
   replaceAllCustomers,
+  getAllCustomerEvents,
+  getAllCustomerContacts,
+  getAllSubAccountItems,
   replaceWithDatabaseBinary,
   generateSqlDump,
   getFullDatabaseJsonExport,
+  getModularDatabaseJsonExport,
+  restoreModularData,
   persist
 } from './server/db';
 
@@ -421,6 +426,36 @@ async function startServer() {
     }
   });
 
+  // 取得所有正規化交際紅白包與客戶往來事件記錄 (支援 SQL JOIN 客戶名稱)
+  app.get('/api/customer-events', async (req, res) => {
+    try {
+      const events = await getAllCustomerEvents();
+      res.json({ success: true, data: events });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 取得所有正規化客戶/廠商主要與次要聯絡人資料
+  app.get('/api/customer-contacts', async (req, res) => {
+    try {
+      const contacts = await getAllCustomerContacts();
+      res.json({ success: true, data: contacts });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 取得所有專款專用子帳戶明細項目 (sub_account_items)
+  app.get('/api/sub-account-items', async (req, res) => {
+    try {
+      const items = await getAllSubAccountItems();
+      res.json({ success: true, data: items });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // =================================================================
   // 資料庫帶著走特權 API：實體 SQLite 檔案下載與還原
   // =================================================================
@@ -460,20 +495,90 @@ async function startServer() {
     }
   });
 
-  // 匯出完整全庫 JSON 備份檔 (.json)，包含客戶通訊、零用金流水帳、公司主檔與所有附加資料表
+  // 匯出完整全庫或單一模組 JSON 備份檔 (.json)
   app.get('/api/database/dump-json', async (req, res) => {
     try {
       persist();
-      const fullJson = await getFullDatabaseJsonExport();
+      const moduleKey = req.query.module ? String(req.query.module) : undefined;
       const now = new Date();
-      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-      const filename = `petty_cash_full_backup_${dateStr}.json`;
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
 
+      if (moduleKey) {
+        const modularJson = await getModularDatabaseJsonExport(moduleKey);
+        const filename = `backup_${moduleKey}_${dateStr}.json`;
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        return res.send(JSON.stringify(modularJson, null, 2));
+      }
+
+      const fullJson = await getFullDatabaseJsonExport();
+      const filename = `petty_cash_full_backup_${dateStr}.json`;
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.send(JSON.stringify(fullJson, null, 2));
     } catch (err: any) {
       console.error('Error generating JSON backup:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // 智慧模組精準還原 API (支援選擇模組與覆蓋/合併模式)
+  app.post('/api/database/restore-modular', async (req, res) => {
+    try {
+      const { data, modules, mode } = req.body;
+      if (!data || typeof data !== 'object') {
+        return res.status(400).json({ success: false, error: '請提供有效的備份資料內容' });
+      }
+      if (!Array.isArray(modules) || modules.length === 0) {
+        return res.status(400).json({ success: false, error: '請至少選取一個欲還原的模組' });
+      }
+
+      const result = await restoreModularData(data, modules, mode || 'replace');
+      res.json({
+        success: true,
+        message: `🎉 所選 ${modules.length} 個模組資料已成功完成${mode === 'merge' ? '智慧合併追加' : '鏡像覆蓋替換'}還原！`,
+        result
+      });
+    } catch (err: any) {
+      console.error('Error restoring modular backup:', err);
+      res.status(500).json({ success: false, error: `模組還原失敗: ${err.message}` });
+    }
+  });
+
+  // 將當前 SQLite 實體資料庫同步匯出為 Git 種子資料集 (data/seeds/*.json)
+  app.post('/api/database/export-seeds', async (req, res) => {
+    try {
+      persist();
+      const seedsDir = path.join(process.cwd(), 'data', 'seeds');
+      if (!fs.existsSync(seedsDir)) {
+        fs.mkdirSync(seedsDir, { recursive: true });
+      }
+
+      const modules = [
+        'companies',
+        'customers',
+        'transactions',
+        'categories_claimants',
+        'sub_accounts',
+        'budgets',
+        'director_withdrawals'
+      ];
+
+      for (const mod of modules) {
+        const modData = await getModularDatabaseJsonExport(mod);
+        fs.writeFileSync(
+          path.join(seedsDir, `${mod}.json`),
+          JSON.stringify(modData, null, 2),
+          'utf-8'
+        );
+      }
+
+      res.json({
+        success: true,
+        message: '🎉 已成功將最新資料庫資料匯出至 data/seeds/*.json！可用於 Git 追蹤與接力協同開發。'
+      });
+    } catch (err: any) {
+      console.error('Error exporting seeds:', err);
       res.status(500).json({ success: false, error: err.message });
     }
   });
