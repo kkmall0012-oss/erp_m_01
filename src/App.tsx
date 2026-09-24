@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   BookOpen, 
   Building2, 
@@ -108,6 +108,22 @@ export default function App() {
 
   // 0. 客製化 ERP 大框架模組狀態 ('home' | 'petty_cash' | 'fleet' | 'assets' | 'workflow' | 'database')
   const [activeApp, setActiveApp] = useState<ErpAppId>('petty_cash');
+  
+  // 🔄 統一的模組切換函數：每次切換都自動捲動到頁面最上方
+  const switchToApp = (appId: ErpAppId) => {
+    setActiveApp(appId);
+  };
+  
+  // 📜 主工作區滾動容器 ref
+  const mainContentRef = useRef<HTMLDivElement>(null);
+  
+  // ⬆️ 每次切換模組時，自動將右側內容捲軸移到最上方
+  useEffect(() => {
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTop = 0;
+    }
+  }, [activeApp]);
+  
   // 左側邊欄展開/收合 (預設 true：仿鼎新經典圖示+下方文字直立欄，展開為 200px 抽屜)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
 
@@ -722,7 +738,7 @@ export default function App() {
         companies={companies}
         activeCompanyId={activeCompanyId}
         onSelectCompany={(id) => setActiveCompanyId(id)}
-        onGoToCompanySettings={() => setActiveApp('company')}
+        onGoToCompanySettings={() => switchToApp('company')}
       />
 
       {/* 2. 主體架構：左側直立選單 + 右側工作視窗 */}
@@ -730,17 +746,17 @@ export default function App() {
         {/* 左側鼎新風格直立導航欄 (整合各小程式入口) */}
         <ErpSidebar
           activeApp={activeApp}
-          onSelectApp={(id) => setActiveApp(id)}
+          onSelectApp={(id) => switchToApp(id)}
           isCollapsed={isSidebarCollapsed}
         />
 
         {/* 右側主工作視窗 (各功能視窗獨立純淨排版) */}
-        <div className="flex-1 flex flex-col overflow-y-auto bg-stone-50/90 min-h-0">
+        <div ref={mainContentRef} className="flex-1 flex flex-col overflow-y-auto bg-stone-50/90 min-h-0">
           {/* 小程式 1：系統總覽首頁 */}
           {activeApp === 'home' && (
             <div className="p-4 sm:p-6 lg:p-8">
               <ErpDashboardView
-                onSelectApp={(id) => setActiveApp(id)}
+                onSelectApp={(id) => switchToApp(id)}
                 transactions={activeTransactions}
                 cashOnHand={cashOnHand}
                 currentYearMonth={currentYearMonth}
@@ -756,7 +772,7 @@ export default function App() {
                 companies={companies}
                 activeCompanyId={activeCompanyId}
                 onGoToReports={() => {
-                  setActiveApp('petty_cash');
+                  switchToApp('petty_cash');
                   setActiveTab('reports');
                   setReportsSubTab('center');
                 }}
@@ -787,7 +803,7 @@ export default function App() {
                 onUpdateTransaction={handleUpdateTransaction}
                 onDeleteTransaction={handleDeleteTransaction}
                 onRefreshCustomers={reloadFromDb}
-                onSwitchToSuppliers={() => setActiveApp('suppliers')}
+                onSwitchToSuppliers={() => switchToApp('suppliers')}
               />
             </div>
           )}
@@ -806,7 +822,7 @@ export default function App() {
                 onUpdateTransaction={handleUpdateTransaction}
                 onDeleteTransaction={handleDeleteTransaction}
                 onRefreshCustomers={reloadFromDb}
-                onSwitchToCustomers={() => setActiveApp('customers')}
+                onSwitchToCustomers={() => switchToApp('customers')}
               />
             </div>
           )}
@@ -1092,7 +1108,7 @@ export default function App() {
             <div className="p-4 sm:p-6 lg:p-8">
               <ErpDatabaseView
                 onOpenBackupModal={() => setIsBackupModalOpen(true)}
-                onGoToPettyCash={() => setActiveApp('petty_cash')}
+                onGoToPettyCash={() => switchToApp('petty_cash')}
                 onReloadData={reloadFromDb}
               />
             </div>
@@ -1103,8 +1119,8 @@ export default function App() {
             <div className="p-4 sm:p-6 lg:p-8">
               <ErpModulePlaceholder
                 app={activeAppItem}
-                onGoToPettyCash={() => setActiveApp('petty_cash')}
-                onGoToHome={() => setActiveApp('home')}
+                onGoToPettyCash={() => switchToApp('petty_cash')}
+                onGoToHome={() => switchToApp('home')}
               />
             </div>
           )}
