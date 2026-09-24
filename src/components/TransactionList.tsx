@@ -12,7 +12,11 @@ import {
   Users, 
   Coins, 
   Car,
-  Building2
+  Building2,
+  Lock,
+  Eye,
+  EyeOff,
+  User
 } from 'lucide-react';
 import { Transaction, CategoryConfig, CompanyProfile } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -40,14 +44,21 @@ export const TransactionList: React.FC<TransactionListProps> = ({
   const [selectedFilterCategory, setSelectedFilterCategory] = useState<string>('all');
   const [scope, setScope] = useState<'month' | 'all'>('month');
   const [itemToDelete, setItemToDelete] = useState<Transaction | null>(null);
+  // 查帳防護模式 (隱藏敏感機密私帳)
+  const [hideConfidential, setHideConfidential] = useState<boolean>(false);
 
   // 1. 篩選月份或全歷史
   const baseList = scope === 'month'
     ? transactions.filter((t) => t.date.startsWith(currentYearMonth))
     : [...transactions];
 
-  // 2. 篩選分類與搜尋詞
+  // 2. 篩選分類、查帳防護、與搜尋詞
   const filteredList = baseList.filter((t) => {
+    // 查帳隱藏機密帳目過濾
+    if (hideConfidential && t.isConfidential) {
+      return false;
+    }
+
     const matchCategory = selectedFilterCategory === 'all' || t.categoryId === selectedFilterCategory || t.categoryName === selectedFilterCategory;
     const matchSearch =
       searchTerm === '' ||
@@ -106,6 +117,30 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
         {/* 篩選控制器 */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* 查帳隱私/機密防護切換鈕 */}
+          <button
+            type="button"
+            onClick={() => setHideConfidential(prev => !prev)}
+            title={hideConfidential ? "目前已隱藏機密私人款項，點擊解除" : "點擊啟動查帳隱藏 (遮蔽機密私帳)"}
+            className={`px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+              hideConfidential
+                ? 'bg-rose-50 text-rose-700 border-rose-300 shadow-2xs ring-1 ring-rose-400/20'
+                : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100'
+            }`}
+          >
+            {hideConfidential ? (
+              <>
+                <EyeOff className="w-3.5 h-3.5 text-rose-600" />
+                <span>查帳防護中 (機密已隱藏)</span>
+              </>
+            ) : (
+              <>
+                <Lock className="w-3.5 h-3.5 text-stone-400" />
+                <span>查帳防護</span>
+              </>
+            )}
+          </button>
+
           {/* 區間切換 */}
           <div className="inline-flex p-1 bg-stone-200/80 rounded-xl text-xs font-semibold">
             <button
@@ -321,7 +356,20 @@ export const TransactionList: React.FC<TransactionListProps> = ({
 
                     {/* 第二層細項 */}
                     <td className="py-3 px-4 font-bold text-stone-800 whitespace-nowrap">
-                      {item.subItem}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span>{item.subItem}</span>
+                        {item.isConfidential && (
+                          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                            <Lock className="w-2.5 h-2.5" />
+                            <span>機密</span>
+                          </span>
+                        )}
+                        {item.accountingCategory === 'internal_management' && (
+                          <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-semibold bg-purple-50 text-purple-700 border border-purple-200">
+                            私帳
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* 用餐人數 */}

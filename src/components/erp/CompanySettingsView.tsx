@@ -18,9 +18,18 @@ import {
   Check,
   Layers,
   ArrowRight,
-  BookmarkCheck
+  BookmarkCheck,
+  Star,
+  Edit2,
+  CreditCard,
+  PhoneCall,
+  Lock,
+  Eye,
+  EyeOff,
+  User,
+  X
 } from 'lucide-react';
-import { CompanyProfile, DEFAULT_COMPANIES } from '../../types';
+import { CompanyProfile, CompanyPhoneEntry, CompanyBankAccount, DEFAULT_COMPANIES } from '../../types';
 import { saveCompaniesApi, saveCompanyProfileApi, deleteCompanyApi } from '../../services/api';
 import { ConfirmDialog } from '../ConfirmDialog';
 
@@ -111,6 +120,243 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
     })));
   };
 
+  // 處理多筆電話/傳真清單
+  const phonesList: CompanyPhoneEntry[] = useMemo(() => {
+    if (Array.isArray(currentCompany.phones) && currentCompany.phones.length > 0) {
+      return currentCompany.phones;
+    }
+    const list: CompanyPhoneEntry[] = [];
+    if (currentCompany.phone) {
+      list.push({
+        id: `${currentCompany.id}_ph_1`,
+        type: 'phone',
+        number: currentCompany.phone,
+        label: '代表號電話',
+        isDefault: true,
+        sortOrder: 1
+      });
+    }
+    if (currentCompany.fax) {
+      list.push({
+        id: `${currentCompany.id}_fx_1`,
+        type: 'fax',
+        number: currentCompany.fax,
+        label: '傳真專線',
+        isDefault: true,
+        sortOrder: 2
+      });
+    }
+    return list;
+  }, [currentCompany.phones, currentCompany.phone, currentCompany.fax, currentCompany.id]);
+
+  const handleUpdatePhones = (newPhones: CompanyPhoneEntry[]) => {
+    const defaultPhone = newPhones.find(p => p.isDefault && p.type !== 'fax') || newPhones.find(p => p.type !== 'fax');
+    const defaultFax = newPhones.find(p => p.isDefault && p.type === 'fax') || newPhones.find(p => p.type === 'fax');
+
+    setCompanyList(prev => prev.map(c => {
+      if (c.id === editingCompanyId) {
+        return {
+          ...c,
+          phones: newPhones,
+          phone: defaultPhone ? defaultPhone.number : '',
+          fax: defaultFax ? defaultFax.number : ''
+        };
+      }
+      return c;
+    }));
+    setSaveSuccess(false);
+  };
+
+  const handleAddPhone = (type: 'phone' | 'fax' | 'mobile' | 'other' = 'phone') => {
+    const nextOrder = phonesList.length + 1;
+    const isFirstOfType = phonesList.filter(p => p.type === type).length === 0;
+    const newEntry: CompanyPhoneEntry = {
+      id: `ph_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      type,
+      number: '',
+      label: type === 'phone' ? '公司電話' : type === 'fax' ? '傳真號碼' : type === 'mobile' ? '行動電話' : '其他分機',
+      isDefault: isFirstOfType,
+      sortOrder: nextOrder
+    };
+    handleUpdatePhones([...phonesList, newEntry]);
+  };
+
+  const handleRemovePhone = (index: number) => {
+    const target = phonesList[index];
+    const updated = phonesList.filter((_, idx) => idx !== index);
+    if (target?.isDefault && updated.length > 0) {
+      const sameType = updated.find(p => p.type === target.type);
+      if (sameType) sameType.isDefault = true;
+    }
+    handleUpdatePhones(updated);
+  };
+
+  const handlePhoneFieldChange = (index: number, field: keyof CompanyPhoneEntry, value: any) => {
+    const updated = phonesList.map((p, idx) => {
+      if (idx === index) {
+        return { ...p, [field]: value };
+      }
+      return p;
+    });
+    handleUpdatePhones(updated);
+  };
+
+  const handleSetDefaultPhone = (index: number) => {
+    const target = phonesList[index];
+    if (!target) return;
+    const isFax = target.type === 'fax';
+    const updated = phonesList.map((p, idx) => {
+      if (isFax) {
+        if (p.type === 'fax') {
+          return { ...p, isDefault: idx === index };
+        }
+      } else {
+        if (p.type !== 'fax') {
+          return { ...p, isDefault: idx === index };
+        }
+      }
+      return p;
+    });
+    handleUpdatePhones(updated);
+  };
+
+  // 處理多筆銀行帳戶清單
+  const bankAccountsList: CompanyBankAccount[] = useMemo(() => {
+    if (Array.isArray(currentCompany.bankAccounts) && currentCompany.bankAccounts.length > 0) {
+      return currentCompany.bankAccounts;
+    }
+    if (currentCompany.bankName || currentCompany.bankAccount) {
+      return [
+        {
+          id: `${currentCompany.id}_bk_1`,
+          bankName: currentCompany.bankName || '臺灣銀行',
+          bankBranch: currentCompany.bankBranch || '',
+          bankCode: currentCompany.bankCode || '',
+          bankAccount: currentCompany.bankAccount || '',
+          accountName: currentCompany.accountName || currentCompany.name || '',
+          accountType: 'operating',
+          isDefault: true,
+          note: '主要往來營運扣款帳戶',
+          sortOrder: 1
+        }
+      ];
+    }
+    return [];
+  }, [currentCompany.bankAccounts, currentCompany.bankName, currentCompany.bankBranch, currentCompany.bankCode, currentCompany.bankAccount, currentCompany.accountName, currentCompany.name, currentCompany.id]);
+
+  const handleUpdateBankAccounts = (newAccounts: CompanyBankAccount[]) => {
+    const defaultBank = newAccounts.find(b => b.isDefault) || newAccounts[0];
+    setCompanyList(prev => prev.map(c => {
+      if (c.id === editingCompanyId) {
+        return {
+          ...c,
+          bankAccounts: newAccounts,
+          bankName: defaultBank ? defaultBank.bankName : '',
+          bankBranch: defaultBank ? (defaultBank.bankBranch || '') : '',
+          bankCode: defaultBank ? (defaultBank.bankCode || '') : '',
+          bankAccount: defaultBank ? defaultBank.bankAccount : '',
+          accountName: defaultBank ? defaultBank.accountName : ''
+        };
+      }
+      return c;
+    }));
+    setSaveSuccess(false);
+  };
+
+  // 銀行帳戶新增/編輯彈窗狀態
+  const [bankModalOpen, setBankModalOpen] = useState<boolean>(false);
+  const [editingBankIndex, setEditingBankIndex] = useState<number | null>(null);
+  const [bankFormData, setBankFormData] = useState<CompanyBankAccount>({
+    id: '',
+    bankName: '',
+    bankBranch: '',
+    bankCode: '',
+    branchCode: '',
+    bankAccount: '',
+    accountName: '',
+    accountType: 'operating',
+    isDefault: false,
+    isConfidential: false,
+    isPrivateAccount: false,
+    note: '',
+    sortOrder: 1
+  });
+
+  const openAddBankModal = () => {
+    setEditingBankIndex(null);
+    setBankFormData({
+      id: `bk_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      bankName: '',
+      bankBranch: '',
+      bankCode: '',
+      branchCode: '',
+      bankAccount: '',
+      accountName: currentCompany.name || '',
+      accountType: bankAccountsList.length === 0 ? 'operating' : 'petty_cash',
+      isDefault: bankAccountsList.length === 0,
+      isConfidential: currentCompany.isConfidential || false,
+      isPrivateAccount: currentCompany.entityType === 'individual',
+      note: '',
+      sortOrder: bankAccountsList.length + 1
+    });
+    setBankModalOpen(true);
+  };
+
+  const openEditBankModal = (index: number) => {
+    const acc = bankAccountsList[index];
+    if (!acc) return;
+    setEditingBankIndex(index);
+    setBankFormData({ ...acc });
+    setBankModalOpen(true);
+  };
+
+  const handleSaveBankModal = () => {
+    if (!bankFormData.bankName.trim() && !bankFormData.bankAccount.trim()) {
+      alert('請填寫金融機構名稱或帳號');
+      return;
+    }
+    let updated: CompanyBankAccount[];
+    if (editingBankIndex === null) {
+      // 新增
+      if (bankFormData.isDefault || bankAccountsList.length === 0) {
+        updated = bankAccountsList.map(b => ({ ...b, isDefault: false }));
+        updated.push({ ...bankFormData, isDefault: true });
+      } else {
+        updated = [...bankAccountsList, bankFormData];
+      }
+    } else {
+      // 編輯
+      updated = bankAccountsList.map((b, idx) => {
+        if (idx === editingBankIndex) {
+          return bankFormData;
+        }
+        if (bankFormData.isDefault) {
+          return { ...b, isDefault: false };
+        }
+        return b;
+      });
+    }
+    handleUpdateBankAccounts(updated);
+    setBankModalOpen(false);
+  };
+
+  const handleRemoveBankAccount = (index: number) => {
+    const target = bankAccountsList[index];
+    const updated = bankAccountsList.filter((_, idx) => idx !== index);
+    if (target?.isDefault && updated.length > 0) {
+      updated[0].isDefault = true;
+    }
+    handleUpdateBankAccounts(updated);
+  };
+
+  const handleSetDefaultBankAccount = (index: number) => {
+    const updated = bankAccountsList.map((b, idx) => ({
+      ...b,
+      isDefault: idx === index
+    }));
+    handleUpdateBankAccounts(updated);
+  };
+
   // 新增關係企業行號
   const handleAddCompany = () => {
     const nextIdx = companyList.length + 1;
@@ -123,21 +369,48 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
       representative: currentCompany?.representative || '',
       phone: currentCompany?.phone || '',
       fax: '',
+      phones: [
+        {
+          id: `ph_${Date.now()}_1`,
+          type: 'phone',
+          number: '',
+          label: '公司代表號',
+          isDefault: true,
+          sortOrder: 1
+        }
+      ],
       email: '',
       website: '',
       postalCode: '',
       address: '',
-      bankName: '',
+      bankName: '臺灣銀行',
       bankBranch: '',
-      bankCode: '',
+      bankCode: '004',
       bankAccount: '',
-      accountName: '',
+      accountName: `新關係企業行號 ${nextIdx}`,
+      bankAccounts: [
+        {
+          id: `bk_${Date.now()}_1`,
+          bankName: '臺灣銀行',
+          bankBranch: '',
+          bankCode: '004',
+          bankAccount: '',
+          accountName: `新關係企業行號 ${nextIdx}`,
+          accountType: 'operating',
+          isDefault: true,
+          note: '主要營運往來帳戶',
+          sortOrder: 1
+        }
+      ],
       chiefAccountant: currentCompany?.chiefAccountant || '',
       cashier: currentCompany?.cashier || '',
       reportHeader: `新關係企業行號 ${nextIdx} 財務零用金月報表`,
       invoiceBuyerName: '',
       taxInvoiceNote: '本單據符合所得稅法各項規定憑證，經辦與權責長官已核訖。',
       color: COMPANY_COLORS[(nextIdx - 1) % COMPANY_COLORS.length].value,
+      entityType: 'corporate',
+      isJointHeader: true,
+      isConfidential: false,
       isDefault: false,
       sortOrder: nextIdx,
       updatedAt: Date.now()
@@ -326,10 +599,26 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                      {comp.entityType === 'individual' ? (
+                        <span className="text-[9px] bg-purple-100 text-purple-900 border border-purple-300 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                          <User className="w-2.5 h-2.5" />
+                          <span>個人/私人戶</span>
+                        </span>
+                      ) : (
+                        <span className="text-[9px] bg-blue-50 text-blue-800 border border-blue-200 px-1.5 py-0.5 rounded-full font-medium">
+                          法人公司
+                        </span>
+                      )}
+                      {comp.isConfidential && (
+                        <span className="text-[9px] bg-rose-100 text-rose-800 border border-rose-300 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5">
+                          <Lock className="w-2.5 h-2.5" />
+                          <span>機密</span>
+                        </span>
+                      )}
                       {comp.isDefault && (
                         <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 px-1.5 py-0.5 rounded-full font-bold">
-                          ★預設主要公司
+                          ★預設主要
                         </span>
                       )}
                     </div>
@@ -340,8 +629,24 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                   </div>
 
                   <div className="mt-1 flex items-center justify-between text-[11px] font-mono text-stone-500">
-                    <span>統編：{comp.taxId || '未設定統編'}</span>
-                    {comp.representative && <span>負責人：{comp.representative}</span>}
+                    <span>
+                      {comp.entityType === 'individual' && !comp.taxId 
+                        ? '自然人 (無統編)' 
+                        : `統編：${comp.taxId || '未設定'}`}
+                    </span>
+                    {comp.representative && <span>{comp.entityType === 'individual' ? '姓名' : '負責人'}：{comp.representative}</span>}
+                  </div>
+                  
+                  <div className="mt-1 flex items-center gap-1.5 text-[10px]">
+                    {comp.isJointHeader !== false ? (
+                      <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
+                        ✓ 列入聯名表單抬頭
+                      </span>
+                    ) : (
+                      <span className="text-stone-500 bg-stone-100 px-1.5 py-0.2 rounded border border-stone-200">
+                        ✕ 排除於聯名抬頭
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -459,7 +764,12 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
           }`}
         >
           <Phone className="w-3.5 h-3.5" />
-          <span>2. 聯絡方式與通訊地址</span>
+          <span>2. 聯絡方式與多筆電話/傳真</span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+            activeSubTab === 'contact' ? 'bg-white/20 text-white' : 'bg-stone-200 text-stone-700'
+          }`}>
+            {phonesList.length}
+          </span>
         </button>
 
         <button
@@ -472,7 +782,12 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
           }`}
         >
           <Landmark className="w-3.5 h-3.5" />
-          <span>3. 金融往來銀行帳戶 (出納撥付款主檔)</span>
+          <span>3. 金融往來銀行帳戶主檔</span>
+          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+            activeSubTab === 'finance' ? 'bg-white/20 text-white' : 'bg-stone-200 text-stone-700'
+          }`}>
+            {bankAccountsList.length}
+          </span>
         </button>
 
         <button
@@ -534,34 +849,95 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                 </div>
               </div>
 
+              {/* 組織主體性質 (公司法人 vs 個人/私人名義) */}
+              <div className="md:col-span-2 bg-gradient-to-r from-stone-50 to-blue-50/40 p-4 rounded-xl border border-stone-200 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <label className="block text-xs font-bold text-stone-800">
+                      組織實體性質 (主體分類)
+                    </label>
+                    <p className="text-[11px] text-stone-500 mt-0.5">
+                      區分營利事業登記之正式法人公司，或是無統編之個人私帳戶（接案未開發票、私人匯款等專用）
+                    </p>
+                  </div>
+
+                  <div className="inline-flex p-1 bg-stone-200/70 rounded-xl text-xs font-bold">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleChange('entityType', 'corporate');
+                        handleChange('isJointHeader', true);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                        currentCompany.entityType !== 'individual'
+                          ? 'bg-white text-blue-700 shadow-xs font-extrabold'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      <Building2 className="w-3.5 h-3.5" />
+                      <span>正式公司 / 行號法人</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleChange('entityType', 'individual');
+                        handleChange('isJointHeader', false);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                        currentCompany.entityType === 'individual'
+                          ? 'bg-white text-purple-700 shadow-xs font-extrabold'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      <User className="w-3.5 h-3.5" />
+                      <span>個人 / 私人名義 (無統編)</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 個人/私帳提示區塊 */}
+                {currentCompany.entityType === 'individual' && (
+                  <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 text-xs text-purple-900 space-y-1">
+                    <div className="font-bold flex items-center gap-1.5">
+                      <span>💡 個人/無統編主體特點：</span>
+                    </div>
+                    <p className="text-purple-800/90 leading-relaxed text-[11px]">
+                      適用於工程無開發票、匯入負責人私人戶之接案收支。統一編號自動轉為免填，系統會自動將其排除於對外三家公司聯合表單抬頭，避免給客人的請款單或正式報表出現個人姓名突兀問題。
+                    </p>
+                  </div>
+                )}
+              </div>
+
               {/* 公司完整登記名稱 */}
               <div className="md:col-span-2">
                 <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  公司/行號正式全名 <span className="text-rose-500">*</span>
+                  {currentCompany.entityType === 'individual' ? '個人名稱 / 私人主體名稱' : '公司/行號正式全名'} <span className="text-rose-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={currentCompany.name}
                   onChange={(e) => handleChange('name', e.target.value)}
-                  placeholder="例如：田頭工程有限公司、田碩工程有限公司、田馨企業社"
+                  placeholder={currentCompany.entityType === 'individual' ? '例如：李永勝 (私人戶)' : '例如：田頭工程有限公司、田碩工程有限公司、田馨企業社'}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent font-medium"
                 />
                 <span className="text-[11px] text-stone-500 mt-1 block">
-                  將印於正式請款單、支出證明單、零用金報表之大抬頭。
+                  {currentCompany.entityType === 'individual'
+                    ? '內部記帳與私人帳戶出納歸屬使用。'
+                    : '將印於正式請款單、支出證明單、零用金報表之大抬頭。'}
                 </span>
               </div>
 
               {/* 公司簡稱 */}
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  公司/行號簡稱
+                  {currentCompany.entityType === 'individual' ? '個人簡稱 / 顯示代號' : '公司/行號簡稱'}
                 </label>
                 <input
                   type="text"
                   value={currentCompany.shortName || ''}
                   onChange={(e) => handleChange('shortName', e.target.value)}
-                  placeholder="例如：田頭工程、田碩工程、田馨企業"
+                  placeholder={currentCompany.entityType === 'individual' ? '例如：李永勝私帳' : '例如：田頭工程、田碩工程、田馨企業'}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
                 />
                 <span className="text-[11px] text-stone-500 mt-1 block">
@@ -573,31 +949,35 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1.5 flex items-center justify-between">
                   <span>統一編號 (統編)</span>
-                  {!isTaxIdValid && (
+                  {currentCompany.entityType === 'individual' ? (
+                    <span className="text-stone-400 font-normal text-[11px]">個人主體免填統編</span>
+                  ) : !isTaxIdValid ? (
                     <span className="text-rose-600 font-normal text-[11px]">
                       統編格式應為 8 碼純數字
                     </span>
-                  )}
+                  ) : null}
                 </label>
                 <input
                   type="text"
                   maxLength={8}
                   value={currentCompany.taxId || ''}
                   onChange={(e) => handleChange('taxId', e.target.value.replace(/\D/g, ''))}
-                  placeholder="例如：13044353"
+                  placeholder={currentCompany.entityType === 'individual' ? '個人無統編 (可留空)' : '例如：13044353'}
                   className={`w-full px-3.5 py-2.5 rounded-xl border text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent ${
-                    !isTaxIdValid ? 'border-rose-400 bg-rose-50/40 text-rose-900' : 'border-stone-300'
+                    !isTaxIdValid && currentCompany.entityType !== 'individual' ? 'border-rose-400 bg-rose-50/40 text-rose-900' : 'border-stone-300'
                   }`}
                 />
                 <span className="text-[11px] text-stone-500 mt-1 block">
-                  台灣營利事業登記 8 碼，報銷或開立統一發票驗證用。
+                  {currentCompany.entityType === 'individual' 
+                    ? '若無設立商號或公司稅籍，直接保留空白即可。'
+                    : '台灣營利事業登記 8 碼，報銷或開立統一發票驗證用。'}
                 </span>
               </div>
 
               {/* 代表人 / 負責人 */}
               <div>
                 <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  負責人 / 代表人姓名
+                  {currentCompany.entityType === 'individual' ? '個人負責人姓名' : '負責人 / 代表人姓名'}
                 </label>
                 <input
                   type="text"
@@ -606,6 +986,44 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
                   placeholder="例如：李永勝"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
                 />
+              </div>
+
+              {/* 表單聯名抬頭與查帳機密隱藏進階屬性 */}
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                {/* 1. 對外表單聯合抬頭 */}
+                <div className="p-3.5 rounded-xl border border-stone-200 bg-stone-50/60 space-y-1.5">
+                  <label className="flex items-center gap-2 text-xs font-bold text-stone-800 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={currentCompany.isJointHeader !== false}
+                      onChange={(e) => handleChange('isJointHeader', e.target.checked)}
+                      className="w-4 h-4 text-[#0066cc] rounded border-stone-300 focus:ring-[#0066cc]"
+                    />
+                    <span>納入「對外三間公司聯合表單大抬頭」</span>
+                  </label>
+                  <p className="text-[11px] text-stone-500 ml-6 leading-relaxed">
+                    預設勾選。若取消勾選（如個人私人戶），產出客戶對外請款單或三家公司聯名月報表時，將<strong>自動隱藏此名稱</strong>，絕不會印出個人名字避免突兀。
+                  </p>
+                </div>
+
+                {/* 2. 查帳機密隱藏屬性 */}
+                <div className="p-3.5 rounded-xl border border-rose-200 bg-rose-50/40 space-y-1.5">
+                  <label className="flex items-center gap-2 text-xs font-bold text-rose-950 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(currentCompany.isConfidential)}
+                      onChange={(e) => handleChange('isConfidential', e.target.checked)}
+                      className="w-4 h-4 text-rose-600 rounded border-stone-300 focus:ring-rose-500"
+                    />
+                    <span className="flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5 text-rose-600" />
+                      <span>設定為「機密私帳主體 (隱藏屬性)」</span>
+                    </span>
+                  </label>
+                  <p className="text-[11px] text-rose-900/80 ml-6 leading-relaxed">
+                    面對查帳審計或給一般同仁檢視時，此主體與其關聯之私帳收支可一鍵啟動遮蔽隱藏，僅最高管理權限可見。
+                  </p>
+                </div>
               </div>
 
               {/* 預設登入行號設定 */}
@@ -665,182 +1083,366 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
         )}
 
         {/* ========================================================= */}
-        {/* 分頁 2：聯絡方式與通訊地址 */}
+        {/* 分頁 2：聯絡方式與多筆電話/傳真 */}
         {/* ========================================================= */}
         {activeSubTab === 'contact' && (
           <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-xs space-y-6 animate-fade-in">
-            <div className="border-b border-stone-100 pb-3">
-              <h3 className="text-sm font-bold text-stone-800">
-                行號通訊聯絡與登記地址
-              </h3>
-              <p className="text-xs text-stone-500 mt-0.5">
-                用於列印憑證簽收回條、報表抬頭附註及廠商聯繫通知。
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-stone-800 flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-[#0066cc]" />
+                  <span>公司電話與傳真通訊清單</span>
+                  <span className="text-xs font-normal text-stone-500">（可新增多筆電話、分機或傳真）</span>
+                </h3>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  支援登記多組代表號、辦公室電話、傳真專線、廠區或公務手機，並可設定主要代表號與傳真供單據套印。
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleAddPhone('phone')}
+                  className="px-3 py-1.5 rounded-xl border border-blue-200 bg-blue-50 text-[#0066cc] hover:bg-blue-100 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>新增電話</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddPhone('fax')}
+                  className="px-3 py-1.5 rounded-xl border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>新增傳真</span>
+                </button>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  代表號電話
-                </label>
-                <input
-                  type="text"
-                  value={currentCompany.phone || ''}
-                  onChange={(e) => handleChange('phone', e.target.value)}
-                  placeholder="例如：02-2798-8888"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  傳真號碼
-                </label>
-                <input
-                  type="text"
-                  value={currentCompany.fax || ''}
-                  onChange={(e) => handleChange('fax', e.target.value)}
-                  placeholder="例如：02-2798-8889"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  財務聯絡 Email
-                </label>
-                <input
-                  type="email"
-                  value={currentCompany.email || ''}
-                  onChange={(e) => handleChange('email', e.target.value)}
-                  placeholder="例如：v23039@yahoo.com.tw"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  公司官方網站
-                </label>
-                <input
-                  type="text"
-                  value={currentCompany.website || ''}
-                  onChange={(e) => handleChange('website', e.target.value)}
-                  placeholder="例如：www.hongyang.com.tw"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-bold text-stone-700">
-                    營業地址 / 登記地址
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[11px] text-stone-400">郵遞區號：</span>
-                    <input
-                      type="text"
-                      maxLength={5}
-                      value={currentCompany.postalCode || ''}
-                      onChange={(e) => handleChange('postalCode', e.target.value)}
-                      placeholder="例如：114"
-                      className="w-16 px-2 py-0.5 rounded border border-stone-300 text-xs font-mono text-center"
-                    />
+            {/* 電話/傳真清單 */}
+            <div className="space-y-3">
+              {phonesList.length === 0 ? (
+                <div className="text-center py-8 border-2 border-dashed border-stone-200 rounded-xl bg-stone-50/50">
+                  <PhoneCall className="w-8 h-8 text-stone-300 mx-auto mb-2" />
+                  <p className="text-xs text-stone-500">目前尚未填寫電話或傳真資料</p>
+                  <div className="flex justify-center gap-2 mt-3">
+                    <button
+                      type="button"
+                      onClick={() => handleAddPhone('phone')}
+                      className="px-3 py-1.5 bg-[#0066cc] text-white rounded-lg text-xs font-bold hover:bg-[#0052a3]"
+                    >
+                      ＋ 新增第一筆代表號電話
+                    </button>
                   </div>
                 </div>
-                <input
-                  type="text"
-                  value={currentCompany.address || ''}
-                  onChange={(e) => handleChange('address', e.target.value)}
-                  placeholder="例如：台北市內湖區行愛路 168 號 5 樓"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
-                />
+              ) : (
+                <div className="space-y-2.5">
+                  {phonesList.map((entry, idx) => {
+                    const isFax = entry.type === 'fax';
+                    return (
+                      <div
+                        key={entry.id || idx}
+                        className={`p-3.5 rounded-xl border transition-all flex flex-col md:flex-row md:items-center gap-3 ${
+                          entry.isDefault 
+                            ? 'bg-blue-50/40 border-blue-200 shadow-2xs' 
+                            : 'bg-white border-stone-200 hover:border-stone-300'
+                        }`}
+                      >
+                        {/* 序號與類型 */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="w-5 text-center text-xs font-mono font-bold text-stone-400">
+                            {idx + 1}
+                          </span>
+                          <select
+                            value={entry.type || 'phone'}
+                            onChange={(e) => handlePhoneFieldChange(idx, 'type', e.target.value)}
+                            className="px-2.5 py-1.5 rounded-lg border border-stone-300 bg-white text-xs font-medium focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                          >
+                            <option value="phone">🏢 代表號 / 市話</option>
+                            <option value="fax">📠 傳真專線</option>
+                            <option value="mobile">📱 行動電話 / 手機</option>
+                            <option value="other">🏗️ 廠區 / 工地 / 其他</option>
+                          </select>
+                        </div>
+
+                        {/* 號碼輸入框 */}
+                        <div className="flex-1 min-w-[200px]">
+                          <input
+                            type="text"
+                            value={entry.number}
+                            onChange={(e) => handlePhoneFieldChange(idx, 'number', e.target.value)}
+                            placeholder={isFax ? '例如：02-2798-8889' : '例如：02-2798-8888 或 0912-345-678'}
+                            className="w-full px-3 py-1.5 rounded-lg border border-stone-300 text-xs font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                          />
+                        </div>
+
+                        {/* 標籤/說明備註 */}
+                        <div className="w-full md:w-48 shrink-0">
+                          <input
+                            type="text"
+                            value={entry.label || ''}
+                            onChange={(e) => handlePhoneFieldChange(idx, 'label', e.target.value)}
+                            placeholder="用途標籤 (如：總公司代表號)"
+                            className="w-full px-3 py-1.5 rounded-lg border border-stone-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                          />
+                        </div>
+
+                        {/* 預設主要開關與操作按鈕 */}
+                        <div className="flex items-center justify-between md:justify-end gap-2 shrink-0">
+                          {entry.isDefault ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-100 text-[#0066cc] font-bold text-[11px]">
+                              <Check className="w-3 h-3" />
+                              <span>{isFax ? '主要傳真' : '主要代表號'}</span>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleSetDefaultPhone(idx)}
+                              className="px-2 py-1 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-100 text-[11px] font-medium transition-colors"
+                            >
+                              設為主要{isFax ? '傳真' : '電話'}
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePhone(idx)}
+                            className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="刪除此電話資料"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* 其他基本聯絡通訊資訊 */}
+            <div className="pt-4 border-t border-stone-100 space-y-4">
+              <h4 className="text-xs font-bold text-stone-700">其他聯絡與地址資訊</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    財務聯絡 Email
+                  </label>
+                  <input
+                    type="email"
+                    value={currentCompany.email || ''}
+                    onChange={(e) => handleChange('email', e.target.value)}
+                    placeholder="例如：service@company.com.tw"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1.5">
+                    公司官方網站
+                  </label>
+                  <input
+                    type="text"
+                    value={currentCompany.website || ''}
+                    onChange={(e) => handleChange('website', e.target.value)}
+                    placeholder="例如：www.company.com.tw"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-stone-700">
+                      營業地址 / 登記地址
+                    </label>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[11px] text-stone-400">郵遞區號：</span>
+                      <input
+                        type="text"
+                        maxLength={5}
+                        value={currentCompany.postalCode || ''}
+                        onChange={(e) => handleChange('postalCode', e.target.value)}
+                        placeholder="例如：630"
+                        className="w-16 px-2 py-0.5 rounded border border-stone-300 text-xs font-mono text-center"
+                      />
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={currentCompany.address || ''}
+                    onChange={(e) => handleChange('address', e.target.value)}
+                    placeholder="例如：雲林縣斗南鎮延平路二段 123 號"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
+                  />
+                </div>
               </div>
             </div>
           </div>
         )}
 
         {/* ========================================================= */}
-        {/* 分頁 3：金融往來銀行帳戶 */}
+        {/* 分頁 3：金融往來銀行帳戶主檔 (多筆帳戶) */}
         {/* ========================================================= */}
         {activeSubTab === 'finance' && (
           <div className="bg-white p-6 rounded-2xl border border-stone-200 shadow-xs space-y-6 animate-fade-in">
-            <div className="border-b border-stone-100 pb-3">
-              <h3 className="text-sm font-bold text-stone-800">
-                公司往來金融機構與銀行帳戶主檔
-              </h3>
-              <p className="text-xs text-stone-500 mt-0.5">
-                記載本公司主要金融機構、分行代碼與銀行帳號，供未來出納收付功能識別從何家公司帳戶扣款出帳。
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-stone-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-stone-800 flex items-center gap-2">
+                  <Landmark className="w-4 h-4 text-[#0066cc]" />
+                  <span>公司往來金融機構與銀行帳戶主檔</span>
+                  <span className="text-xs font-normal text-stone-500">（可新增多筆往來銀行帳戶）</span>
+                </h3>
+                <p className="text-xs text-stone-500 mt-0.5">
+                  公司可能不只一個帳戶（如主要營運戶、薪轉戶、零用金撥補專戶等），可指定主要預設帳戶供出納扣款出帳。
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={openAddBankModal}
+                className="px-3.5 py-2 rounded-xl bg-[#0066cc] text-white hover:bg-[#0052a3] text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>新增往來銀行帳戶</span>
+              </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  往來金融機構名稱
-                </label>
-                <input
-                  type="text"
-                  value={currentCompany.bankName || ''}
-                  onChange={(e) => handleChange('bankName', e.target.value)}
-                  placeholder="例如：臺灣銀行、玉山銀行"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
-                />
+            {/* 帳戶卡片列表 */}
+            {bankAccountsList.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed border-stone-200 rounded-xl bg-stone-50/50">
+                <Landmark className="w-10 h-10 text-stone-300 mx-auto mb-2" />
+                <p className="text-xs font-semibold text-stone-600">目前尚未設定任何往來銀行帳戶</p>
+                <p className="text-[11px] text-stone-400 mt-0.5">點擊上方按鈕新增此公司的第一個往來金融機構與帳號</p>
+                <button
+                  type="button"
+                  onClick={openAddBankModal}
+                  className="mt-4 px-4 py-2 bg-[#0066cc] text-white rounded-xl text-xs font-bold hover:bg-[#0052a3] shadow-xs cursor-pointer"
+                >
+                  ＋ 立即新增銀行帳戶
+                </button>
               </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {bankAccountsList.map((account, idx) => {
+                  const typeLabels: Record<string, { label: string; color: string }> = {
+                    operating: { label: '💼 主要營運戶', color: 'bg-blue-50 text-blue-700 border-blue-200' },
+                    payroll: { label: '👥 薪資轉帳戶', color: 'bg-purple-50 text-purple-700 border-purple-200' },
+                    petty_cash: { label: '💰 零用金專戶', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+                    savings: { label: '🏦 一般活期戶', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+                    other: { label: '🏷️ 其他專案戶', color: 'bg-stone-100 text-stone-700 border-stone-200' },
+                  };
+                  const typeInfo = typeLabels[account.accountType || 'operating'] || typeLabels.operating;
 
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  分行名稱
-                </label>
-                <input
-                  type="text"
-                  value={currentCompany.bankBranch || ''}
-                  onChange={(e) => handleChange('bankBranch', e.target.value)}
-                  placeholder="例如：南港軟體園區分行"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
-                />
-              </div>
+                  return (
+                    <div
+                      key={account.id || idx}
+                      className={`p-5 rounded-2xl border transition-all flex flex-col justify-between ${
+                        account.isDefault 
+                          ? 'border-blue-300 bg-gradient-to-br from-blue-50/50 via-white to-stone-50 shadow-xs ring-1 ring-blue-500/20' 
+                          : 'border-stone-200 bg-white hover:border-stone-300 hover:shadow-2xs'
+                      }`}
+                    >
+                      <div className="space-y-3">
+                        {/* 頂部標籤與狀態 */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="p-1.5 bg-blue-100 text-[#0066cc] rounded-lg">
+                              <Landmark className="w-4 h-4" />
+                            </span>
+                            <span className="font-bold text-sm text-stone-900">
+                              {account.bankName} {account.bankBranch}
+                            </span>
+                            {account.bankCode && (
+                              <span className="px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 text-[10px] font-mono font-bold">
+                                {account.bankCode}
+                              </span>
+                            )}
+                          </div>
 
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  銀行總代碼 (3 碼)
-                </label>
-                <input
-                  type="text"
-                  maxLength={3}
-                  value={currentCompany.bankCode || ''}
-                  onChange={(e) => handleChange('bankCode', e.target.value.replace(/\D/g, ''))}
-                  placeholder="例如：004、808"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
-                />
-              </div>
+                          <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                            {account.isPrivateAccount && (
+                              <span className="px-2 py-0.5 rounded-full border text-[10px] font-bold bg-purple-50 text-purple-700 border-purple-200 flex items-center gap-0.5">
+                                <User className="w-2.5 h-2.5" />
+                                <span>私人戶</span>
+                              </span>
+                            )}
+                            {account.isConfidential && (
+                              <span className="px-2 py-0.5 rounded-full border text-[10px] font-bold bg-rose-50 text-rose-700 border-rose-200 flex items-center gap-0.5">
+                                <Lock className="w-2.5 h-2.5" />
+                                <span>機密帳戶</span>
+                              </span>
+                            )}
+                            <span className={`px-2 py-0.5 rounded-full border text-[10px] font-bold ${typeInfo.color}`}>
+                              {typeInfo.label}
+                            </span>
+                            {account.isDefault && (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold shadow-2xs">
+                                <Star className="w-3 h-3 fill-current" />
+                                <span>主要帳戶</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
 
-              <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  銀行帳號
-                </label>
-                <input
-                  type="text"
-                  value={currentCompany.bankAccount || ''}
-                  onChange={(e) => handleChange('bankAccount', e.target.value)}
-                  placeholder="例如：128-001-987654"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm font-mono tracking-wider focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent font-bold text-stone-800"
-                />
-              </div>
+                        {/* 銀行帳號與戶名 */}
+                        <div className="bg-stone-50 p-3 rounded-xl border border-stone-200/80 space-y-1">
+                          <div className="text-[11px] text-stone-500 flex items-center justify-between">
+                            <span>銀行帳號</span>
+                            <span className="font-mono text-[10px] text-stone-400">
+                              戶名：<strong className="text-stone-700">{account.accountName || currentCompany.name}</strong>
+                            </span>
+                          </div>
+                          <div className="text-base font-mono font-bold text-stone-900 tracking-wider">
+                            {account.bankAccount || '（未填寫帳號）'}
+                          </div>
+                        </div>
 
-              <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1.5">
-                  帳戶戶名
-                </label>
-                <input
-                  type="text"
-                  value={currentCompany.accountName || ''}
-                  onChange={(e) => handleChange('accountName', e.target.value)}
-                  placeholder={currentCompany.name || '例如：公司名稱'}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0066cc] focus:border-transparent"
-                />
+                        {/* 備註說明 */}
+                        {account.note && (
+                          <p className="text-xs text-stone-500 italic bg-white/70 px-2.5 py-1 rounded border border-stone-100">
+                            備註：{account.note}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* 卡片底端操作按鈕 */}
+                      <div className="flex items-center justify-between gap-2 pt-4 mt-3 border-t border-stone-100">
+                        <div>
+                          {!account.isDefault && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetDefaultBankAccount(idx)}
+                              className="px-2.5 py-1 rounded-lg border border-stone-300 bg-white text-stone-700 hover:bg-stone-100 text-xs font-medium transition-colors cursor-pointer"
+                            >
+                              設為主要扣款帳戶
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openEditBankModal(idx)}
+                            className="p-1.5 text-stone-500 hover:text-[#0066cc] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                            title="編輯帳戶"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveBankAccount(idx)}
+                            className="p-1.5 text-stone-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="刪除此帳戶"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -1080,6 +1682,195 @@ export const CompanySettingsView: React.FC<CompanySettingsViewProps> = ({
           if (!isDeleting) setCompanyToDelete(null);
         }}
       />
+
+      {/* 新增/編輯往來銀行帳戶彈窗 */}
+      {bankModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/50 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-stone-200 space-y-5 animate-scale-in">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-50 text-[#0066cc] rounded-xl">
+                  <Landmark className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-stone-800 text-sm">
+                    {editingBankIndex === null ? '新增往來金融機構與銀行帳戶' : '編輯往來銀行帳戶資料'}
+                  </h3>
+                  <p className="text-[11px] text-stone-400 mt-0.5">
+                    設定此帳戶供出納扣款、金庫管理與對外匯款憑證使用
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBankModalOpen(false)}
+                className="text-stone-400 hover:text-stone-600 p-1.5 rounded-lg hover:bg-stone-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block font-bold text-stone-700 mb-1">
+                    金融機構名稱 <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={bankFormData.bankName}
+                    onChange={(e) => setBankFormData({ ...bankFormData, bankName: e.target.value })}
+                    placeholder="例如：臺灣銀行、玉山銀行"
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                  />
+                </div>
+
+                <div className="col-span-2 sm:col-span-1">
+                  <label className="block font-bold text-stone-700 mb-1">
+                    分行名稱
+                  </label>
+                  <input
+                    type="text"
+                    value={bankFormData.bankBranch || ''}
+                    onChange={(e) => setBankFormData({ ...bankFormData, bankBranch: e.target.value })}
+                    placeholder="例如：斗南分行、營業部"
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-1">
+                  <label className="block font-bold text-stone-700 mb-1">
+                    銀行總代碼 (3 碼)
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={3}
+                    value={bankFormData.bankCode || ''}
+                    onChange={(e) => setBankFormData({ ...bankFormData, bankCode: e.target.value.replace(/\D/g, '') })}
+                    placeholder="例如：004"
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-mono text-center focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block font-bold text-stone-700 mb-1">
+                    帳戶性質
+                  </label>
+                  <select
+                    value={bankFormData.accountType || 'operating'}
+                    onChange={(e) => setBankFormData({ ...bankFormData, accountType: e.target.value as any })}
+                    className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                  >
+                    <option value="operating">💼 主要營運收付戶</option>
+                    <option value="payroll">👥 薪資轉帳專戶</option>
+                    <option value="petty_cash">💰 零用金撥補專戶</option>
+                    <option value="savings">🏦 一般活期存款戶</option>
+                    <option value="other">🏷️ 其他專案/押標金帳戶</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">
+                  銀行帳號 <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={bankFormData.bankAccount}
+                  onChange={(e) => setBankFormData({ ...bankFormData, bankAccount: e.target.value })}
+                  placeholder="例如：004-012-3456789"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs font-mono font-bold tracking-wider focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">
+                  帳戶戶名
+                </label>
+                <input
+                  type="text"
+                  value={bankFormData.accountName || ''}
+                  onChange={(e) => setBankFormData({ ...bankFormData, accountName: e.target.value })}
+                  placeholder={currentCompany.name || '例如：公司全名'}
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-stone-700 mb-1">
+                  備註用途說明 (選填)
+                </label>
+                <input
+                  type="text"
+                  value={bankFormData.note || ''}
+                  onChange={(e) => setBankFormData({ ...bankFormData, note: e.target.value })}
+                  placeholder="例如：專供斗南廠區零用金撥補、投標押標金專用"
+                  className="w-full px-3 py-2 rounded-xl border border-stone-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#0066cc]"
+                />
+              </div>
+
+              <div className="pt-2 bg-stone-50 p-3 rounded-xl border border-stone-200 space-y-2.5">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={bankFormData.isDefault}
+                    onChange={(e) => setBankFormData({ ...bankFormData, isDefault: e.target.checked })}
+                    className="w-4 h-4 text-[#0066cc] rounded border-stone-300 focus:ring-[#0066cc]"
+                  />
+                  <span className="font-bold text-stone-800">設為此公司之「主要預設扣款帳戶」</span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(bankFormData.isPrivateAccount)}
+                    onChange={(e) => setBankFormData({ ...bankFormData, isPrivateAccount: e.target.checked })}
+                    className="w-4 h-4 text-purple-600 rounded border-stone-300 focus:ring-purple-500"
+                  />
+                  <span className="font-bold text-purple-900 flex items-center gap-1">
+                    <User className="w-3.5 h-3.5 text-purple-600" />
+                    <span>此帳戶為「負責人/個人私人戶頭」(非公司正式公帳戶)</span>
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(bankFormData.isConfidential)}
+                    onChange={(e) => setBankFormData({ ...bankFormData, isConfidential: e.target.checked })}
+                    className="w-4 h-4 text-rose-600 rounded border-stone-300 focus:ring-rose-500"
+                  />
+                  <span className="font-bold text-rose-900 flex items-center gap-1">
+                    <Lock className="w-3.5 h-3.5 text-rose-600" />
+                    <span>設為「機密帳戶 (隱藏屬性)」(查帳或一般權限時自動過濾屏蔽)</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-stone-100">
+              <button
+                type="button"
+                onClick={() => setBankModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-stone-300 text-stone-600 hover:bg-stone-100 text-xs font-bold transition-colors cursor-pointer"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveBankModal}
+                className="px-4 py-2 rounded-xl bg-[#0066cc] text-white hover:bg-[#0052a3] text-xs font-bold transition-all shadow-xs cursor-pointer"
+              >
+                {editingBankIndex === null ? '確認新增帳戶' : '儲存修改'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

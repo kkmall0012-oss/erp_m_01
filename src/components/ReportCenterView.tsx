@@ -23,6 +23,8 @@ import {
   ChevronDown,
   ChevronsUpDown,
   Eye,
+  EyeOff,
+  Lock,
   AlertCircle, 
   CheckCircle2, 
   Coins,
@@ -85,13 +87,23 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
   }, [companies, companyProfile]);
   const effectiveCompany = isSharedView ? nominalCompany : (companyProfile || nominalCompany);
 
-  // 關係企業公司名稱清單 (以 / 隔開)
+  // 關係企業公司名稱清單 (僅納入參與聯名之法人公司，自動排除個人名義或已設定不聯名之私人戶)
   const combinedCompaniesTitle = useMemo(() => {
     if (companies && companies.length > 0) {
-      return companies.map(c => c.name).join(' / ');
+      const jointCompanies = companies.filter(c => c.isJointHeader !== false && c.entityType !== 'individual');
+      if (jointCompanies.length > 0) {
+        return jointCompanies.map(c => c.name).join(' / ');
+      }
+      return companies.filter(c => c.entityType !== 'individual').map(c => c.name).join(' / ') || companies[0].name;
     }
     return '田頭工程有限公司 / 田頭工業有限公司 / 第三關係商行';
   }, [companies]);
+
+  // 查帳審計與機密帳務隱藏控制 (Audit Mode & Confidentiality)
+  // 'all': 顯示全部帳目（含機密私人帳）；'public_only': 查帳防護模式（自動隱藏敏感/機密私人款項）
+  const [confidentialFilter, setConfidentialFilter] = useState<'all' | 'public_only'>('all');
+  // 帳務屬性篩選：'all' | 'official_tax' (正式外帳/稅務憑證) | 'internal_management' (內部管理私帳)
+  const [accountingFilter, setAccountingFilter] = useState<'all' | 'official_tax' | 'internal_management'>('all');
 
   // 篩選條件
   const [periodType, setPeriodType] = useState<'month' | 'year' | 'custom' | 'all'>('month');
@@ -128,9 +140,20 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
     categoryId: ['tx_details', 'daily_summary'].includes(activeReportId) ? selectedCategory : 'all'
   }), [periodType, selectedYearMonth, selectedYear, startDate, endDate, selectedCategory, activeReportId]);
 
-  // 取得篩選後的交易資料
+  // 取得篩選後的交易資料 (結合日期、科目、關鍵字、以及查帳防護/帳務屬性篩選)
   const filteredTransactions = useMemo(() => {
     let list = getFilteredTransactions(transactions, filterOptions);
+
+    // 查帳機密隱藏過濾：若切換為 public_only，隱藏所有標記為 isConfidential 的私人敏感帳目
+    if (confidentialFilter === 'public_only') {
+      list = list.filter((t) => !t.isConfidential);
+    }
+
+    // 帳務屬性過濾 (稅務外帳 official_tax vs 內部管理私帳 internal_management)
+    if (accountingFilter !== 'all') {
+      list = list.filter((t) => t.accountingCategory === accountingFilter);
+    }
+
     if (searchKeyword.trim()) {
       const q = searchKeyword.trim().toLowerCase();
       list = list.filter((t) => 
@@ -142,7 +165,7 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
       );
     }
     return list;
-  }, [transactions, filterOptions, searchKeyword]);
+  }, [transactions, filterOptions, searchKeyword, confidentialFilter, accountingFilter]);
 
   // 當前報表定義
   const currentReportDef = useMemo(() => {
@@ -159,10 +182,10 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
     return getReportGeneratedTimestamp();
   }, [activeReportId, filterOptions, filteredTransactions.length]);
 
-  // 單獨匯出當前報表
+  // 單獨匯出當前報表 (傳入已套用機密遮蔽與查帳防護的交易資料)
   const handleExportCurrent = () => {
     exportSingleReportExcel(activeReportId, {
-      transactions,
+      transactions: filteredTransactions,
       categories,
       budgets,
       subAccounts,
@@ -170,10 +193,10 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
     }, filterOptions);
   };
 
-  // 批次匯出選定的多張報表
+  // 批次匯出選定的多張報表 (傳入已套用機密遮蔽與查帳防護的交易資料)
   const handleExportBatch = () => {
     exportMultipleSelectedReportsExcel(selectedReportIdsForBatch, {
-      transactions,
+      transactions: filteredTransactions,
       categories,
       budgets,
       subAccounts,
@@ -571,29 +594,69 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
               </div>
             </div>
 
-            {/* 次要篩選：關鍵字搜尋與分類 (項目分類統計表等報表無須單一科目篩選，自動隱藏以保持簡潔) */}
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              {['tx_details', 'daily_summary'].includes(activeReportId) ? (
-                <div className="flex items-center gap-2">
-                  <Filter className="w-3.5 h-3.5 text-stone-400" />
-                  <span className="text-stone-600 font-medium">科目分類：</span>
+            {/* 次要篩選：關鍵字搜尋與分類、查帳防護切換與帳務屬性過濾 */}
+            <div className="flex flex-wrap items-center justify-between gap-2.5 text-xs pt-2 border-t border-stone-100">
+              <div className="flex flex-wrap items-center gap-2.5">
+                {['tx_details', 'daily_summary'].includes(activeReportId) ? (
+                  <div className="flex items-center gap-1.5">
+                    <Filter className="w-3.5 h-3.5 text-stone-400" />
+                    <span className="text-stone-600 font-medium">科目分類：</span>
+                    <select
+                      value={selectedCategory}
+                      onChange={(e) => setSelectedCategory(e.target.value)}
+                      className="bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 text-stone-800 focus:outline-hidden cursor-pointer"
+                    >
+                      <option value="all">全部分類科目</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="text-xs text-stone-500 flex items-center gap-1.5 bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    <span className="font-medium text-stone-700">自動彙總對比全科目支出數據</span>
+                  </div>
+                )}
+
+                {/* 帳務屬性篩選 (公帳稅務 vs 內部管理私帳) */}
+                <div className="flex items-center gap-1.5 pl-1">
+                  <span className="text-stone-500 font-medium">帳務：</span>
                   <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="bg-stone-50 border border-stone-200 rounded-xl px-2.5 py-1.5 text-stone-800 focus:outline-hidden cursor-pointer"
+                    value={accountingFilter}
+                    onChange={(e) => setAccountingFilter(e.target.value as any)}
+                    className="bg-stone-50 border border-stone-200 rounded-xl px-2 py-1 text-stone-800 focus:outline-hidden cursor-pointer"
                   >
-                    <option value="all">全部分類科目</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
+                    <option value="all">全帳目 (含未稅/無憑證)</option>
+                    <option value="official_tax">正式稅務公帳 (具憑證)</option>
+                    <option value="internal_management">內部管理私帳</option>
                   </select>
                 </div>
-              ) : (
-                <div className="text-xs text-stone-500 flex items-center gap-1.5 bg-stone-50 border border-stone-200/80 px-2.5 py-1 rounded-xl">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="font-medium text-stone-700">自動彙總對比全科目支出數據</span>
-                </div>
-              )}
+
+                {/* 查帳隱私/敏感機密防護模式切換鈕 */}
+                <button
+                  type="button"
+                  onClick={() => setConfidentialFilter(prev => prev === 'all' ? 'public_only' : 'all')}
+                  title={confidentialFilter === 'public_only' ? '目前處於查帳防護模式 (已遮蔽敏感機密私人款項)，點擊顯示全部' : '點擊切換為查帳防護模式 (自動隱藏機密私帳)'}
+                  className={`px-2.5 py-1 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    confidentialFilter === 'public_only'
+                      ? 'bg-rose-50 text-rose-700 border-rose-300 shadow-2xs ring-1 ring-rose-400/20'
+                      : 'bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100'
+                  }`}
+                >
+                  {confidentialFilter === 'public_only' ? (
+                    <>
+                      <EyeOff className="w-3.5 h-3.5 text-rose-600" />
+                      <span>查帳防護模式 (已隱藏機密私帳)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Lock className="w-3.5 h-3.5 text-stone-400" />
+                      <span>切換查帳防護</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
               <div className="relative min-w-[200px]">
                 <Search className="w-3.5 h-3.5 text-stone-400 absolute left-2.5 top-2.5" />
@@ -676,6 +739,13 @@ export const ReportCenterView: React.FC<ReportCenterViewProps> = ({
                             <span className="text-stone-400">幣別單位：</span>
                             <span className="font-bold text-stone-800">新台幣 (NT$)</span>
                           </div>
+                          {confidentialFilter === 'public_only' && (
+                            <div className="print:hidden">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                🛡️ 查帳防護中 (機密私帳已隱藏)
+                              </span>
+                            </div>
+                          )}
                           <div className="text-stone-500">
                             <span className="text-stone-400">列印產出時間：</span>
                             <span className="font-mono font-medium">{generatedTimestamp}</span>
@@ -1188,6 +1258,17 @@ const TxDetailsTable: React.FC<{
                         {t.subAccountSourceName && (
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-sky-50 text-sky-800 border border-sky-200">
                             專款: {t.subAccountSourceName}
+                          </span>
+                        )}
+                        {t.isConfidential && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-rose-50 text-rose-700 border border-rose-200 font-semibold inline-flex items-center gap-0.5">
+                            <Lock className="w-2.5 h-2.5" />
+                            <span>機密</span>
+                          </span>
+                        )}
+                        {t.accountingCategory === 'internal_management' && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-50 text-purple-700 border border-purple-200 font-semibold">
+                            內部私帳
                           </span>
                         )}
                       </div>

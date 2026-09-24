@@ -38,6 +38,9 @@ export interface TransactionRow {
   taxAmount?: number;
   taxDeductible?: boolean;
   sellerTaxId?: string;
+  accountingCategory?: 'official_tax' | 'internal_management';
+  taxType?: 'taxable' | 'tax_free' | 'receipt_pool' | 'unspecified';
+  isConfidential?: boolean;
 }
 
 export interface MonthBudgetRow {
@@ -85,14 +88,48 @@ export interface DirectorWithdrawalRow {
   createdAt: number;
 }
 
+export interface CompanyPhoneEntryRow {
+  id: string;
+  companyId?: string;
+  type: 'phone' | 'fax' | 'mobile' | 'other';
+  number: string;
+  label?: string;
+  isDefault?: boolean;
+  sortOrder?: number;
+  createdAt?: number;
+}
+
+export interface CompanyBankAccountRow {
+  id: string;
+  companyId?: string;
+  bankName: string;
+  bankBranch?: string;
+  bankCode?: string;
+  branchCode?: string;
+  bankAccount: string;
+  accountName: string;
+  accountType?: 'operating' | 'payroll' | 'petty_cash' | 'savings' | 'other';
+  isDefault?: boolean;
+  isConfidential?: boolean;
+  isPrivateAccount?: boolean;
+  note?: string;
+  sortOrder?: number;
+  createdAt?: number;
+}
+
 export interface CompanyProfileRow {
   id: string;
   name: string;
   shortName?: string;
   taxId?: string;
   representative?: string;
+  entityType?: 'corporate' | 'individual';
+  isJointHeader?: boolean;
+  isConfidential?: boolean;
   phone?: string;
   fax?: string;
+  phones?: CompanyPhoneEntryRow[];
+  bankAccounts?: CompanyBankAccountRow[];
   email?: string;
   website?: string;
   postalCode?: string;
@@ -193,19 +230,58 @@ export const DEFAULT_COMPANIES_SEED: CompanyProfileRow[] = [
     shortName: '田頭工程',
     taxId: '13044353',
     representative: '李永勝',
-    phone: '02-2345-6789',
-    fax: '',
-    email: '',
+    entityType: 'corporate',
+    isJointHeader: true,
+    isConfidential: false,
+    phone: '05-5973882',
+    fax: '05-5964269',
+    phones: [
+      { id: 'comp_1_p1', companyId: 'comp_1', type: 'phone', number: '05-5973882', label: '公司代表號', isDefault: true, sortOrder: 1 },
+      { id: 'comp_1_p2', companyId: 'comp_1', type: 'fax', number: '05-5964269', label: '傳真專線', isDefault: true, sortOrder: 2 }
+    ],
+    bankAccounts: [
+      {
+        id: 'comp_1_b1',
+        companyId: 'comp_1',
+        bankName: '臺灣銀行',
+        bankBranch: '斗南分行',
+        bankCode: '004',
+        bankAccount: '004-012-3456789',
+        accountName: '田頭工程有限公司',
+        accountType: 'operating',
+        isDefault: true,
+        isConfidential: false,
+        isPrivateAccount: false,
+        note: '主要營運與對外請款扣款帳戶',
+        sortOrder: 1
+      },
+      {
+        id: 'comp_1_b2',
+        companyId: 'comp_1',
+        bankName: '玉山銀行',
+        bankBranch: '斗六分行',
+        bankCode: '808',
+        bankAccount: '808-036-9876543',
+        accountName: '田頭工程有限公司',
+        accountType: 'petty_cash',
+        isDefault: false,
+        isConfidential: false,
+        isPrivateAccount: false,
+        note: '零用金定期定額撥補與員工薪資轉帳帳戶',
+        sortOrder: 2
+      }
+    ],
+    email: 'v23039@yahoo.com.tw',
     website: '',
-    postalCode: '221',
-    address: '新北市汐止區新台五路一段100號',
-    bankName: '臺灣銀行 南港分行',
-    bankBranch: '南港分行',
+    postalCode: '630',
+    address: '雲林縣斗南鎮田頭里田南一路53號',
+    bankName: '臺灣銀行',
+    bankBranch: '斗南分行',
     bankCode: '004',
     bankAccount: '004-012-3456789',
     accountName: '田頭工程有限公司',
-    chiefAccountant: '會計',
-    cashier: '出納',
+    chiefAccountant: '林會計',
+    cashier: '張出納',
     reportHeader: '田頭工程有限公司 零用金收支月報表',
     invoiceBuyerName: '田頭工程有限公司',
     taxInvoiceNote: '報銷請開立三聯式發票，載明統編 13044353',
@@ -221,16 +297,40 @@ export const DEFAULT_COMPANIES_SEED: CompanyProfileRow[] = [
     shortName: '田頭工業',
     taxId: '45107604',
     representative: '李湋薇',
-    phone: '',
-    fax: '',
-    email: '',
+    entityType: 'corporate',
+    isJointHeader: true,
+    isConfidential: false,
+    phone: '05-5973882',
+    fax: '05-5964269',
+    phones: [
+      { id: 'comp_2_p1', companyId: 'comp_2', type: 'phone', number: '05-5973882', label: '辦公室市話', isDefault: true, sortOrder: 1 },
+      { id: 'comp_2_p2', companyId: 'comp_2', type: 'fax', number: '05-5964269', label: '傳真號碼', isDefault: true, sortOrder: 2 }
+    ],
+    bankAccounts: [
+      {
+        id: 'comp_2_b1',
+        companyId: 'comp_2',
+        bankName: '臺灣銀行',
+        bankBranch: '斗南分行',
+        bankCode: '004',
+        bankAccount: '004-055-1234567',
+        accountName: '田頭工業有限公司',
+        accountType: 'operating',
+        isDefault: true,
+        isConfidential: false,
+        isPrivateAccount: false,
+        note: '田頭工業主要營運帳戶',
+        sortOrder: 1
+      }
+    ],
+    email: 'v23039@yahoo.com.tw',
     website: '',
-    postalCode: '',
-    address: '',
-    bankName: '',
-    bankBranch: '',
-    bankCode: '',
-    bankAccount: '',
+    postalCode: '630',
+    address: '雲林縣斗南鎮田頭里田南一路53號',
+    bankName: '臺灣銀行',
+    bankBranch: '斗南分行',
+    bankCode: '004',
+    bankAccount: '004-055-1234567',
     accountName: '田頭工業有限公司',
     chiefAccountant: '會計',
     cashier: '出納',
@@ -245,25 +345,48 @@ export const DEFAULT_COMPANIES_SEED: CompanyProfileRow[] = [
   },
   {
     id: 'comp_3',
-    name: '第三關係商行',
-    shortName: '關係行號三',
-    taxId: '',
-    representative: '負責人',
-    phone: '',
-    fax: '',
-    email: '',
+    name: '田頭工業社',
+    shortName: '工業社',
+    taxId: '97605960',
+    representative: '李永勝',
+    entityType: 'corporate',
+    isJointHeader: true,
+    isConfidential: false,
+    phone: '05-5973882',
+    fax: '05-5964269',
+    phones: [
+      { id: 'comp_3_p1', companyId: 'comp_3', type: 'phone', number: '05-5973882', label: '代表號', isDefault: true, sortOrder: 1 }
+    ],
+    bankAccounts: [
+      {
+        id: 'comp_3_b1',
+        companyId: 'comp_3',
+        bankName: '合作金庫銀行',
+        bankBranch: '斗南分行',
+        bankCode: '006',
+        bankAccount: '006-088-7654321',
+        accountName: '田頭工業社',
+        accountType: 'operating',
+        isDefault: true,
+        isConfidential: false,
+        isPrivateAccount: false,
+        note: '商行經常收支帳戶',
+        sortOrder: 1
+      }
+    ],
+    email: 'v23039@yahoo.com.tw',
     website: '',
-    postalCode: '',
-    address: '',
-    bankName: '',
-    bankBranch: '',
-    bankCode: '',
-    bankAccount: '',
-    accountName: '第三關係商行',
+    postalCode: '630',
+    address: '雲林縣斗南鎮田頭里田南一路53號',
+    bankName: '合作金庫銀行',
+    bankBranch: '斗南分行',
+    bankCode: '006',
+    bankAccount: '006-088-7654321',
+    accountName: '田頭工業社',
     chiefAccountant: '會計',
     cashier: '出納',
-    reportHeader: '第三關係商行 現金收支帳簿',
-    invoiceBuyerName: '第三關係商行',
+    reportHeader: '田頭工業社 現金收支帳簿',
+    invoiceBuyerName: '田頭工業社',
     taxInvoiceNote: '二聯式發票或收據請蓋公司/商行專用印章',
     color: '#d97706',
     isDefault: false,
@@ -646,7 +769,10 @@ function initSchema(database: Database) {
       netAmount REAL,
       taxAmount REAL,
       taxDeductible INTEGER DEFAULT 1,
-      sellerTaxId TEXT
+      sellerTaxId TEXT,
+      accountingCategory TEXT DEFAULT 'official_tax',
+      taxType TEXT DEFAULT 'taxable',
+      isConfidential INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS categories (
@@ -719,11 +845,49 @@ function initSchema(database: Database) {
       invoiceBuyerName TEXT,
       taxInvoiceNote TEXT,
       color TEXT,
+      entityType TEXT DEFAULT 'corporate',
+      isJointHeader INTEGER DEFAULT 1,
+      isConfidential INTEGER DEFAULT 0,
       isDefault INTEGER DEFAULT 0,
       isNominalPettyCashHolder INTEGER DEFAULT 0,
       sortOrder INTEGER DEFAULT 0,
       updatedAt INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS company_phones (
+      id TEXT PRIMARY KEY,
+      companyId TEXT NOT NULL,
+      type TEXT NOT NULL,
+      number TEXT NOT NULL,
+      label TEXT,
+      isDefault INTEGER DEFAULT 0,
+      sortOrder INTEGER DEFAULT 0,
+      createdAt INTEGER NOT NULL,
+      FOREIGN KEY (companyId) REFERENCES company_profile(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_company_phones_companyId ON company_phones(companyId);
+
+    CREATE TABLE IF NOT EXISTS company_bank_accounts (
+      id TEXT PRIMARY KEY,
+      companyId TEXT NOT NULL,
+      bankName TEXT NOT NULL,
+      bankBranch TEXT,
+      bankCode TEXT,
+      branchCode TEXT,
+      bankAccount TEXT NOT NULL,
+      accountName TEXT NOT NULL,
+      accountType TEXT,
+      isDefault INTEGER DEFAULT 0,
+      isConfidential INTEGER DEFAULT 0,
+      isPrivateAccount INTEGER DEFAULT 0,
+      note TEXT,
+      sortOrder INTEGER DEFAULT 0,
+      createdAt INTEGER NOT NULL,
+      FOREIGN KEY (companyId) REFERENCES company_profile(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_company_bank_accounts_companyId ON company_bank_accounts(companyId);
 
     CREATE TABLE IF NOT EXISTS customers (
       id TEXT PRIMARY KEY,
@@ -825,12 +989,20 @@ function initSchema(database: Database) {
   try { database.run(`ALTER TABLE transactions ADD COLUMN taxAmount REAL`); } catch (e) {}
   try { database.run(`ALTER TABLE transactions ADD COLUMN taxDeductible INTEGER DEFAULT 1`); } catch (e) {}
   try { database.run(`ALTER TABLE transactions ADD COLUMN sellerTaxId TEXT`); } catch (e) {}
+  try { database.run(`ALTER TABLE transactions ADD COLUMN accountingCategory TEXT DEFAULT 'official_tax'`); } catch (e) {}
+  try { database.run(`ALTER TABLE transactions ADD COLUMN taxType TEXT DEFAULT 'taxable'`); } catch (e) {}
+  try { database.run(`ALTER TABLE transactions ADD COLUMN isConfidential INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE categories ADD COLUMN defaultReceiptType TEXT`); } catch (e) {}
   try { database.run(`ALTER TABLE categories ADD COLUMN taxCategory TEXT`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN color TEXT`); } catch (e) {}
+  try { database.run(`ALTER TABLE company_profile ADD COLUMN entityType TEXT DEFAULT 'corporate'`); } catch (e) {}
+  try { database.run(`ALTER TABLE company_profile ADD COLUMN isJointHeader INTEGER DEFAULT 1`); } catch (e) {}
+  try { database.run(`ALTER TABLE company_profile ADD COLUMN isConfidential INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN isDefault INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN isNominalPettyCashHolder INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE company_profile ADD COLUMN sortOrder INTEGER DEFAULT 0`); } catch (e) {}
+  try { database.run(`ALTER TABLE company_bank_accounts ADD COLUMN isConfidential INTEGER DEFAULT 0`); } catch (e) {}
+  try { database.run(`ALTER TABLE company_bank_accounts ADD COLUMN isPrivateAccount INTEGER DEFAULT 0`); } catch (e) {}
   try { database.run(`ALTER TABLE customers ADD COLUMN events TEXT`); } catch (e) {}
   try { database.run(`ALTER TABLE customers ADD COLUMN customerCategory TEXT`); } catch (e) {}
   try { database.run(`ALTER TABLE customers ADD COLUMN supplierCategory TEXT`); } catch (e) {}
@@ -859,8 +1031,8 @@ function initSchema(database: Database) {
           id, name, shortName, taxId, representative, phone, fax, email, website,
           postalCode, address, bankName, bankBranch, bankCode, bankAccount, accountName,
           chiefAccountant, cashier, reportHeader, invoiceBuyerName, taxInvoiceNote,
-          color, isDefault, isNominalPettyCashHolder, sortOrder, updatedAt
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          color, entityType, isJointHeader, isConfidential, isDefault, isNominalPettyCashHolder, sortOrder, updatedAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           cp.id, cp.name, cp.shortName || null, cp.taxId || null, cp.representative || null,
           cp.phone || null, cp.fax || null, cp.email || null, cp.website || null,
@@ -868,7 +1040,8 @@ function initSchema(database: Database) {
           cp.bankCode || null, cp.bankAccount || null, cp.accountName || null,
           cp.chiefAccountant || null, cp.cashier || null, cp.reportHeader || null,
           cp.invoiceBuyerName || null, cp.taxInvoiceNote || null,
-          cp.color || '#0066cc', cp.isDefault ? 1 : 0, cp.isNominalPettyCashHolder ? 1 : 0, cp.sortOrder || 1, cp.updatedAt
+          cp.color || '#0066cc', cp.entityType || 'corporate', cp.isJointHeader ? 1 : 0, cp.isConfidential ? 1 : 0,
+          cp.isDefault ? 1 : 0, cp.isNominalPettyCashHolder ? 1 : 0, cp.sortOrder || 1, cp.updatedAt
         ]
       );
     });
@@ -888,8 +1061,8 @@ function initSchema(database: Database) {
             id, name, shortName, taxId, representative, phone, fax, email, website,
             postalCode, address, bankName, bankBranch, bankCode, bankAccount, accountName,
             chiefAccountant, cashier, reportHeader, invoiceBuyerName, taxInvoiceNote,
-            color, isDefault, isNominalPettyCashHolder, sortOrder, updatedAt
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            color, entityType, isJointHeader, isConfidential, isDefault, isNominalPettyCashHolder, sortOrder, updatedAt
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             cp.id, cp.name, cp.shortName || null, cp.taxId || null, cp.representative || null,
             cp.phone || null, cp.fax || null, cp.email || null, cp.website || null,
@@ -897,7 +1070,8 @@ function initSchema(database: Database) {
             cp.bankCode || null, cp.bankAccount || null, cp.accountName || null,
             cp.chiefAccountant || null, cp.cashier || null, cp.reportHeader || null,
             cp.invoiceBuyerName || null, cp.taxInvoiceNote || null,
-            cp.color || '#059669', 0, 0, cp.sortOrder || 2, cp.updatedAt
+            cp.color || '#059669', cp.entityType || 'corporate', cp.isJointHeader ? 1 : 0, cp.isConfidential ? 1 : 0,
+            0, 0, cp.sortOrder || 2, cp.updatedAt
           ]
         );
       });
@@ -918,6 +1092,128 @@ function initSchema(database: Database) {
     }
   } catch (err) {
     console.warn('Residual seed cleanup notice:', err);
+  }
+
+  // 檢查並建立/遷移 company_phones
+  try {
+    const phoneCountRes = database.exec('SELECT COUNT(*) AS cnt FROM company_phones');
+    const phoneCount = (phoneCountRes[0]?.values[0]?.[0] as number) || 0;
+    if (phoneCount === 0) {
+      DEFAULT_COMPANIES_SEED.forEach((cp) => {
+        if (Array.isArray(cp.phones)) {
+          cp.phones.forEach((ph, pIdx) => {
+            database.run(
+              `INSERT OR IGNORE INTO company_phones (
+                id, companyId, type, number, label, isDefault, sortOrder, createdAt
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                ph.id || `${cp.id}_p_${pIdx + 1}`,
+                cp.id,
+                ph.type || 'phone',
+                ph.number,
+                ph.label || '電話號碼',
+                ph.isDefault ? 1 : 0,
+                ph.sortOrder || pIdx + 1,
+                Date.now()
+              ]
+            );
+          });
+        }
+      });
+      const cpRes = database.exec(`SELECT id, phone, fax FROM company_profile`);
+      if (cpRes && cpRes.length > 0 && cpRes[0].values.length > 0) {
+        cpRes[0].values.forEach(([cId, ph, fx]) => {
+          const companyId = String(cId);
+          const hasExisting = database.exec(`SELECT COUNT(*) FROM company_phones WHERE companyId = '${companyId.replace(/'/g, "''")}'`);
+          if (!hasExisting || !hasExisting[0]?.values[0]?.[0]) {
+            let sOrder = 1;
+            if (ph && String(ph).trim()) {
+              database.run(
+                `INSERT INTO company_phones (id, companyId, type, number, label, isDefault, sortOrder, createdAt)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [`${companyId}_ph_1`, companyId, 'phone', String(ph).trim(), '公司代表號', 1, sOrder++, Date.now()]
+              );
+            }
+            if (fx && String(fx).trim()) {
+              database.run(
+                `INSERT INTO company_phones (id, companyId, type, number, label, isDefault, sortOrder, createdAt)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [`${companyId}_fx_1`, companyId, 'fax', String(fx).trim(), '傳真專線', 1, sOrder++, Date.now()]
+              );
+            }
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('company_phones migration notice:', err);
+  }
+
+  // 檢查並建立/遷移 company_bank_accounts
+  try {
+    const bankCountRes = database.exec('SELECT COUNT(*) AS cnt FROM company_bank_accounts');
+    const bankCount = (bankCountRes[0]?.values[0]?.[0] as number) || 0;
+    if (bankCount === 0) {
+      DEFAULT_COMPANIES_SEED.forEach((cp) => {
+        if (Array.isArray(cp.bankAccounts)) {
+          cp.bankAccounts.forEach((bAcc, bIdx) => {
+            database.run(
+              `INSERT OR IGNORE INTO company_bank_accounts (
+                id, companyId, bankName, bankBranch, bankCode, branchCode, bankAccount, accountName, accountType, isDefault, note, sortOrder, createdAt
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                bAcc.id || `${cp.id}_b_${bIdx + 1}`,
+                cp.id,
+                bAcc.bankName || '臺灣銀行',
+                bAcc.bankBranch || null,
+                bAcc.bankCode || null,
+                bAcc.branchCode || null,
+                bAcc.bankAccount || '',
+                bAcc.accountName || cp.name,
+                bAcc.accountType || 'operating',
+                bAcc.isDefault ? 1 : 0,
+                bAcc.note || null,
+                bAcc.sortOrder || bIdx + 1,
+                Date.now()
+              ]
+            );
+          });
+        }
+      });
+      const cpRes = database.exec(`SELECT id, bankName, bankBranch, bankCode, bankAccount, accountName, name FROM company_profile`);
+      if (cpRes && cpRes.length > 0 && cpRes[0].values.length > 0) {
+        cpRes[0].values.forEach(([cId, bName, bBranch, bCode, bAcc, accName, cName]) => {
+          const companyId = String(cId);
+          const hasExisting = database.exec(`SELECT COUNT(*) FROM company_bank_accounts WHERE companyId = '${companyId.replace(/'/g, "''")}'`);
+          if (!hasExisting || !hasExisting[0]?.values[0]?.[0]) {
+            if ((bName && String(bName).trim()) || (bAcc && String(bAcc).trim())) {
+              database.run(
+                `INSERT INTO company_bank_accounts (
+                  id, companyId, bankName, bankBranch, bankCode, branchCode, bankAccount, accountName, accountType, isDefault, note, sortOrder, createdAt
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  `${companyId}_bk_1`,
+                  companyId,
+                  bName ? String(bName).trim() : '臺灣銀行',
+                  bBranch ? String(bBranch).trim() : null,
+                  bCode ? String(bCode).trim() : null,
+                  null,
+                  bAcc ? String(bAcc).trim() : '',
+                  accName ? String(accName).trim() : String(cName || ''),
+                  'operating',
+                  1,
+                  '主要往來扣款帳戶',
+                  1,
+                  Date.now()
+                ]
+              );
+            }
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('company_bank_accounts migration notice:', err);
   }
 
   // 確保舊交易若無 companyId 預設補為 comp_1
@@ -1291,7 +1587,10 @@ export async function getAllTransactions(): Promise<TransactionRow[]> {
       netAmount: obj.netAmount !== null && obj.netAmount !== undefined ? Number(obj.netAmount) : computedNet,
       taxAmount: obj.taxAmount !== null && obj.taxAmount !== undefined ? Number(obj.taxAmount) : computedTax,
       taxDeductible: obj.taxDeductible !== null && obj.taxDeductible !== undefined ? Boolean(obj.taxDeductible) : (isInv ? true : false),
-      sellerTaxId: obj.sellerTaxId || undefined
+      sellerTaxId: obj.sellerTaxId || undefined,
+      accountingCategory: obj.accountingCategory || (isInv ? 'official_tax' : 'internal_management'),
+      taxType: obj.taxType || (isInv ? 'taxable' : 'receipt_pool'),
+      isConfidential: Boolean(obj.isConfidential)
     };
   });
 }
@@ -1303,14 +1602,18 @@ export async function addTransaction(t: TransactionRow): Promise<void> {
   const computedNet = t.netAmount !== undefined ? t.netAmount : (isInv ? Math.round(amt / 1.05) : amt);
   const computedTax = t.taxAmount !== undefined ? t.taxAmount : (isInv ? amt - computedNet : 0);
   const isDeductible = t.taxDeductible !== undefined ? (t.taxDeductible ? 1 : 0) : (isInv ? 1 : 0);
+  const accCat = t.accountingCategory || (isInv ? 'official_tax' : 'internal_management');
+  const tType = t.taxType || (isInv ? 'taxable' : 'receipt_pool');
+  const isConf = t.isConfidential ? 1 : 0;
 
   database.run(
     `INSERT OR REPLACE INTO transactions (
       id, date, type, categoryId, categoryName, subItem, claimant, peopleCount,
       amount, note, createdAt, receiptType, invoiceNumber, voucherNo, rawVoucherId,
       subAccountSourceId, subAccountSourceName, companyId,
-      netAmount, taxAmount, taxDeductible, sellerTaxId
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      netAmount, taxAmount, taxDeductible, sellerTaxId,
+      accountingCategory, taxType, isConfidential
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       t.id || `tx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       t.date || new Date().toISOString().slice(0, 10),
@@ -1333,7 +1636,10 @@ export async function addTransaction(t: TransactionRow): Promise<void> {
       computedNet,
       computedTax,
       isDeductible,
-      t.sellerTaxId || null
+      t.sellerTaxId || null,
+      accCat,
+      tType,
+      isConf
     ]
   );
   persist();
@@ -1358,14 +1664,18 @@ export async function replaceAllTransactions(transactions: TransactionRow[]): Pr
     const computedNet = t.netAmount !== undefined ? t.netAmount : (isInv ? Math.round(amt / 1.05) : amt);
     const computedTax = t.taxAmount !== undefined ? t.taxAmount : (isInv ? amt - computedNet : 0);
     const isDeductible = t.taxDeductible !== undefined ? (t.taxDeductible ? 1 : 0) : (isInv ? 1 : 0);
+    const accCat = t.accountingCategory || (isInv ? 'official_tax' : 'internal_management');
+    const tType = t.taxType || (isInv ? 'taxable' : 'receipt_pool');
+    const isConf = t.isConfidential ? 1 : 0;
 
     database.run(
       `INSERT INTO transactions (
         id, date, type, categoryId, categoryName, subItem, claimant, peopleCount,
         amount, note, createdAt, receiptType, invoiceNumber, voucherNo, rawVoucherId,
         subAccountSourceId, subAccountSourceName, companyId,
-        netAmount, taxAmount, taxDeductible, sellerTaxId
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        netAmount, taxAmount, taxDeductible, sellerTaxId,
+        accountingCategory, taxType, isConfidential
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         t.id || `tx-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         t.date || new Date().toISOString().slice(0, 10),
@@ -1388,7 +1698,10 @@ export async function replaceAllTransactions(transactions: TransactionRow[]): Pr
         computedNet,
         computedTax,
         isDeductible,
-        t.sellerTaxId || null
+        t.sellerTaxId || null,
+        accCat,
+        tType,
+        isConf
       ]
     );
   }
@@ -1669,30 +1982,153 @@ export async function saveAllDirectorWithdrawals(withdrawals: DirectorWithdrawal
   persist();
 }
 
-export function mapRowToCompanyProfile(obj: any): CompanyProfileRow {
+export async function getAllCompanyPhones(companyId?: string): Promise<CompanyPhoneEntryRow[]> {
+  const database = await getDb();
+  let query = `SELECT * FROM company_phones ORDER BY sortOrder ASC, id ASC`;
+  if (companyId) {
+    query = `SELECT * FROM company_phones WHERE companyId = '${companyId.replace(/'/g, "''")}' ORDER BY sortOrder ASC, id ASC`;
+  }
+  const res = database.exec(query);
+  if (!res || !res.length || !res[0].values.length) return [];
+  const cols = res[0].columns;
+  return res[0].values.map((row) => {
+    const o: any = {};
+    cols.forEach((c, idx) => { o[c] = row[idx]; });
+    return {
+      id: String(o.id),
+      companyId: String(o.companyId),
+      type: o.type as any,
+      number: String(o.number || ''),
+      label: o.label ? String(o.label) : '',
+      isDefault: Boolean(o.isDefault),
+      sortOrder: Number(o.sortOrder || 1),
+      createdAt: Number(o.createdAt || Date.now())
+    };
+  });
+}
+
+export async function getAllCompanyBankAccounts(companyId?: string): Promise<CompanyBankAccountRow[]> {
+  const database = await getDb();
+  let query = `SELECT * FROM company_bank_accounts ORDER BY isDefault DESC, sortOrder ASC, id ASC`;
+  if (companyId) {
+    query = `SELECT * FROM company_bank_accounts WHERE companyId = '${companyId.replace(/'/g, "''")}' ORDER BY isDefault DESC, sortOrder ASC, id ASC`;
+  }
+  const res = database.exec(query);
+  if (!res || !res.length || !res[0].values.length) return [];
+  const cols = res[0].columns;
+  return res[0].values.map((row) => {
+    const o: any = {};
+    cols.forEach((c, idx) => { o[c] = row[idx]; });
+    return {
+      id: String(o.id),
+      companyId: String(o.companyId),
+      bankName: String(o.bankName || ''),
+      bankBranch: o.bankBranch ? String(o.bankBranch) : '',
+      bankCode: o.bankCode ? String(o.bankCode) : '',
+      branchCode: o.branchCode ? String(o.branchCode) : '',
+      bankAccount: String(o.bankAccount || ''),
+      accountName: String(o.accountName || ''),
+      accountType: o.accountType as any,
+      isDefault: Boolean(o.isDefault),
+      isConfidential: Boolean(o.isConfidential),
+      isPrivateAccount: Boolean(o.isPrivateAccount),
+      note: o.note ? String(o.note) : '',
+      sortOrder: Number(o.sortOrder || 1),
+      createdAt: Number(o.createdAt || Date.now())
+    };
+  });
+}
+
+export function mapRowToCompanyProfile(
+  obj: any,
+  phones?: CompanyPhoneEntryRow[],
+  bankAccounts?: CompanyBankAccountRow[]
+): CompanyProfileRow {
+  const compId = String(obj.id || 'comp_1');
+  let companyPhones = phones || [];
+  let companyBanks = bankAccounts || [];
+
+  // 若尚未關聯子表資料，提供向下相容合成
+  if (companyPhones.length === 0) {
+    const fallbackPhones: CompanyPhoneEntryRow[] = [];
+    if (obj.phone && String(obj.phone).trim()) {
+      fallbackPhones.push({
+        id: `${compId}_p_default`,
+        companyId: compId,
+        type: 'phone',
+        number: String(obj.phone).trim(),
+        label: '代表號電話',
+        isDefault: true,
+        sortOrder: 1
+      });
+    }
+    if (obj.fax && String(obj.fax).trim()) {
+      fallbackPhones.push({
+        id: `${compId}_f_default`,
+        companyId: compId,
+        type: 'fax',
+        number: String(obj.fax).trim(),
+        label: '傳真專線',
+        isDefault: true,
+        sortOrder: 2
+      });
+    }
+    if (fallbackPhones.length > 0) {
+      companyPhones = fallbackPhones;
+    }
+  }
+
+  if (companyBanks.length === 0 && (obj.bankName || obj.bankAccount)) {
+    companyBanks = [
+      {
+        id: `${compId}_b_default`,
+        companyId: compId,
+        bankName: String(obj.bankName || '臺灣銀行'),
+        bankBranch: obj.bankBranch ? String(obj.bankBranch) : '',
+        bankCode: obj.bankCode ? String(obj.bankCode) : '',
+        bankAccount: String(obj.bankAccount || ''),
+        accountName: String(obj.accountName || obj.name || ''),
+        accountType: 'operating',
+        isDefault: true,
+        note: '公司主要往來帳戶',
+        sortOrder: 1
+      }
+    ];
+  }
+
+  // 取得代表號與主要銀行帳號以維持向下相容
+  const defaultPhone = companyPhones.find(p => p.isDefault && p.type !== 'fax') || companyPhones.find(p => p.type !== 'fax');
+  const defaultFax = companyPhones.find(p => p.isDefault && p.type === 'fax') || companyPhones.find(p => p.type === 'fax');
+  const defaultBank = companyBanks.find(b => b.isDefault) || companyBanks[0];
+
   return {
-    id: String(obj.id || 'comp_1'),
+    id: compId,
     name: String(obj.name || ''),
     shortName: obj.shortName ? String(obj.shortName) : '',
     taxId: obj.taxId ? String(obj.taxId) : '',
     representative: obj.representative ? String(obj.representative) : '',
-    phone: obj.phone ? String(obj.phone) : '',
-    fax: obj.fax ? String(obj.fax) : '',
+    phone: defaultPhone ? defaultPhone.number : (obj.phone ? String(obj.phone) : ''),
+    fax: defaultFax ? defaultFax.number : (obj.fax ? String(obj.fax) : ''),
+    phones: companyPhones,
+    bankAccounts: companyBanks,
     email: obj.email ? String(obj.email) : '',
     website: obj.website ? String(obj.website) : '',
     postalCode: obj.postalCode ? String(obj.postalCode) : '',
     address: obj.address ? String(obj.address) : '',
-    bankName: obj.bankName ? String(obj.bankName) : '',
-    bankBranch: obj.bankBranch ? String(obj.bankBranch) : '',
-    bankCode: obj.bankCode ? String(obj.bankCode) : '',
-    bankAccount: obj.bankAccount ? String(obj.bankAccount) : '',
-    accountName: obj.accountName ? String(obj.accountName) : '',
+    bankName: defaultBank ? defaultBank.bankName : (obj.bankName ? String(obj.bankName) : ''),
+    bankBranch: defaultBank ? (defaultBank.bankBranch || '') : (obj.bankBranch ? String(obj.bankBranch) : ''),
+    bankCode: defaultBank ? (defaultBank.bankCode || '') : (obj.bankCode ? String(obj.bankCode) : ''),
+    bankAccount: defaultBank ? defaultBank.bankAccount : (obj.bankAccount ? String(obj.bankAccount) : ''),
+    accountName: defaultBank ? defaultBank.accountName : (obj.accountName ? String(obj.accountName) : ''),
     chiefAccountant: obj.chiefAccountant ? String(obj.chiefAccountant) : '',
     cashier: obj.cashier ? String(obj.cashier) : '',
     reportHeader: obj.reportHeader ? String(obj.reportHeader) : '',
     invoiceBuyerName: obj.invoiceBuyerName ? String(obj.invoiceBuyerName) : '',
     taxInvoiceNote: obj.taxInvoiceNote ? String(obj.taxInvoiceNote) : '',
     color: obj.color ? String(obj.color) : '#0066cc',
+    entityType: (obj.entityType as any) || 'corporate',
+    isJointHeader: obj.isJointHeader !== null && obj.isJointHeader !== undefined ? Boolean(obj.isJointHeader) : true,
+    isConfidential: Boolean(obj.isConfidential),
     isDefault: Boolean(obj.isDefault),
     isNominalPettyCashHolder: Boolean(obj.isNominalPettyCashHolder),
     sortOrder: Number(obj.sortOrder || 1),
@@ -1706,13 +2142,19 @@ export async function getAllCompanyProfiles(): Promise<CompanyProfileRow[]> {
   if (!res || res.length === 0 || !res[0].values.length) {
     return DEFAULT_COMPANIES_SEED;
   }
+  const allPhones = await getAllCompanyPhones();
+  const allBanks = await getAllCompanyBankAccounts();
+
   const columns = res[0].columns;
   return res[0].values.map((row) => {
     const obj: any = {};
     columns.forEach((col, i) => {
       obj[col] = row[i];
     });
-    return mapRowToCompanyProfile(obj);
+    const cId = String(obj.id);
+    const cPhones = allPhones.filter(p => p.companyId === cId);
+    const cBanks = allBanks.filter(b => b.companyId === cId);
+    return mapRowToCompanyProfile(obj, cPhones, cBanks);
   });
 }
 
@@ -1736,8 +2178,11 @@ export async function getCompanyProfile(id?: string): Promise<CompanyProfileRow>
   columns.forEach((col, i) => {
     obj[col] = row[i];
   });
+  const cId = String(obj.id);
+  const phones = await getAllCompanyPhones(cId);
+  const banks = await getAllCompanyBankAccounts(cId);
 
-  return mapRowToCompanyProfile(obj);
+  return mapRowToCompanyProfile(obj, phones, banks);
 }
 
 export async function saveCompanyProfile(profile: CompanyProfileRow): Promise<void> {
@@ -1748,42 +2193,125 @@ export async function saveCompanyProfile(profile: CompanyProfileRow): Promise<vo
   if (profile.isNominalPettyCashHolder) {
     database.run(`UPDATE company_profile SET isNominalPettyCashHolder = 0 WHERE id != ?`, [profile.id]);
   }
+
+  // 同步預設電話與傳真至主檔欄位
+  let primePhone = profile.phone || null;
+  let primeFax = profile.fax || null;
+  if (Array.isArray(profile.phones) && profile.phones.length > 0) {
+    const defPh = profile.phones.find(p => p.isDefault && p.type !== 'fax') || profile.phones.find(p => p.type !== 'fax');
+    const defFx = profile.phones.find(p => p.isDefault && p.type === 'fax') || profile.phones.find(p => p.type === 'fax');
+    if (defPh) primePhone = defPh.number;
+    if (defFx) primeFax = defFx.number;
+  }
+
+  // 同步預設銀行帳戶至主檔欄位
+  let primeBankName = profile.bankName || null;
+  let primeBankBranch = profile.bankBranch || null;
+  let primeBankCode = profile.bankCode || null;
+  let primeBankAccount = profile.bankAccount || null;
+  let primeAccountName = profile.accountName || null;
+  if (Array.isArray(profile.bankAccounts) && profile.bankAccounts.length > 0) {
+    const defBk = profile.bankAccounts.find(b => b.isDefault) || profile.bankAccounts[0];
+    if (defBk) {
+      primeBankName = defBk.bankName;
+      primeBankBranch = defBk.bankBranch || null;
+      primeBankCode = defBk.bankCode || null;
+      primeBankAccount = defBk.bankAccount;
+      primeAccountName = defBk.accountName || profile.name;
+    }
+  }
+
   database.run(
     `INSERT OR REPLACE INTO company_profile (
       id, name, shortName, taxId, representative, phone, fax, email, website,
       postalCode, address, bankName, bankBranch, bankCode, bankAccount, accountName,
       chiefAccountant, cashier, reportHeader, invoiceBuyerName, taxInvoiceNote,
-      color, isDefault, isNominalPettyCashHolder, sortOrder, updatedAt
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      color, entityType, isJointHeader, isConfidential, isDefault, isNominalPettyCashHolder, sortOrder, updatedAt
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       profile.id || 'comp_1',
       profile.name || '公司名稱',
       profile.shortName || null,
       profile.taxId || null,
       profile.representative || null,
-      profile.phone || null,
-      profile.fax || null,
+      primePhone,
+      primeFax,
       profile.email || null,
       profile.website || null,
       profile.postalCode || null,
       profile.address || null,
-      profile.bankName || null,
-      profile.bankBranch || null,
-      profile.bankCode || null,
-      profile.bankAccount || null,
-      profile.accountName || null,
+      primeBankName,
+      primeBankBranch,
+      primeBankCode,
+      primeBankAccount,
+      primeAccountName,
       profile.chiefAccountant || null,
       profile.cashier || null,
       profile.reportHeader || null,
       profile.invoiceBuyerName || null,
       profile.taxInvoiceNote || null,
       profile.color || '#0066cc',
+      profile.entityType || 'corporate',
+      profile.isJointHeader !== undefined ? (profile.isJointHeader ? 1 : 0) : 1,
+      profile.isConfidential ? 1 : 0,
       profile.isDefault ? 1 : 0,
       profile.isNominalPettyCashHolder ? 1 : 0,
       profile.sortOrder ?? 1,
       Date.now()
     ]
   );
+
+  // 儲存/同步多筆電話與傳真
+  if (Array.isArray(profile.phones)) {
+    database.run(`DELETE FROM company_phones WHERE companyId = ?`, [profile.id]);
+    profile.phones.forEach((ph, pIdx) => {
+      database.run(
+        `INSERT INTO company_phones (
+          id, companyId, type, number, label, isDefault, sortOrder, createdAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          ph.id || `${profile.id}_p_${pIdx + 1}_${Date.now()}`,
+          profile.id,
+          ph.type || 'phone',
+          ph.number,
+          ph.label || null,
+          ph.isDefault ? 1 : 0,
+          ph.sortOrder || pIdx + 1,
+          ph.createdAt || Date.now()
+        ]
+      );
+    });
+  }
+
+  // 儲存/同步多筆銀行帳戶
+  if (Array.isArray(profile.bankAccounts)) {
+    database.run(`DELETE FROM company_bank_accounts WHERE companyId = ?`, [profile.id]);
+    profile.bankAccounts.forEach((bk, bIdx) => {
+      database.run(
+        `INSERT INTO company_bank_accounts (
+          id, companyId, bankName, bankBranch, bankCode, branchCode, bankAccount, accountName, accountType, isDefault, isConfidential, isPrivateAccount, note, sortOrder, createdAt
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          bk.id || `${profile.id}_b_${bIdx + 1}_${Date.now()}`,
+          profile.id,
+          bk.bankName,
+          bk.bankBranch || null,
+          bk.bankCode || null,
+          bk.branchCode || null,
+          bk.bankAccount,
+          bk.accountName || profile.name,
+          bk.accountType || 'operating',
+          bk.isDefault ? 1 : 0,
+          bk.isConfidential ? 1 : 0,
+          bk.isPrivateAccount ? 1 : 0,
+          bk.note || null,
+          bk.sortOrder || bIdx + 1,
+          bk.createdAt || Date.now()
+        ]
+      );
+    });
+  }
+
   persist();
 }
 
@@ -1796,6 +2324,8 @@ export async function saveAllCompanyProfiles(profiles: CompanyProfileRow[]): Pro
 
 export async function deleteCompanyProfile(id: string): Promise<void> {
   const database = await getDb();
+  database.run(`DELETE FROM company_phones WHERE companyId = ?`, [id]);
+  database.run(`DELETE FROM company_bank_accounts WHERE companyId = ?`, [id]);
   database.run(`DELETE FROM company_profile WHERE id = ?`, [id]);
   persist();
 }
@@ -2281,7 +2811,8 @@ export async function getFullDatabaseJsonExport(): Promise<Record<string, any>> 
   const extraTables: Record<string, any[]> = {};
   const coreTableSet = new Set([
     'transactions', 'categories', 'claimants', 'budgets',
-    'sub_accounts', 'sub_account_items', 'director_withdrawals', 'company_profile',
+    'sub_accounts', 'sub_account_items', 'director_withdrawals',
+    'company_profile', 'company_phones', 'company_bank_accounts',
     'customers', 'customer_contacts', 'customer_events'
   ]);
 
@@ -2350,6 +2881,8 @@ export async function generateSqlDump(): Promise<string> {
   // 優先依外鍵關聯順序排列核心資料表，並動態抓取資料庫中所有現存資料表
   const preferredOrder = [
     'company_profile',
+    'company_phones',
+    'company_bank_accounts',
     'customers',
     'customer_contacts',
     'customer_events',

@@ -133,10 +133,52 @@
 | **`invoiceBuyerName`** | `TEXT` | NULL | `string` | 常用發票買受人名稱 | 開立發票時抬頭預設值。 | 例如：「田頭工程有限公司」。 |
 | **`taxInvoiceNote`** | `TEXT` | NULL | `string` | 發票開立與報帳特別備註 | 顯示於報表下方或報帳指引，例如「報銷請開立三聯式發票，載明統編 13044353」。 | 報表底部提醒專用文字。 |
 | **`color`** | `TEXT` | NULL | `string` | 行號專屬識別色標 | 前端多行號切換標籤與識別色彩十六進位碼。 | 例如：`#0066cc`, `#059669`。 |
+| **`entityType`** | `TEXT` | 預設 `'corporate'` | `'corporate' \| 'individual'` | 組織主體性質 | `'corporate'`: 法人/公司/商行（有統編之正式公司）；`'individual'`: 個人/自然人/私人出資主體（無統編，僅負責人姓名，專供私人款項與未開發票工程收付）。 | 區分正式公司與個人私帳主體，控制外部表單呈現。 |
+| **`isJointHeader`** | `INTEGER` | 預設 `1` | `boolean` (`0` \| `1`) | 是否參與對外三間公司聯名大抬頭 | `1`: 列入對外工程聯名報表抬頭（如三間公司正式名稱）；`0`: 個人私帳主體或獨立專用帳戶，對外表單自動排除，絕不突兀印出私人名字給客戶看。 | 解決客戶表單印出私人名字突兀問題。 |
+| **`isConfidential`** | `INTEGER` | 預設 `0` | `boolean` (`0` \| `1`) | 是否為機密/隱藏私帳主體 | `1`: 具機密隱藏屬性（僅具高階權限主管可見，遇外部查帳或一般同仁查閱時自動遮蔽屏蔽）；`0`: 一般公開公司主體。 | 內外帳查帳與隱私權限過濾。 |
 | **`isDefault`** | `INTEGER` | 預設 `0` | `boolean` (`0` \| `1`) | 是否為系統主要預設行號 | 登入或初始化時預設選取之公司。 | `1` 為預設主要公司。 |
 | **`isNominalPettyCashHolder`** | `INTEGER` | 預設 `0` | `boolean` (`0` \| `1`) | 是否為共用零用金之法定主理行號 | 多間關係企業共用同一零用金大水池時，標明實體款項依法記於哪家帳上。 | 零用金水池歸屬判斷。 |
 | **`sortOrder`** | `INTEGER` | 預設 `0` | `number` | 公司排序權重 | 多行號下拉選單排列先後。 | `ORDER BY sortOrder ASC`。 |
 | **`updatedAt`** | `INTEGER` | **NOT NULL** | `number` | 最後變更修改時間戳 (毫秒) | 稽核紀錄、資料庫最新時間戳記。 | 毫秒數 Unix Timestamp。 |
+
+---
+
+### 3. 關聯附屬表：`company_bank_accounts`（公司與個人金融機構往來帳戶主檔）
+
+公司或負責人名下可能擁有多組金融機構帳戶（主要營運戶、薪轉戶、零用金專戶、個人收款戶等）。此表支援公帳/私帳標記與機密隱藏屬性：
+
+| 欄位名稱 (Column) | SQLite 型態 | 必填/預設 | 對應 TypeScript 型別 | 變數代表意思 (商業含義) | 系統使用的地方與業務邏輯 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`id`** | `TEXT` | **PRIMARY KEY** | `string` | 銀行帳戶唯一主鍵 | 例如：`comp_1_b_1`。 |
+| **`companyId`** | `TEXT` | **NOT NULL (INDEX)**| `string` | 所屬公司或主體 ID | 外鍵，關聯 `company_profile.id`。 |
+| **`bankName`** | `TEXT` | **NOT NULL** | `string` | 金融機構名稱 | 例如：「臺灣銀行」、「玉山銀行」。 |
+| **`bankBranch`** | `TEXT` | NULL | `string` | 分行名稱 | 例如：「斗南分行」。 |
+| **`bankCode`** | `TEXT` | NULL | `string` | 銀行總代碼 (3碼) | 跨行轉帳代碼，例如：`004`。 |
+| **`branchCode`** | `TEXT` | NULL | `string` | 分行代碼 (4碼) | 選填。 |
+| **`bankAccount`** | `TEXT` | **NOT NULL** | `string` | 銀行帳號 | 撥補扣款與收款指定帳號。 |
+| **`accountName`** | `TEXT` | **NOT NULL** | `string` | 帳戶戶名 | 公司名或負責人個人名字。 |
+| **`accountType`** | `TEXT` | 預設 `'operating'`| `string` | 帳戶性質 | `'operating'` (營運收付戶)、`'payroll'` (薪轉)、`'petty_cash'` (零用金撥補)、`'savings'`、`'other'`。 |
+| **`isDefault`** | `INTEGER` | 預設 `0` | `boolean` (`0` \| `1`) | 是否為預設主要扣款帳戶 | `1`: 主要預設帳戶，供系統自動選用扣款。 |
+| **`isConfidential`**| `INTEGER` | 預設 `0` | `boolean` (`0` \| `1`) | 是否為私人機密帳戶 | `1`: 敏感機密帳戶，外帳查帳或一般權限同仁瀏覽時遮蔽。 |
+| **`isPrivateAccount`**| `INTEGER` | 預設 `0` | `boolean` (`0` \| `1`) | 是否為私人名義帳戶 | `1`: 負責人個人名義私帳（非公司公帳戶頭，專供未開發票匯款入帳）；`0`: 公司正式公帳。 |
+| **`note`** | `TEXT` | NULL | `string` | 備註用途說明 | 帳戶使用規範與說明。 |
+| **`sortOrder`** | `INTEGER` | 預設 `0` | `number` | 排序權重 | 帳戶選單排列優先順序。 |
+| **`createdAt`** | `INTEGER` | **NOT NULL** | `number` | 建立時間戳 (毫秒) | 系統建檔時間。 |
+
+---
+
+### 4. 關聯附屬表：`company_phones`（公司多筆電話與傳真通訊表）
+
+| 欄位名稱 (Column) | SQLite 型態 | 必填/預設 | 對應 TypeScript 型別 | 變數代表意思 (商業含義) | 系統使用的地方與業務邏輯 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`id`** | `TEXT` | **PRIMARY KEY** | `string` | 通訊項目主鍵 | 例如：`comp_1_p_1`。 |
+| **`companyId`** | `TEXT` | **NOT NULL (INDEX)**| `string` | 所屬公司或主體 ID | 外鍵，關聯 `company_profile.id`。 |
+| **`type`** | `TEXT` | **NOT NULL** | `'phone' \| 'fax' \| 'mobile' \| 'other'` | 通訊類型 | 電話、傳真、行動電話或其他。 |
+| **`number`** | `TEXT` | **NOT NULL** | `string` | 電話/傳真號碼 | 例如：`05-597-1234`。 |
+| **`label`** | `TEXT` | NULL | `string` | 識別標籤 | 例如：「公司代表號」、「工務專線」、「傳真專線」。 |
+| **`isDefault`** | `INTEGER` | 預設 `0` | `boolean` (`0` \| `1`) | 是否為該類型預設號碼 | `1`: 該類型預設號碼，列印時優先帶出。 |
+| **`sortOrder`** | `INTEGER` | 預設 `0` | `number` | 排序權重 | 排序先後。 |
+| **`createdAt`** | `INTEGER` | **NOT NULL** | `number` | 建立時間戳 (毫秒) | 系統建檔時間。 |
 
 ---
 
@@ -269,6 +311,9 @@
 | **`taxAmount`** | `REAL` | NULL | `number` | 營業稅額 (NT$) | 5% 進項營業稅額。支援手動微調 ±1 元差額。 | 營業稅可扣抵稅額統計。 |
 | **`taxDeductible`** | `INTEGER` | 預設 `1` | `boolean` (`0` \| `1`) | 是否得扣抵 401 營業稅 | `1`: 得扣抵進項稅額；`0`: 依稅法不得扣抵（如交際應酬、非公務支出）或免稅。 | 國稅局扣抵清冊產出關鍵標記。 |
 | **`sellerTaxId`** | `TEXT` | NULL | `string` | 開立發票廠商/店家統一編號 | 開立發票店家的 8 碼統編（如中油統編 `03757848`）。 | 未來 401 媒體申報檔直接產出。 |
+| **`accountingCategory`** | `TEXT` | 預設 `'official_tax'` | `'official_tax' \| 'internal_management'` | 內外帳屬性隔離標籤 | `'official_tax'`: 正式公帳/稅務外帳（具合法進項/銷項憑證，供報稅申報）；`'internal_management'`: 內部管理私帳（未開發票工程款、私帳收支、私人戶撥款）。 | 查帳防護核心：外部查帳時 `WHERE accountingCategory = 'official_tax'` 完美隔離私帳。 |
+| **`taxType`** | `TEXT` | 預設 `'taxable'` | `'taxable' \| 'tax_free' \| 'receipt_pool' \| 'unspecified'` | 課稅與憑證類別 | `'taxable'`: 應稅5%；`'tax_free'`: 免稅；`'receipt_pool'`: 收據大水池（免用發票收據合流）；`'unspecified'`: 未指定/無發票私帳收支。 | 稅務憑證清單與私帳分離統計。 |
+| **`isConfidential`** | `INTEGER` | 預設 `0` | `boolean` (`0` \| `1`) | 敏感收支機密隱藏標記 | `1`: 敏感機密款項（私人匯款、特定工程款），外部查帳模式或一般權限瀏覽時自動屏蔽隱藏；`0`: 公開常規收支。 | 權限控管與安全查帳過濾。 |
 
 ---
 
@@ -560,7 +605,14 @@ ORDER BY total_claimed_amount DESC;
 ---
 
 ## 結語與維護紀錄
-- **版本**：v3.0 (全 11 大標準正規化 SQL 實體資料表規格、大水池不分公司與報稅歸屬原則、多聯絡人/交際禮金/專案採買實體關聯全收錄)
+- **版本**：v3.1 (全面支援無統編自然人/私人出資主體、外部表單三公司聯名抬頭過濾、私帳與機密屬性隔離、查帳防護模式與 401 稅務外帳拆分)
 - **維護者**：公司零用金與 ERP 系統工程組
 - **更新日期**：2026-09-24
+- **本次更新重點 (v3.1)**：
+  1. `company_profile`：新增 `entityType` (`'corporate'` | `'individual'`)，支援無統編自然人/私人戶主體，僅留負責人姓名即可開案與出納收款。
+  2. `company_profile`：新增 `isJointHeader` (布林值)，外部表單抬頭印製三間公司正式名稱時，自動排除個人名字，避免給客戶看時突兀。
+  3. `company_profile`：新增 `isConfidential` (布林值)，機密私帳主體在外部查帳模式與一般導覽列下拉選單中可一鍵遮蔽屏蔽。
+  4. `company_bank_accounts`：新增 `isPrivateAccount` (負責人私人名義戶) 與 `isConfidential` (機密帳戶標記)。
+  5. `transactions`：新增 `accountingCategory` (`'official_tax'` 稅務外帳公帳 vs `'internal_management'` 內部管理私帳)、`isConfidential` (敏感機密款項)。
+  6. 前端 UI：各報表中心、流水帳、開支登記與頂部切換選單均全面連動「🛡️ 查帳防護模式」，一鍵排除機密私帳，免除國稅局或外部查帳之合規疑慮。
 - **異動規範**：如未來確有不可替代之新業務需求需增修欄位，請同步更新本檔案與 `/server/db.ts` 中的 `initSchema`，以確保全系統文件與程式一致。

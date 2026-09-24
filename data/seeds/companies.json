@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "backupType": "module",
   "moduleKey": "companies",
-  "exportedAt": "2026-09-24T02:50:43.327Z",
+  "exportedAt": "2026-09-24T03:04:29.914Z",
   "system": "企業零用金與客戶財務管理系統",
   "moduleLabel": "公司行號主檔",
   "companies": [
@@ -14,15 +14,69 @@
       "representative": "李永勝",
       "phone": "05-5973882",
       "fax": "05-5964269",
+      "phones": [
+        {
+          "id": "comp_1_p1",
+          "companyId": "comp_1",
+          "type": "phone",
+          "number": "05-5973882",
+          "label": "公司代表號",
+          "isDefault": true,
+          "sortOrder": 1,
+          "createdAt": 1790219053342
+        },
+        {
+          "id": "comp_1_p2",
+          "companyId": "comp_1",
+          "type": "fax",
+          "number": "05-5964269",
+          "label": "傳真專線",
+          "isDefault": true,
+          "sortOrder": 2,
+          "createdAt": 1790219053343
+        }
+      ],
+      "bankAccounts": [
+        {
+          "id": "comp_1_b1",
+          "companyId": "comp_1",
+          "bankName": "臺灣銀行",
+          "bankBranch": "斗南分行",
+          "bankCode": "004",
+          "branchCode": "",
+          "bankAccount": "004-012-3456789",
+          "accountName": "田頭工程有限公司",
+          "accountType": "operating",
+          "isDefault": true,
+          "note": "主要營運與對外請款扣款帳戶",
+          "sortOrder": 1,
+          "createdAt": 1790219053346
+        },
+        {
+          "id": "comp_1_b2",
+          "companyId": "comp_1",
+          "bankName": "玉山銀行",
+          "bankBranch": "斗六分行",
+          "bankCode": "808",
+          "branchCode": "",
+          "bankAccount": "808-036-9876543",
+          "accountName": "田頭工程有限公司",
+          "accountType": "petty_cash",
+          "isDefault": false,
+          "note": "零用金定期定額撥補與員工薪資轉帳帳戶",
+          "sortOrder": 2,
+          "createdAt": 1790219053346
+        }
+      ],
       "email": "v23039@yahoo.com.tw",
       "website": "",
       "postalCode": "630",
       "address": "雲林縣斗南鎮田頭里田南一路53號",
-      "bankName": "",
-      "bankBranch": "",
-      "bankCode": "",
-      "bankAccount": "",
-      "accountName": "",
+      "bankName": "臺灣銀行",
+      "bankBranch": "斗南分行",
+      "bankCode": "004",
+      "bankAccount": "004-012-3456789",
+      "accountName": "田頭工程有限公司",
       "chiefAccountant": "林會計",
       "cashier": "張出納",
       "reportHeader": "田頭工程有限公司 零用金收支月報表",
@@ -32,7 +86,7 @@
       "isDefault": true,
       "isNominalPettyCashHolder": true,
       "sortOrder": 1,
-      "updatedAt": 1790209143872
+      "updatedAt": 1790219069905
     },
     {
       "id": "comp_2",
@@ -42,14 +96,53 @@
       "representative": "李湋薇",
       "phone": "05-5973882",
       "fax": "05-5964269",
+      "phones": [
+        {
+          "id": "comp_2_p1",
+          "companyId": "comp_2",
+          "type": "phone",
+          "number": "05-5973882",
+          "label": "辦公室市話",
+          "isDefault": true,
+          "sortOrder": 1,
+          "createdAt": 1790219053344
+        },
+        {
+          "id": "comp_2_p2",
+          "companyId": "comp_2",
+          "type": "fax",
+          "number": "05-5964269",
+          "label": "傳真號碼",
+          "isDefault": true,
+          "sortOrder": 2,
+          "createdAt": 1790219053344
+        }
+      ],
+      "bankAccounts": [
+        {
+          "id": "comp_2_b1",
+          "companyId": "comp_2",
+          "bankName": "臺灣銀行",
+          "bankBranch": "斗南分行",
+          "bankCode": "004",
+          "branchCode": "",
+          "bankAccount": "004-055-1234567",
+          "accountName": "田頭工業有限公司",
+          "accountType": "operating",
+          "isDefault": true,
+          "note": "田頭工業主要營運帳戶",
+          "sortOrder": 1,
+          "createdAt": 1790219053346
+        }
+      ],
       "email": "v23039@yahoo.com.tw",
       "website": "",
       "postalCode": "",
       "address": "",
-      "bankName": "",
-      "bankBranch": "",
-      "bankCode": "",
-      "bankAccount": "",
+      "bankName": "臺灣銀行",
+      "bankBranch": "斗南分行",
+      "bankCode": "004",
+      "bankAccount": "004-055-1234567",
       "accountName": "田頭工業有限公司",
       "chiefAccountant": "會計",
       "cashier": "出納",
@@ -60,7 +153,7 @@
       "isDefault": false,
       "isNominalPettyCashHolder": false,
       "sortOrder": 2,
-      "updatedAt": 1790209143873
+      "updatedAt": 1790219069908
     },
     {
       "id": "comp_3",
@@ -70,15 +163,44 @@
       "representative": "李永勝",
       "phone": "05-5973882",
       "fax": "05-5964269",
+      "phones": [
+        {
+          "id": "comp_3_p1",
+          "companyId": "comp_3",
+          "type": "phone",
+          "number": "05-5973882",
+          "label": "代表號",
+          "isDefault": true,
+          "sortOrder": 1,
+          "createdAt": 1790219053344
+        }
+      ],
+      "bankAccounts": [
+        {
+          "id": "comp_3_b1",
+          "companyId": "comp_3",
+          "bankName": "合作金庫銀行",
+          "bankBranch": "斗南分行",
+          "bankCode": "006",
+          "branchCode": "",
+          "bankAccount": "006-088-7654321",
+          "accountName": "田頭工業社",
+          "accountType": "operating",
+          "isDefault": true,
+          "note": "商行經常收支帳戶",
+          "sortOrder": 1,
+          "createdAt": 1790219053347
+        }
+      ],
       "email": "v23039@yahoo.com.tw",
       "website": "",
       "postalCode": "630",
       "address": "雲林縣斗南鎮田頭里田南一路53號",
-      "bankName": "",
-      "bankBranch": "",
-      "bankCode": "",
-      "bankAccount": "",
-      "accountName": "第三關係商行",
+      "bankName": "合作金庫銀行",
+      "bankBranch": "斗南分行",
+      "bankCode": "006",
+      "bankAccount": "006-088-7654321",
+      "accountName": "田頭工業社",
       "chiefAccountant": "會計",
       "cashier": "出納",
       "reportHeader": "第三關係商行 現金收支帳簿",
@@ -88,7 +210,7 @@
       "isDefault": false,
       "isNominalPettyCashHolder": false,
       "sortOrder": 3,
-      "updatedAt": 1790209143874
+      "updatedAt": 1790219069911
     }
   ],
   "companyProfile": {
@@ -99,15 +221,69 @@
     "representative": "李永勝",
     "phone": "05-5973882",
     "fax": "05-5964269",
+    "phones": [
+      {
+        "id": "comp_1_p1",
+        "companyId": "comp_1",
+        "type": "phone",
+        "number": "05-5973882",
+        "label": "公司代表號",
+        "isDefault": true,
+        "sortOrder": 1,
+        "createdAt": 1790219053342
+      },
+      {
+        "id": "comp_1_p2",
+        "companyId": "comp_1",
+        "type": "fax",
+        "number": "05-5964269",
+        "label": "傳真專線",
+        "isDefault": true,
+        "sortOrder": 2,
+        "createdAt": 1790219053343
+      }
+    ],
+    "bankAccounts": [
+      {
+        "id": "comp_1_b1",
+        "companyId": "comp_1",
+        "bankName": "臺灣銀行",
+        "bankBranch": "斗南分行",
+        "bankCode": "004",
+        "branchCode": "",
+        "bankAccount": "004-012-3456789",
+        "accountName": "田頭工程有限公司",
+        "accountType": "operating",
+        "isDefault": true,
+        "note": "主要營運與對外請款扣款帳戶",
+        "sortOrder": 1,
+        "createdAt": 1790219053346
+      },
+      {
+        "id": "comp_1_b2",
+        "companyId": "comp_1",
+        "bankName": "玉山銀行",
+        "bankBranch": "斗六分行",
+        "bankCode": "808",
+        "branchCode": "",
+        "bankAccount": "808-036-9876543",
+        "accountName": "田頭工程有限公司",
+        "accountType": "petty_cash",
+        "isDefault": false,
+        "note": "零用金定期定額撥補與員工薪資轉帳帳戶",
+        "sortOrder": 2,
+        "createdAt": 1790219053346
+      }
+    ],
     "email": "v23039@yahoo.com.tw",
     "website": "",
     "postalCode": "630",
     "address": "雲林縣斗南鎮田頭里田南一路53號",
-    "bankName": "",
-    "bankBranch": "",
-    "bankCode": "",
-    "bankAccount": "",
-    "accountName": "",
+    "bankName": "臺灣銀行",
+    "bankBranch": "斗南分行",
+    "bankCode": "004",
+    "bankAccount": "004-012-3456789",
+    "accountName": "田頭工程有限公司",
     "chiefAccountant": "林會計",
     "cashier": "張出納",
     "reportHeader": "田頭工程有限公司 零用金收支月報表",
@@ -117,6 +293,6 @@
     "isDefault": true,
     "isNominalPettyCashHolder": true,
     "sortOrder": 1,
-    "updatedAt": 1790209143872
+    "updatedAt": 1790219069905
   }
 }

@@ -11,7 +11,10 @@ import {
   Receipt,
   Building2,
   Check,
-  Sparkles
+  Sparkles,
+  Lock,
+  EyeOff,
+  User
 } from 'lucide-react';
 import { CategoryConfig, Transaction, ReceiptType, CompanyProfile } from '../types';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -51,6 +54,8 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
   const [companyId, setCompanyId] = useState<string>('comp_1');
   const [taxDeductible, setTaxDeductible] = useState<boolean>(true);
   const [sellerTaxId, setSellerTaxId] = useState<string>('');
+  const [accountingCategory, setAccountingCategory] = useState<'official_tax' | 'internal_management'>('official_tax');
+  const [isConfidential, setIsConfidential] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
 
@@ -69,6 +74,8 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
       setAmount(String(transaction.amount));
       setNote(transaction.note || '');
       setCompanyId(transaction.companyId || (companies[0]?.id || 'comp_1'));
+      setAccountingCategory(transaction.accountingCategory || 'official_tax');
+      setIsConfidential(Boolean(transaction.isConfidential));
       setErrorMessage('');
       setShowDeleteConfirm(false);
     }
@@ -144,7 +151,9 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
       netAmount: computedNet,
       taxAmount: computedTax,
       taxDeductible: isInv ? taxDeductible : false,
-      sellerTaxId: isExpense && receiptType !== 'none' ? (sellerTaxId.trim() || undefined) : undefined
+      sellerTaxId: isExpense && receiptType !== 'none' ? (sellerTaxId.trim() || undefined) : undefined,
+      accountingCategory,
+      isConfidential
     };
 
     onSave(updated);
@@ -693,6 +702,50 @@ export const TransactionEditModal: React.FC<TransactionEditModalProps> = ({
               placeholder="例如：發票號碼、用途說明、預支原因..."
               className="w-full px-3 py-2 text-xs bg-stone-50 border border-stone-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 text-stone-800"
             />
+          </div>
+
+          {/* 帳務性質與機密隱藏進階屬性 (公帳 vs 私帳 / 查帳機密) */}
+          <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 space-y-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="text-xs font-bold text-stone-700">帳務屬性：</span>
+              <div className="inline-flex p-0.5 bg-stone-200/80 rounded-lg text-xs">
+                <button
+                  type="button"
+                  onClick={() => setAccountingCategory('official_tax')}
+                  className={`px-2.5 py-1 rounded-md transition-all cursor-pointer font-bold ${
+                    accountingCategory === 'official_tax'
+                      ? 'bg-white text-stone-900 shadow-2xs'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  正式稅務外帳 (公帳)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccountingCategory('internal_management')}
+                  className={`px-2.5 py-1 rounded-md transition-all cursor-pointer font-bold ${
+                    accountingCategory === 'internal_management'
+                      ? 'bg-white text-purple-700 shadow-2xs'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  內部管理私帳 (無發票/私人戶)
+                </button>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none pt-1 border-t border-stone-200/60">
+              <input
+                type="checkbox"
+                checked={isConfidential}
+                onChange={(e) => setIsConfidential(e.target.checked)}
+                className="w-4 h-4 text-rose-600 rounded border-stone-300 focus:ring-rose-500"
+              />
+              <span className="text-xs font-bold text-rose-900 flex items-center gap-1">
+                <Lock className="w-3.5 h-3.5 text-rose-600" />
+                <span>設為「機密敏感帳目」(隱藏屬性：查帳模式與一般報表自動過濾隱藏)</span>
+              </span>
+            </label>
           </div>
         </form>
 

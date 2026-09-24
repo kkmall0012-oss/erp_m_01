@@ -7,7 +7,9 @@ import {
   Layers, 
   Calendar,
   Eye,
-  FileText
+  FileText,
+  EyeOff,
+  Lock
 } from 'lucide-react';
 import { Transaction, CategoryConfig, MonthBudget, SubAccount, DirectorWithdrawal, CompanyProfile } from '../types';
 import { 
@@ -61,14 +63,22 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
     'yearly_matrix'
   ]);
 
+  // 查帳審計與機密遮蔽狀態 ('all' 全部 | 'public_only' 查帳防護，排除敏感私帳)
+  const [confidentialFilter, setConfidentialFilter] = useState<'all' | 'public_only'>('all');
+
   const filterOptions: ReportFilterOptions = {
     periodType,
     yearMonth: selectedYearMonth,
     year: selectedYear
   };
 
+  // 依查帳防護篩選交易資料
+  const effectiveTransactions = confidentialFilter === 'public_only'
+    ? transactions.filter(t => !t.isConfidential)
+    : transactions;
+
   const contextData = {
-    transactions,
+    transactions: effectiveTransactions,
     categories,
     budgets,
     subAccounts,
@@ -147,6 +157,32 @@ export const ReportExportModal: React.FC<ReportExportModalProps> = ({
                 全部歷史
               </button>
             </div>
+          </div>
+
+          {/* 查帳防護切換 */}
+          <div className="flex items-center justify-between pt-2 border-t border-stone-200/60">
+            <span className="text-stone-500 font-medium">查帳保護篩選：</span>
+            <button
+              type="button"
+              onClick={() => setConfidentialFilter(prev => prev === 'all' ? 'public_only' : 'all')}
+              className={`px-2.5 py-1 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                confidentialFilter === 'public_only'
+                  ? 'bg-rose-50 text-rose-700 border-rose-300 shadow-2xs ring-1 ring-rose-400/20'
+                  : 'bg-white text-stone-600 border-stone-200 hover:bg-stone-50'
+              }`}
+            >
+              {confidentialFilter === 'public_only' ? (
+                <>
+                  <EyeOff className="w-3.5 h-3.5 text-rose-600" />
+                  <span>查帳防護模式 (已排除敏感機密私帳)</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="w-3.5 h-3.5 text-stone-400" />
+                  <span>包含全部私帳 (點擊啟用查帳防護)</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
 

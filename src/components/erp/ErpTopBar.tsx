@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Menu, 
   Database, 
@@ -8,7 +8,10 @@ import {
   ChevronDown,
   Check,
   Settings,
-  Layers
+  Layers,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { CompanyProfile } from '../../types';
 
@@ -36,11 +39,20 @@ export const ErpTopBar: React.FC<ErpTopBarProps> = ({
   onGoToCompanySettings
 }) => {
   const [isCompanyMenuOpen, setIsCompanyMenuOpen] = useState(false);
+  const [hideConfidentialCompanies, setHideConfidentialCompanies] = useState(false);
   const companyMenuRef = useRef<HTMLDivElement>(null);
 
   // 取得當前選取的公司物件
   const activeCompany = companies.find(c => c.id === activeCompanyId);
   const isAllCompanies = activeCompanyId === 'all';
+
+  // 依機密遮蔽狀態過濾可見公司名冊
+  const visibleCompanies = useMemo(() => {
+    if (hideConfidentialCompanies) {
+      return companies.filter(c => !c.isConfidential);
+    }
+    return companies;
+  }, [companies, hideConfidentialCompanies]);
 
   // 點擊外部關閉選單
   useEffect(() => {
@@ -124,15 +136,34 @@ export const ErpTopBar: React.FC<ErpTopBarProps> = ({
                 <div className="px-3 py-1.5 border-b border-stone-100 flex items-center justify-between text-xs text-stone-500 font-semibold">
                   <span className="flex items-center gap-1">
                     <Building2 className="w-3.5 h-3.5 text-[#0066cc]" />
-                    切換記帳行號主體 (3 間關係企業)
+                    切換記帳主體 ({companies.length} 個單位)
                   </span>
-                  <span className="text-[10px] bg-stone-100 px-1.5 py-0.5 rounded text-stone-600">
-                    獨立帳冊
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setHideConfidentialCompanies(prev => !prev)}
+                    title={hideConfidentialCompanies ? "目前已隱藏機密私帳主體，點擊解除" : "點擊啟動隱藏機密私帳主體"}
+                    className={`text-[10px] px-1.5 py-0.5 rounded flex items-center gap-1 cursor-pointer transition-colors ${
+                      hideConfidentialCompanies 
+                        ? 'bg-rose-100 text-rose-800 border border-rose-300 font-bold'
+                        : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                    }`}
+                  >
+                    {hideConfidentialCompanies ? (
+                      <>
+                        <EyeOff className="w-3 h-3 text-rose-600" />
+                        <span>已隱藏私帳</span>
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="w-3 h-3 text-stone-500" />
+                        <span>查帳隱藏</span>
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 <div className="py-1 max-h-64 overflow-y-auto">
-                  {companies.map((comp) => {
+                  {visibleCompanies.map((comp) => {
                     const isSelected = activeCompanyId === comp.id;
                     return (
                       <button
@@ -152,10 +183,22 @@ export const ErpTopBar: React.FC<ErpTopBarProps> = ({
                             style={{ backgroundColor: comp.color || '#0066cc' }}
                           />
                           <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               <span className={`text-xs truncate ${isSelected ? 'font-bold text-[#0066cc]' : 'font-semibold text-stone-800'}`}>
                                 {comp.name}
                               </span>
+                              {comp.entityType === 'individual' && (
+                                <span className="text-[9px] bg-purple-100 text-purple-800 px-1 rounded font-bold shrink-0 flex items-center gap-0.5">
+                                  <User className="w-2.5 h-2.5" />
+                                  <span>私人戶</span>
+                                </span>
+                              )}
+                              {comp.isConfidential && (
+                                <span className="text-[9px] bg-rose-100 text-rose-800 px-1 rounded font-bold shrink-0 flex items-center gap-0.5">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  <span>機密</span>
+                                </span>
+                              )}
                               {comp.isDefault && (
                                 <span className="text-[9px] bg-amber-100 text-amber-800 px-1 rounded font-medium shrink-0">
                                   預設
@@ -163,7 +206,11 @@ export const ErpTopBar: React.FC<ErpTopBarProps> = ({
                               )}
                             </div>
                             <div className="text-[11px] text-stone-500 font-mono flex items-center gap-2 mt-0.5">
-                              <span>統編：{comp.taxId || '未填'}</span>
+                              <span>
+                                {comp.entityType === 'individual' && !comp.taxId 
+                                  ? '自然人 (無統編)' 
+                                  : `統編：${comp.taxId || '未填'}`}
+                              </span>
                               {comp.shortName && (
                                 <span className="text-stone-400 font-sans">({comp.shortName})</span>
                               )}

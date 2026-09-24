@@ -38,6 +38,10 @@ export interface Transaction {
   taxAmount?: number; // 營業稅額 5% (NT$)
   taxDeductible?: boolean; // 是否得扣抵 401 營業稅 (true: 可扣抵進項稅額；false: 免稅或依法不得扣抵)
   sellerTaxId?: string; // 開立發票之店家/加油站統一編號 (8碼，供未來 401 媒體檔申報)
+  // --- 外帳/內部帳務隔離與查帳隱私屬性 (Auditing & Confidentiality) ---
+  accountingCategory?: 'official_tax' | 'internal_management'; // 帳務屬性：official_tax (正式稅務公帳/具憑證) | internal_management (內部管理私帳/未稅收支)
+  taxType?: 'taxable' | 'tax_free' | 'receipt_pool' | 'unspecified'; // 課稅類別：應稅5% | 免稅 | 收據大水池 | 未指定
+  isConfidential?: boolean; // 是否為敏感機密款項 (1/true: 隱藏屬性，一般同仁/外帳查帳時自動屏蔽過濾；0/false: 一般公開帳目)
   // --- 零用金與往來客戶/廠商大事紀逆向連動 (k12 規格) ---
   courtesyTargetId?: string; // 關聯之客戶/廠商 ID (如 cust_xxx)
   courtesyTargetName?: string; // 關聯之客戶/廠商名稱 (如 台塑鋼鐵)
@@ -91,19 +95,52 @@ export interface MonthBudget {
   alertThresholdPercent: number; // 警戒百分比 (預設 20%，即零用金低於20%時發出請款撥補警示)
 }
 
+export interface CompanyPhoneEntry {
+  id: string;
+  companyId?: string;
+  type: 'phone' | 'fax' | 'mobile' | 'other';
+  number: string;
+  label?: string; // 如：代表號電話、雲林斗南廠區、傳真專線 1、工地緊急專線
+  isDefault?: boolean;
+  sortOrder?: number;
+}
+
+export interface CompanyBankAccount {
+  id: string;
+  companyId?: string;
+  bankName: string; // 銀行名稱 (如「臺灣銀行」)
+  bankBranch?: string; // 分行 (如「斗南分行」)
+  bankCode?: string; // 總代碼 (如「004」)
+  branchCode?: string; // 分行代碼 (選填)
+  bankAccount: string; // 帳號
+  accountName: string; // 戶名
+  accountType?: 'operating' | 'payroll' | 'petty_cash' | 'savings' | 'other'; // 帳戶性質
+  isDefault?: boolean; // 是否為主要往來/出納預設扣款帳戶
+  isConfidential?: boolean; // 是否為私人機密帳戶 (1/true: 隱藏私帳，一般員工看報表/選單自動屏蔽；0/false: 公開公帳)
+  isPrivateAccount?: boolean; // 是否為負責人/私人名義帳戶 (非公司公帳戶頭)
+  note?: string; // 備註 (如：公司主要營運戶、薪資轉帳帳戶、專案押標金、負責人私人帳戶)
+  sortOrder?: number;
+}
+
 export interface CompanyProfile {
   id: string; // e.g. 'comp_1', 'comp_2', 'comp_3'
   name: string; // 公司全名 (如「田頭工程有限公司」)
   shortName?: string; // 公司簡稱 (如「田頭工程」)
   taxId?: string; // 統一編號 (8 碼)
   representative?: string; // 負責人 / 代表人
-  phone?: string; // 公司代表號電話
-  fax?: string; // 傳真號碼
+  // 主體性質與對外聯名表單控制 (Auditing & Joint Forms)
+  entityType?: 'corporate' | 'individual'; // 組織主體性質：'corporate' (法定法人/公司/行號) | 'individual' (個人/自然人/私帳)
+  isJointHeader?: boolean; // 是否參與對外三家公司聯名大抬頭 (true: 列入聯名表單；false: 個人名義或獨立專用，自動排除)
+  isConfidential?: boolean; // 是否為私人機密主體 (true: 隱藏私帳主體，一般同仁權限與外帳查帳時自動過濾屏蔽)
+  phone?: string; // 公司代表號電話 (向下相容)
+  fax?: string; // 傳真號碼 (向下相容)
+  phones?: CompanyPhoneEntry[]; // 多筆電話或傳真清單
+  bankAccounts?: CompanyBankAccount[]; // 多筆往來銀行帳戶清單
   email?: string; // 電子郵件信箱
   website?: string; // 官方網站
   postalCode?: string; // 郵遞區號
   address?: string; // 登記/營運地址
-  // 財務與匯款銀行帳號 (未來供表格、請款單、撥補匯款帶入)
+  // 財務與匯款銀行帳號 (向下相容，同步自主要預設銀行帳戶)
   bankName?: string; // 往來銀行 (如「臺灣銀行」)
   bankBranch?: string; // 分行 (如「營業部」)
   bankCode?: string; // 銀行代碼 (如「004」)
@@ -129,19 +166,56 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
   shortName: '田頭工程',
   taxId: '13044353',
   representative: '李永勝',
-  phone: '02-2345-6789',
-  fax: '',
-  email: '',
+  entityType: 'corporate',
+  isJointHeader: true,
+  isConfidential: false,
+  phone: '05-5973882',
+  fax: '05-5964269',
+  phones: [
+    { id: 'comp_1_p1', type: 'phone', number: '05-5973882', label: '公司代表號', isDefault: true, sortOrder: 1 },
+    { id: 'comp_1_p2', type: 'fax', number: '05-5964269', label: '傳真專線', isDefault: true, sortOrder: 2 }
+  ],
+  bankAccounts: [
+    {
+      id: 'comp_1_b1',
+      bankName: '臺灣銀行',
+      bankBranch: '斗南分行',
+      bankCode: '004',
+      bankAccount: '004-012-3456789',
+      accountName: '田頭工程有限公司',
+      accountType: 'operating',
+      isDefault: true,
+      isConfidential: false,
+      isPrivateAccount: false,
+      note: '主要營運與對外請款扣款帳戶',
+      sortOrder: 1
+    },
+    {
+      id: 'comp_1_b2',
+      bankName: '玉山銀行',
+      bankBranch: '斗六分行',
+      bankCode: '808',
+      bankAccount: '808-036-9876543',
+      accountName: '田頭工程有限公司',
+      accountType: 'petty_cash',
+      isDefault: false,
+      isConfidential: false,
+      isPrivateAccount: false,
+      note: '零用金定期定額撥補與員工薪資轉帳帳戶',
+      sortOrder: 2
+    }
+  ],
+  email: 'v23039@yahoo.com.tw',
   website: '',
-  postalCode: '221',
-  address: '新北市汐止區新台五路一段100號',
-  bankName: '臺灣銀行 南港分行',
-  bankBranch: '南港分行',
+  postalCode: '630',
+  address: '雲林縣斗南鎮田頭里田南一路53號',
+  bankName: '臺灣銀行',
+  bankBranch: '斗南分行',
   bankCode: '004',
   bankAccount: '004-012-3456789',
   accountName: '田頭工程有限公司',
-  chiefAccountant: '會計',
-  cashier: '出納',
+  chiefAccountant: '林會計',
+  cashier: '張出納',
   reportHeader: '田頭工程有限公司 零用金收支月報表',
   invoiceBuyerName: '田頭工程有限公司',
   taxInvoiceNote: '報銷請開立三聯式發票，載明統編 13044353',
@@ -153,50 +227,46 @@ export const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
 };
 
 export const DEFAULT_COMPANIES: CompanyProfile[] = [
-  {
-    id: 'comp_1',
-    name: '田頭工程有限公司',
-    shortName: '田頭工程',
-    taxId: '13044353',
-    representative: '李永勝',
-    phone: '02-2345-6789',
-    fax: '',
-    email: '',
-    website: '',
-    postalCode: '221',
-    address: '新北市汐止區新台五路一段100號',
-    bankName: '臺灣銀行 南港分行',
-    bankBranch: '南港分行',
-    bankCode: '004',
-    bankAccount: '004-012-3456789',
-    accountName: '田頭工程有限公司',
-    chiefAccountant: '會計',
-    cashier: '出納',
-    reportHeader: '田頭工程有限公司 零用金收支月報表',
-    invoiceBuyerName: '田頭工程有限公司',
-    taxInvoiceNote: '報銷請開立三聯式發票，載明統編 13044353',
-    color: '#0066cc', // 經典海軍藍
-    isDefault: true,
-    isNominalPettyCashHolder: true,
-    sortOrder: 1,
-    updatedAt: Date.now()
-  },
+  DEFAULT_COMPANY_PROFILE,
   {
     id: 'comp_2',
     name: '田頭工業有限公司',
     shortName: '田頭工業',
     taxId: '45107604',
     representative: '李湋薇',
-    phone: '',
-    fax: '',
-    email: '',
+    entityType: 'corporate',
+    isJointHeader: true,
+    isConfidential: false,
+    phone: '05-5973882',
+    fax: '05-5964269',
+    phones: [
+      { id: 'comp_2_p1', type: 'phone', number: '05-5973882', label: '辦公室市話', isDefault: true, sortOrder: 1 },
+      { id: 'comp_2_p2', type: 'fax', number: '05-5964269', label: '傳真號碼', isDefault: true, sortOrder: 2 }
+    ],
+    bankAccounts: [
+      {
+        id: 'comp_2_b1',
+        bankName: '臺灣銀行',
+        bankBranch: '斗南分行',
+        bankCode: '004',
+        bankAccount: '004-055-1234567',
+        accountName: '田頭工業有限公司',
+        accountType: 'operating',
+        isDefault: true,
+        isConfidential: false,
+        isPrivateAccount: false,
+        note: '田頭工業主要營運帳戶',
+        sortOrder: 1
+      }
+    ],
+    email: 'v23039@yahoo.com.tw',
     website: '',
-    postalCode: '',
-    address: '',
-    bankName: '',
-    bankBranch: '',
-    bankCode: '',
-    bankAccount: '',
+    postalCode: '630',
+    address: '雲林縣斗南鎮田頭里田南一路53號',
+    bankName: '臺灣銀行',
+    bankBranch: '斗南分行',
+    bankCode: '004',
+    bankAccount: '004-055-1234567',
     accountName: '田頭工業有限公司',
     chiefAccountant: '會計',
     cashier: '出納',
@@ -211,27 +281,49 @@ export const DEFAULT_COMPANIES: CompanyProfile[] = [
   },
   {
     id: 'comp_3',
-    name: '第三關係商行',
-    shortName: '關係行號三',
-    taxId: '',
-    representative: '負責人',
-    phone: '',
-    fax: '',
-    email: '',
+    name: '田頭工業社',
+    shortName: '工業社',
+    taxId: '97605960',
+    representative: '李永勝',
+    entityType: 'corporate',
+    isJointHeader: true,
+    isConfidential: false,
+    phone: '05-5973882',
+    fax: '05-5964269',
+    phones: [
+      { id: 'comp_3_p1', type: 'phone', number: '05-5973882', label: '代表號', isDefault: true, sortOrder: 1 }
+    ],
+    bankAccounts: [
+      {
+        id: 'comp_3_b1',
+        bankName: '合作金庫銀行',
+        bankBranch: '斗南分行',
+        bankCode: '006',
+        bankAccount: '006-088-7654321',
+        accountName: '田頭工業社',
+        accountType: 'operating',
+        isDefault: true,
+        isConfidential: false,
+        isPrivateAccount: false,
+        note: '商行經常收支帳戶',
+        sortOrder: 1
+      }
+    ],
+    email: 'v23039@yahoo.com.tw',
     website: '',
-    postalCode: '',
-    address: '',
-    bankName: '',
-    bankBranch: '',
-    bankCode: '',
-    bankAccount: '',
-    accountName: '第三關係商行',
+    postalCode: '630',
+    address: '雲林縣斗南鎮田頭里田南一路53號',
+    bankName: '合作金庫銀行',
+    bankBranch: '斗南分行',
+    bankCode: '006',
+    bankAccount: '006-088-7654321',
+    accountName: '田頭工業社',
     chiefAccountant: '會計',
     cashier: '出納',
-    reportHeader: '第三關係商行 現金收支帳簿',
-    invoiceBuyerName: '第三關係商行',
+    reportHeader: '田頭工業社 現金收支帳簿',
+    invoiceBuyerName: '田頭工業社',
     taxInvoiceNote: '二聯式發票或收據請蓋公司/商行專用印章',
-    color: '#d97706', // 琥珀橘
+    color: '#d97706',
     isDefault: false,
     isNominalPettyCashHolder: false,
     sortOrder: 3,

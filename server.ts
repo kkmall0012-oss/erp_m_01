@@ -25,6 +25,8 @@ import {
   saveCompanyProfile,
   saveAllCompanyProfiles,
   deleteCompanyProfile,
+  getAllCompanyPhones,
+  getAllCompanyBankAccounts,
   getAllCustomers,
   addCustomer,
   updateCustomer,
@@ -349,6 +351,26 @@ async function startServer() {
       syncSeedsModule('companies');
       const updated = await getAllCompanyProfiles();
       res.json({ success: true, data: updated, message: '公司行號已刪除' });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/company-phones', async (req, res) => {
+    try {
+      const companyId = req.query.companyId as string | undefined;
+      const phones = await getAllCompanyPhones(companyId);
+      res.json({ success: true, data: phones });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.get('/api/company-bank-accounts', async (req, res) => {
+    try {
+      const companyId = req.query.companyId as string | undefined;
+      const accounts = await getAllCompanyBankAccounts(companyId);
+      res.json({ success: true, data: accounts });
     } catch (err: any) {
       res.status(500).json({ success: false, error: err.message });
     }
